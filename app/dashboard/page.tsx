@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { 
@@ -30,16 +31,33 @@ import ReportsTab from '../../components/ReportsTab';
 import SettingsTab from '../../components/SettingsTab';
 import FeedbackTab from '../../components/FeedbackTab';
 
-const CentravityLogo = ({ size = 28, className = "" }: { size?: number, className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="6" className="opacity-40" strokeDasharray="3 4" />
-    <circle cx="12" cy="12" r="2" fill="currentColor" />
-    <path d="M12 2v4" className="opacity-40" />
-    <path d="M12 18v4" className="opacity-40" />
-    <path d="M2 12h4" className="opacity-40" />
-    <path d="M18 12h4" className="opacity-40" />
-  </svg>
+const CentravityBrand = ({ onNavigateHome }: { onNavigateHome?: () => void }) => (
+  <Link
+    href="/dashboard"
+    onClick={onNavigateHome}
+    className="flex items-center gap-3"
+    aria-label="CENTRAVITY home"
+  >
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5 text-purple-600"
+        aria-hidden
+      >
+        <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+        <path d="M7 16V9" />
+        <path d="M12 16V5" />
+        <path d="M17 16v-3" />
+      </svg>
+    </div>
+    <span className="text-xl font-black tracking-[0.2em] text-slate-900">CENTRAVITY</span>
+  </Link>
 );
 
 const GlobalStyles = () => (
@@ -2839,11 +2857,10 @@ export default function Home() {
         </div>
       )}
 
-      <nav className="w-full md:w-64 bg-white border-r border-gray-200 px-4 py-6 flex flex-col md:sticky md:top-0 md:h-screen overflow-y-auto hide-scroll">
-        <div className="flex items-center gap-2 mb-8 px-2">
-          <CentravityLogo className="text-blue-600" size={28} />
-          <h1 className="text-2xl font-bold text-gray-900">Centravity HQ</h1>
-        </div>
+      <nav className="w-full md:w-72 bg-white border-r border-gray-200 px-4 py-6 flex flex-col md:sticky md:top-0 md:h-screen overflow-y-auto hide-scroll">
+        <header className="mb-8 -mx-4 border-b border-gray-200 bg-white px-4 pb-5">
+          <CentravityBrand onNavigateHome={() => setActiveTab("dashboard")} />
+        </header>
 
         {/* DYNAMIC RBAC LOCATION SELECTOR */}
         {(canViewAgencyDash || canViewTeamComm) && offices.length > 0 && (
