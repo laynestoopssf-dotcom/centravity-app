@@ -12,6 +12,17 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [betaFull, setBetaFull] = useState(false);
+
+  useEffect(() => {
+    const checkBetaCapacity = async () => {
+      const { data: count, error } = await supabase.rpc("get_beta_count");
+      if (error) return;
+      setBetaFull(typeof count === "number" && count >= 10);
+    };
+
+    void checkBetaCapacity();
+  }, []);
 
   useEffect(() => {
     let mounted = true;
