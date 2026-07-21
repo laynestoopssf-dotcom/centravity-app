@@ -242,7 +242,8 @@ export default function GodmodeAdminPage() {
             </div>
           ) : (
             <>
-              {(showDashboard || activeNav === "beta" || activeNav === "waitlist") && (
+              {(showDashboard || activeNav === "beta" || activeNav === "waitlist") &&
+                activeNav !== "settings" && (
                   <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <KpiCard
                       icon={Users}
