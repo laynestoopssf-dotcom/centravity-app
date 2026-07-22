@@ -1377,6 +1377,11 @@ export default function Home() {
 
       if (error) throw error;
       showToast("Office goals saved successfully!", "success");
+
+      // Keep in-memory offices in sync so Enterprise book/renewal sums update immediately
+      setOffices((prev: any[]) =>
+        prev.map((o) => (o.id === officeId ? { ...o, ...officeData } : o))
+      );
       
       if (profile) fetchOffices(profile.agency_id);
     } catch (error: any) {
@@ -2619,9 +2624,21 @@ export default function Home() {
       return Number.isFinite(n) ? n : fallback;
     };
 
-    // Book size + renewal rates live on `offices` (Settings → Office Goals).
-    // Agency-level book_size_* is often unset. When viewing Enterprise / "all",
-    // we must aggregate (or compute per-office) instead of reading null agency fields.
+    // Book sizes live on `offices` only (Settings → Office Goals). Never read agency.book_size_*.
+    const sumOfficeBookSizes = (officeList: any[]) => {
+      return (officeList || []).reduce(
+        (acc, office) => ({
+          book_size_auto: acc.book_size_auto + num(office?.book_size_auto),
+          book_size_fire: acc.book_size_fire + num(office?.book_size_fire),
+          book_size_commercial: acc.book_size_commercial + num(office?.book_size_commercial),
+          book_size_life: acc.book_size_life + num(office?.book_size_life),
+          book_size_health: acc.book_size_health + num(office?.book_size_health),
+        }),
+        { book_size_auto: 0, book_size_fire: 0, book_size_commercial: 0, book_size_life: 0, book_size_health: 0 }
+      );
+    };
+
+    // Per-office renewal $ using that office's book + rates (rates may fall back to agency defaults).
     const calculateRenewalsForOffice = (office: any, ytdTimeFraction: number) => {
         const autoLapse = (num(office?.ytd_lapse_cancel_auto, num(agencySettings?.ytd_lapse_cancel_auto)) / 100) * ytdTimeFraction;
         const fireLapse = (num(office?.ytd_lapse_cancel_fire, num(agencySettings?.ytd_lapse_cancel_fire)) / 100) * ytdTimeFraction;
@@ -2649,6 +2666,23 @@ export default function Home() {
           bookHealth * bHealth;
 
         return { totalBookPremium, totalRenRev };
+    };
+
+    // Enterprise / All Locations: SUM every office's book + renewal (never agency.book_size_*).
+    const calculateEnterpriseBookAndRenewals = (ytdTimeFraction: number) => {
+      const summedBook = sumOfficeBookSizes(offices);
+      const totalBookPremium =
+        summedBook.book_size_auto +
+        summedBook.book_size_fire +
+        summedBook.book_size_commercial +
+        summedBook.book_size_life +
+        summedBook.book_size_health;
+
+      const totalRenRev = (offices || []).reduce((sum, office) => {
+        return sum + calculateRenewalsForOffice(office, ytdTimeFraction).totalRenRev;
+      }, 0);
+
+      return { totalBookPremium, totalRenRev, summedBook };
     };
 
     const calculateRev = (ytdNode: any, policies: any[], name: string, specificOffice?: any) => {
@@ -2698,31 +2732,10 @@ export default function Home() {
 
         const ytdTimeFraction = ytdNode.daysPassed / ytdNode.daysInYear;
 
-        let totalBookPremium = 0;
-        let totalRenRev = 0;
-
-        if (specificOffice) {
-          const ren = calculateRenewalsForOffice(specificOffice, ytdTimeFraction);
-          totalBookPremium = ren.totalBookPremium;
-          totalRenRev = ren.totalRenRev;
-        } else if (offices.length > 0) {
-          // Enterprise view: sum each office's book + renewal commission (Settings stores book on offices)
-          offices.forEach((office: any) => {
-            const ren = calculateRenewalsForOffice(office, ytdTimeFraction);
-            totalBookPremium += ren.totalBookPremium;
-            totalRenRev += ren.totalRenRev;
-          });
-          // Fallback if offices have no book rows but agency-level book sizes exist
-          if (totalBookPremium === 0) {
-            const ren = calculateRenewalsForOffice(agencySettings, ytdTimeFraction);
-            totalBookPremium = ren.totalBookPremium;
-            totalRenRev = ren.totalRenRev;
-          }
-        } else {
-          const ren = calculateRenewalsForOffice(agencySettings, ytdTimeFraction);
-          totalBookPremium = ren.totalBookPremium;
-          totalRenRev = ren.totalRenRev;
-        }
+        // specificOffice set → one location. null (Enterprise / All) → SUM all offices.
+        const { totalBookPremium, totalRenRev } = specificOffice
+          ? calculateRenewalsForOffice(specificOffice, ytdTimeFraction)
+          : calculateEnterpriseBookAndRenewals(ytdTimeFraction);
 
         return { 
           name, projectedVc, autoVc, fireVc, fsVc, ytdFsComm, 
