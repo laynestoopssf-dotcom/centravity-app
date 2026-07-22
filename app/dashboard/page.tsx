@@ -294,7 +294,7 @@ export default function Home() {
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (error) console.error(error);
+    if (error) console.error('[Settings] fetchProfile error', error);
     if (data) {
       setProfile(data);
       
@@ -306,11 +306,14 @@ export default function Home() {
       
       fetchOffices(data.agency_id);
       fetchCompPlans(data.agency_id); 
-      fetchAgencySettings(data.agency_id); 
+      fetchAgencySettings(data.agency_id);
+      // Always load roster for Settings goals UI — custom roles with manage_settings
+      // are not always literally role === 'owner'|'manager', so gating on those strings
+      // left team/comp-plan bindings empty and hid member targets.
+      fetchTeam(data.agency_id);
+      fetchArchivedTeam(data.agency_id);
 
       if (data.role === 'owner' || data.role === 'manager') {
-        fetchTeam(data.agency_id);
-        fetchArchivedTeam(data.agency_id);
         fetchAgencyOverview(data.agency_id);
       }
     }
@@ -318,12 +321,37 @@ export default function Home() {
   };
 
   const fetchOffices = async (agencyId: string) => {
-    const { data } = await supabase.from('offices').select('*').eq('agency_id', agencyId).order('created_at', { ascending: true });
+    const { data, error } = await supabase
+      .from('offices')
+      .select('*')
+      .eq('agency_id', agencyId)
+      .order('created_at', { ascending: true });
+    console.log('[Revenue] fetchOffices payload', {
+      agencyId,
+      error,
+      count: data?.length ?? 0,
+      bookSizes: (data || []).map((o: any) => ({
+        id: o.id,
+        name: o.name,
+        book_size_auto: o.book_size_auto,
+        book_size_fire: o.book_size_fire,
+        book_size_commercial: o.book_size_commercial,
+        book_size_life: o.book_size_life,
+        book_size_health: o.book_size_health,
+        keys: Object.keys(o || {}).filter((k) => k.includes('book')),
+      })),
+    });
+    if (error) {
+      console.error('[Revenue] fetchOffices failed', error);
+      return;
+    }
     if (data) setOffices(data);
   };
 
   const fetchCompPlans = async (agencyId: string) => {
-    const { data } = await supabase.from('comp_plans').select('*').eq('agency_id', agencyId).order('created_at', { ascending: true });
+    const { data, error } = await supabase.from('comp_plans').select('*').eq('agency_id', agencyId).order('created_at', { ascending: true });
+    console.log('[Settings] fetchCompPlans', { agencyId, error, count: data?.length ?? 0 });
+    if (error) console.error('[Settings] fetchCompPlans failed', error);
     if (data) setCompPlans(data);
   };
 
@@ -676,7 +704,31 @@ export default function Home() {
     // Management, etc. - automatically stops surfacing them on active lists without needing its
     // own filter. Their historical policies/activities rows are untouched in the DB, so YTD and
     // agency-wide reporting (which reads directly from those tables, not from `team`) stays intact.
-    const { data } = await supabase.from('profiles').select('*').eq('agency_id', agencyId).eq('is_archived', false);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('agency_id', agencyId)
+      .eq('is_archived', false);
+    console.log('[Settings] fetchTeam', {
+      agencyId,
+      error,
+      count: data?.length ?? 0,
+      sampleTargets: (data || []).slice(0, 3).map((m: any) => ({
+        id: m.id,
+        name: `${m.first_name} ${m.last_name}`,
+        role: m.role,
+        daily_target_touchpoints: m.daily_target_touchpoints,
+        daily_target_quotes: m.daily_target_quotes,
+        daily_target_bound: m.daily_target_bound,
+        monthly_target_premium: m.monthly_target_premium,
+        comp_plan_id: m.comp_plan_id,
+        office_id: m.office_id,
+      })),
+    });
+    if (error) {
+      console.error('[Settings] fetchTeam failed', error);
+      return;
+    }
     if (data) setTeam(data);
   };
 
@@ -1435,8 +1487,9 @@ export default function Home() {
         const { error: profileErr } = await (supabase.from('profiles') as any).update({
             role: m.role,
             office_id: m.office_id,
-            comp_plan_id: m.comp_plan_id,
+            comp_plan_id: m.comp_plan_id === '' ? null : m.comp_plan_id,
             is_floater: m.is_floater,
+            on_vacation: m.on_vacation ?? false,
             daily_target_touchpoints: m.daily_target_touchpoints,
             daily_target_quotes: m.daily_target_quotes,
             daily_target_bound: m.daily_target_bound,
@@ -2620,22 +2673,55 @@ export default function Home() {
     };
 
     const num = (v: any, fallback = 0) => {
-      const n = Number(v);
+      if (v == null || v === '') return fallback;
+      if (typeof v === 'number') return Number.isFinite(v) ? v : fallback;
+      // Strip currency formatting that would otherwise Number() → NaN → 0
+      const cleaned = String(v).replace(/[$,\s]/g, '');
+      const n = Number(cleaned);
       return Number.isFinite(n) ? n : fallback;
     };
 
     // Book sizes live on `offices` only (Settings → Office Goals). Never read agency.book_size_*.
+    // Also accept common alternate key spellings if a row was saved under a variant name.
+    const readBookField = (office: any, field: string) => {
+      const alts: Record<string, string[]> = {
+        book_size_auto: ['book_size_auto', 'auto_book', 'auto_book_size'],
+        book_size_fire: ['book_size_fire', 'fire_book', 'fire_book_size', 'book_size_home'],
+        book_size_commercial: ['book_size_commercial', 'commercial_book', 'comm_book'],
+        book_size_life: ['book_size_life', 'life_book'],
+        book_size_health: ['book_size_health', 'health_book'],
+      };
+      for (const key of alts[field] || [field]) {
+        if (office?.[key] != null && office[key] !== '') return num(office[key]);
+      }
+      return 0;
+    };
+
     const sumOfficeBookSizes = (officeList: any[]) => {
-      return (officeList || []).reduce(
+      const result = (officeList || []).reduce(
         (acc, office) => ({
-          book_size_auto: acc.book_size_auto + num(office?.book_size_auto),
-          book_size_fire: acc.book_size_fire + num(office?.book_size_fire),
-          book_size_commercial: acc.book_size_commercial + num(office?.book_size_commercial),
-          book_size_life: acc.book_size_life + num(office?.book_size_life),
-          book_size_health: acc.book_size_health + num(office?.book_size_health),
+          book_size_auto: acc.book_size_auto + readBookField(office, 'book_size_auto'),
+          book_size_fire: acc.book_size_fire + readBookField(office, 'book_size_fire'),
+          book_size_commercial: acc.book_size_commercial + readBookField(office, 'book_size_commercial'),
+          book_size_life: acc.book_size_life + readBookField(office, 'book_size_life'),
+          book_size_health: acc.book_size_health + readBookField(office, 'book_size_health'),
         }),
         { book_size_auto: 0, book_size_fire: 0, book_size_commercial: 0, book_size_life: 0, book_size_health: 0 }
       );
+      console.log('[Revenue] sumOfficeBookSizes', {
+        officeCount: officeList?.length ?? 0,
+        result,
+        perOffice: (officeList || []).map((o: any) => ({
+          id: o.id,
+          name: o.name,
+          auto: readBookField(o, 'book_size_auto'),
+          fire: readBookField(o, 'book_size_fire'),
+          commercial: readBookField(o, 'book_size_commercial'),
+          life: readBookField(o, 'book_size_life'),
+          health: readBookField(o, 'book_size_health'),
+        })),
+      });
+      return result;
     };
 
     // Per-office renewal $ using that office's book + rates (rates may fall back to agency defaults).
@@ -2651,11 +2737,11 @@ export default function Home() {
         const bLife = num(office?.base_comm_life, num(agencySettings?.base_comm_life, 20)) / 100;
         const bHealth = num(office?.base_comm_health, num(agencySettings?.base_comm_health, 20)) / 100;
 
-        const bookAuto = num(office?.book_size_auto);
-        const bookFire = num(office?.book_size_fire);
-        const bookComm = num(office?.book_size_commercial);
-        const bookLife = num(office?.book_size_life);
-        const bookHealth = num(office?.book_size_health);
+        const bookAuto = readBookField(office, 'book_size_auto');
+        const bookFire = readBookField(office, 'book_size_fire');
+        const bookComm = readBookField(office, 'book_size_commercial');
+        const bookLife = readBookField(office, 'book_size_life');
+        const bookHealth = readBookField(office, 'book_size_health');
 
         const totalBookPremium = bookAuto + bookFire + bookComm + bookLife + bookHealth;
         const totalRenRev =
@@ -2681,6 +2767,14 @@ export default function Home() {
       const totalRenRev = (offices || []).reduce((sum, office) => {
         return sum + calculateRenewalsForOffice(office, ytdTimeFraction).totalRenRev;
       }, 0);
+
+      console.log('[Revenue] calculateEnterpriseBookAndRenewals', {
+        officeCount: offices?.length ?? 0,
+        ytdTimeFraction,
+        totalBookPremium,
+        totalRenRev,
+        summedBook,
+      });
 
       return { totalBookPremium, totalRenRev, summedBook };
     };
@@ -2748,13 +2842,35 @@ export default function Home() {
 
     const globalName = globalOfficeFilter === 'all' ? 'Enterprise Global' : offices.find(o => o.id === globalOfficeFilter)?.name || 'Office';
     const globalOfficeObj = globalOfficeFilter === 'all' ? null : offices.find(o => o.id === globalOfficeFilter);
+    console.log('[Revenue] calculateRev inputs', {
+      globalOfficeFilter,
+      specificOfficeId: globalOfficeObj?.id ?? null,
+      officesLen: offices?.length ?? 0,
+      officeBookSnapshot: (offices || []).map((o: any) => ({
+        id: o.id,
+        name: o.name,
+        book_size_auto: o.book_size_auto,
+        book_size_fire: o.book_size_fire,
+        book_size_commercial: o.book_size_commercial,
+        book_size_life: o.book_size_life,
+        book_size_health: o.book_size_health,
+      })),
+    });
     const globalRev = calculateRev(ytdOverviewData.global, filteredPolicies, globalName, globalOfficeObj);
+    console.log('[Revenue] globalRev output → RevenueTab', {
+      name: globalRev?.name,
+      totalBookPremium: globalRev?.totalBookPremium,
+      totalRenRev: globalRev?.totalRenRev,
+      totalNbRev: globalRev?.totalNbRev,
+      totalAgencyRev: globalRev?.totalAgencyRev,
+    });
 
     const locationsRev: any[] = [];
     if (globalOfficeFilter === 'all') {
         offices.forEach((office, i) => {
             const officePolicies = agencyPolicies.filter(p => p.office_id === office.id);
-            locationsRev.push(calculateRev(ytdOverviewData.locations[i], officePolicies, office.name, office));
+            const locNode = ytdOverviewData.locations?.[i] || ytdOverviewData.global;
+            locationsRev.push(calculateRev(locNode, officePolicies, office.name, office));
         });
     } else {
         locationsRev.push(globalRev);
