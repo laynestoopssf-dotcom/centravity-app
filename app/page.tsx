@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../utils/supabase";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
