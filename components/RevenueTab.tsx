@@ -7,19 +7,17 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
     return Number.isFinite(v) ? Math.round(v).toLocaleString() : "0";
   };
 
-  console.log("[RevenueTab] render props", {
-    hasData: Boolean(revenueOverviewData),
-    global: revenueOverviewData?.global
-      ? {
-          name: revenueOverviewData.global.name,
-          totalBookPremium: revenueOverviewData.global.totalBookPremium,
-          totalRenRev: revenueOverviewData.global.totalRenRev,
-          totalNbRev: revenueOverviewData.global.totalNbRev,
-          totalAgencyRev: revenueOverviewData.global.totalAgencyRev,
-        }
-      : null,
-    locations: revenueOverviewData?.locations?.length ?? 0,
-  });
+  // Explicit mapping to the exact keys calculateRev()/calculateEnterpriseBookAndRenewals()
+  // emit on the `global` node — destructuring (with safe defaults) instead of deep property
+  // access on `revenueOverviewData.global.*` avoids silently rendering blank/undefined if the
+  // shape ever shifts, and makes the prop → UI contract explicit at a glance.
+  const {
+    name: enterpriseName = "Enterprise Global",
+    totalBookPremium = 0,
+    totalNbRev = 0,
+    totalRenRev = 0,
+    totalAgencyRev = 0,
+  } = revenueOverviewData?.global || {};
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300 pb-12">
@@ -31,20 +29,20 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 bg-gradient-to-br from-emerald-900 to-gray-900 rounded-2xl shadow-lg border border-emerald-800 p-8 flex flex-col justify-center text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none"><DollarSign size={150} /></div>
-          <h3 className="text-sm font-bold text-emerald-400 mb-2 uppercase tracking-wider">{revenueOverviewData.global.name} Estimated Revenue</h3>
-          <div className="text-6xl font-black mb-4">${money(revenueOverviewData.global.totalAgencyRev)}</div>
+          <h3 className="text-sm font-bold text-emerald-400 mb-2 uppercase tracking-wider">{enterpriseName} Estimated Revenue</h3>
+          <div className="text-6xl font-black mb-4">${money(totalAgencyRev)}</div>
           <div className="flex flex-wrap gap-6 mt-2 border-t border-emerald-800/50 pt-4">
              <div>
                <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Annual Book Premium</p>
-               <p className="text-xl font-bold">${money(revenueOverviewData.global.totalBookPremium)}</p>
+               <p className="text-xl font-bold">${money(totalBookPremium)}</p>
              </div>
              <div>
                <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">New Business</p>
-               <p className="text-xl font-bold">${money(revenueOverviewData.global.totalNbRev)}</p>
+               <p className="text-xl font-bold">${money(totalNbRev)}</p>
              </div>
              <div>
                <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals</p>
-               <p className="text-xl font-bold">${money(revenueOverviewData.global.totalRenRev)}</p>
+               <p className="text-xl font-bold">${money(totalRenRev)}</p>
              </div>
           </div>
         </div>
