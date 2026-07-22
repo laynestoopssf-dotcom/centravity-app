@@ -1150,10 +1150,17 @@ export default function Home() {
                parsedFirst = spaceParts.length > 1 ? spaceParts[1].trim().toLowerCase() : "";
            }
 
-           const matchedTeamMember = team.find(t => 
-               t.last_name.toLowerCase() === parsedLast && 
-               t.first_name.toLowerCase() === parsedFirst
-           );
+           const matchedTeamMember = team.find(t => {
+            const dbFirst = (t.first_name || '').toLowerCase().trim();
+            const dbLast = (t.last_name || '').toLowerCase().trim();
+            const rawLower = producerRaw.toLowerCase();
+
+            if (dbFirst === parsedFirst && dbLast === parsedLast) return true;
+            if (dbFirst === parsedFirst && dbLast === '') return true;
+            if (dbFirst && rawLower.includes(dbFirst)) return true;
+
+            return false;
+        });
            
            if (matchedTeamMember) {
                mappedUserId = matchedTeamMember.id;
