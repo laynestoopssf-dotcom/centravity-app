@@ -14,9 +14,19 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
           <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none"><DollarSign size={150} /></div>
           <h3 className="text-sm font-bold text-emerald-400 mb-2 uppercase tracking-wider">{revenueOverviewData.global.name} Estimated Revenue</h3>
           <div className="text-6xl font-black mb-4">${Math.round(revenueOverviewData.global.totalAgencyRev).toLocaleString()}</div>
-          <div className="flex gap-6 mt-2 border-t border-emerald-800/50 pt-4">
-             <div><p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">New Business</p><p className="text-xl font-bold">${Math.round(revenueOverviewData.global.totalNbRev).toLocaleString()}</p></div>
-             <div><p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals</p><p className="text-xl font-bold">${Math.round(revenueOverviewData.global.totalRenRev).toLocaleString()}</p></div>
+          <div className="flex flex-wrap gap-6 mt-2 border-t border-emerald-800/50 pt-4">
+             <div>
+               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Annual Book Premium</p>
+               <p className="text-xl font-bold">${Math.round(revenueOverviewData.global.totalBookPremium || 0).toLocaleString()}</p>
+             </div>
+             <div>
+               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">New Business</p>
+               <p className="text-xl font-bold">${Math.round(revenueOverviewData.global.totalNbRev).toLocaleString()}</p>
+             </div>
+             <div>
+               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals</p>
+               <p className="text-xl font-bold">${Math.round(revenueOverviewData.global.totalRenRev).toLocaleString()}</p>
+             </div>
           </div>
         </div>
 

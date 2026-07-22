@@ -2614,6 +2614,43 @@ export default function Home() {
         return ((actual - min) / (max - min)) * maxPct;
     };
 
+    const num = (v: any, fallback = 0) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    // Book size + renewal rates live on `offices` (Settings → Office Goals).
+    // Agency-level book_size_* is often unset. When viewing Enterprise / "all",
+    // we must aggregate (or compute per-office) instead of reading null agency fields.
+    const calculateRenewalsForOffice = (office: any, ytdTimeFraction: number) => {
+        const autoLapse = (num(office?.ytd_lapse_cancel_auto, num(agencySettings?.ytd_lapse_cancel_auto)) / 100) * ytdTimeFraction;
+        const fireLapse = (num(office?.ytd_lapse_cancel_fire, num(agencySettings?.ytd_lapse_cancel_fire)) / 100) * ytdTimeFraction;
+        const commLapse = (num(office?.ytd_lapse_cancel_commercial, num(agencySettings?.ytd_lapse_cancel_commercial)) / 100) * ytdTimeFraction;
+
+        const vcRate = num(office?.current_vc_rate, num(agencySettings?.current_vc_rate)) / 100;
+        const bAuto = num(office?.base_comm_auto, num(agencySettings?.base_comm_auto, 8)) / 100;
+        const bFire = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
+        const bComm = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
+        const bLife = num(office?.base_comm_life, num(agencySettings?.base_comm_life, 20)) / 100;
+        const bHealth = num(office?.base_comm_health, num(agencySettings?.base_comm_health, 20)) / 100;
+
+        const bookAuto = num(office?.book_size_auto);
+        const bookFire = num(office?.book_size_fire);
+        const bookComm = num(office?.book_size_commercial);
+        const bookLife = num(office?.book_size_life);
+        const bookHealth = num(office?.book_size_health);
+
+        const totalBookPremium = bookAuto + bookFire + bookComm + bookLife + bookHealth;
+        const totalRenRev =
+          bookAuto * (1 - autoLapse) * (bAuto + vcRate) +
+          bookFire * (1 - fireLapse) * (bFire + vcRate) +
+          bookComm * (1 - commLapse) * (bComm + vcRate) +
+          bookLife * bLife +
+          bookHealth * bHealth;
+
+        return { totalBookPremium, totalRenRev };
+    };
+
     const calculateRev = (ytdNode: any, policies: any[], name: string, specificOffice?: any) => {
         const autoVc = calcPoints(ytdNode.netYtdAutoApps, specificOffice?.vc_min_auto_gain ?? agencySettings?.vc_min_auto_gain ?? 0, specificOffice?.vc_max_auto_gain ?? agencySettings?.vc_max_auto_gain ?? 100, 1.0);
         const fireVc = calcPoints(ytdNode.netYtdFireApps, specificOffice?.vc_min_fire_gain ?? agencySettings?.vc_min_fire_gain ?? 0, specificOffice?.vc_max_fire_gain ?? agencySettings?.vc_max_fire_gain ?? 100, 1.0);
@@ -2639,7 +2676,7 @@ export default function Home() {
                 const prem = Number(pol.premium_amount);
                 const parentLine = getParentLine(pol.product_line);
 
-                if (parentLine === 'Auto') nbAutoPrem += prem; // REMOVED MULTIPLIER
+                if (parentLine === 'Auto') nbAutoPrem += prem;
                 else if (parentLine === 'Fire') nbFirePrem += prem;
                 else if (parentLine === 'Commercial') nbCommPrem += prem;
                 else if (parentLine === 'Life') nbLifePrem += prem;
@@ -2650,7 +2687,7 @@ export default function Home() {
         const vcRate = (specificOffice?.current_vc_rate ?? agencySettings?.current_vc_rate ?? 0) / 100;
         const bAuto = (specificOffice?.base_comm_auto ?? agencySettings?.base_comm_auto ?? 8) / 100;
         const bFire = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100;
-        const bComm = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100; 
+        const bComm = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100;
 
         const nbAutoRev = nbAutoPrem * (bAuto + vcRate);
         const nbFireRev = nbFirePrem * (bFire + vcRate);
@@ -2660,22 +2697,39 @@ export default function Home() {
         const totalNbRev = nbAutoRev + nbFireRev + nbCommRev + nbLifeRev + nbHealthRev;
 
         const ytdTimeFraction = ytdNode.daysPassed / ytdNode.daysInYear;
-        const autoLapse = ((specificOffice?.ytd_lapse_cancel_auto ?? agencySettings?.ytd_lapse_cancel_auto ?? 0) / 100) * ytdTimeFraction;
-        const fireLapse = ((specificOffice?.ytd_lapse_cancel_fire ?? agencySettings?.ytd_lapse_cancel_fire ?? 0) / 100) * ytdTimeFraction;
-        const commLapse = ((specificOffice?.ytd_lapse_cancel_commercial ?? agencySettings?.ytd_lapse_cancel_commercial ?? 0) / 100) * ytdTimeFraction;
 
-        const renAutoRev = (specificOffice?.book_size_auto ?? agencySettings?.book_size_auto ?? 0) * (1 - autoLapse) * (bAuto + vcRate);
-        const renFireRev = (specificOffice?.book_size_fire ?? agencySettings?.book_size_fire ?? 0) * (1 - fireLapse) * (bFire + vcRate);
-        const renCommRev = (specificOffice?.book_size_commercial ?? agencySettings?.book_size_commercial ?? 0) * (1 - commLapse) * (bComm + vcRate);
-        const renLifeRev = (specificOffice?.book_size_life ?? agencySettings?.book_size_life ?? 0) * bLife; 
-        const renHealthRev = (specificOffice?.book_size_health ?? agencySettings?.book_size_health ?? 0) * bHealth;
-        const totalRenRev = renAutoRev + renFireRev + renCommRev + renLifeRev + renHealthRev;
+        let totalBookPremium = 0;
+        let totalRenRev = 0;
+
+        if (specificOffice) {
+          const ren = calculateRenewalsForOffice(specificOffice, ytdTimeFraction);
+          totalBookPremium = ren.totalBookPremium;
+          totalRenRev = ren.totalRenRev;
+        } else if (offices.length > 0) {
+          // Enterprise view: sum each office's book + renewal commission (Settings stores book on offices)
+          offices.forEach((office: any) => {
+            const ren = calculateRenewalsForOffice(office, ytdTimeFraction);
+            totalBookPremium += ren.totalBookPremium;
+            totalRenRev += ren.totalRenRev;
+          });
+          // Fallback if offices have no book rows but agency-level book sizes exist
+          if (totalBookPremium === 0) {
+            const ren = calculateRenewalsForOffice(agencySettings, ytdTimeFraction);
+            totalBookPremium = ren.totalBookPremium;
+            totalRenRev = ren.totalRenRev;
+          }
+        } else {
+          const ren = calculateRenewalsForOffice(agencySettings, ytdTimeFraction);
+          totalBookPremium = ren.totalBookPremium;
+          totalRenRev = ren.totalRenRev;
+        }
 
         return { 
           name, projectedVc, autoVc, fireVc, fsVc, ytdFsComm, 
           runRateAutoVc, runRateFireVc, runRateFsVc, runRateProjectedVc, runRateFsComm, 
           runRateAutoApps: ytdNode.runRateAutoApps, runRateFireApps: ytdNode.runRateFireApps,
-          lifeVc: fsVc, ytdLifePremium: ytdFsComm, totalNbRev, totalRenRev, totalAgencyRev: totalNbRev + totalRenRev, netYtdAutoApps: ytdNode.netYtdAutoApps, netYtdFireApps: ytdNode.netYtdFireApps 
+          lifeVc: fsVc, ytdLifePremium: ytdFsComm, totalNbRev, totalRenRev, totalBookPremium,
+          totalAgencyRev: totalNbRev + totalRenRev, netYtdAutoApps: ytdNode.netYtdAutoApps, netYtdFireApps: ytdNode.netYtdFireApps 
         };
     };
 
