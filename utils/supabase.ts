@@ -1,23 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseEnv';
 
-// 🛑 ULTIMATE SANITY CHECK 🛑
-const RAW_URL = "https://onnydmmyzreatfyevlrp.supabase.co/rest/v1/";
-const RAW_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ubnlkbW15enJlYXRmeWV2bHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMzUzODQsImV4cCI6MjA5NzcxMTM4NH0.xEW3JhqmKw0RHsWLfs1SYJYuUCtcyL2Zsv0Il7LctwI";
-
-// --- AUTO-FIXER ---
-let cleanUrl = RAW_URL.replace(/['"]/g, '').trim();
-let cleanKey = RAW_KEY.replace(/['"]/g, '').trim();
-
-// Remove /rest/v1/ if it was accidentally included (This causes the PGRST125 error!)
-cleanUrl = cleanUrl.replace('/rest/v1/', '').replace('/rest/v1', '');
-
-// Automatically add https:// if it was accidentally left off
-if (!cleanUrl.startsWith('http')) {
-  cleanUrl = `https://${cleanUrl}`;
-}
-// Remove trailing slashes just in case
-if (cleanUrl.endsWith('/')) {
-  cleanUrl = cleanUrl.slice(0, -1);
-}
-
-export const supabase = createClient(cleanUrl, cleanKey);
+// Switched from plain @supabase/supabase-js createClient() (localStorage-only
+// session) to @supabase/ssr's createBrowserClient(). Same API surface for every
+// existing call site (.auth.*, .from(), .rpc(), etc.) — but it ALSO writes the
+// session to cookies, which is what lets proxy.ts (running server-side, with no
+// access to localStorage) read the session and gate /dashboard vs /onboarding
+// before the page even renders. See proxy.ts for the read side.
+//
+// One-time migration note: anyone with an existing session in localStorage from
+// before this change will need to log in again — the new cookie-based client
+// doesn't read the old localStorage entry. Expected/harmless for a small closed
+// beta; not worth a bespoke migration path.
+export const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
