@@ -1,20 +1,38 @@
 "use client";
 
-import React, { useEffect, useState, FormEvent } from "react";
+import React, { useEffect, useRef, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../utils/supabase";
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// =============================================================================
+// "/" — standard login / signup page ONLY.
+// -----------------------------------------------------------------------------
+// This page never renders OnboardingWizard directly, and never decides on its
+// own whether a user needs onboarding — it just gets them authenticated and
+// hands off to /dashboard, which owns the "is this account fully set up?"
+// gatekeeper check (see app/dashboard/page.tsx fetchProfile). If it isn't,
+// /dashboard redirects to /onboarding itself. Keeping that decision in one
+// place (the dashboard's gatekeeper) means both this page AND the dashboard's
+// own legacy inline registration form funnel through the same check.
+// =============================================================================
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  // supabase.auth.signUp() fires its own SIGNED_IN event once the session is
+  // established — same as signInWithPassword. Without this flag, that event
+  // would race the explicit router.push("/onboarding") in handleSubmit's signup
+  // branch against this listener's router.replace("/dashboard"), since both
+  // fire almost simultaneously. Set right before either auth call, so the
+  // listener knows "this SIGNED_IN came from our own form submit, which already
+  // owns routing for it" and should stay hands-off.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -31,7 +49,7 @@ export default function LoginPage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
+      if (event === "SIGNED_IN" && session && !submittingRef.current) {
         router.replace("/dashboard");
       }
     });
@@ -46,8 +64,27 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setIsLoading(true);
+    submittingRef.current = true;
 
     try {
+      if (mode === "signup") {
+        // Deliberately bare: only creates the auth.users row. No agency, no
+        // profile fields, and — critically — no `profiles` row at all yet either
+        // (nothing here inserts one). Route straight to /onboarding instead of
+        // /dashboard: fetchProfile's gatekeeper would otherwise have to correctly
+        // interpret "0 rows" as "brand new, not an error", and there's no reason
+        // to make it guess when we already know exactly why the row is missing.
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
+
+        if (signUpError) throw signUpError;
+
+        router.push("/onboarding");
+        return;
+      }
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -57,8 +94,11 @@ export default function LoginPage() {
 
       router.replace("/dashboard");
     } catch (err: unknown) {
+      // Failed — we're not navigating away, so let the listener resume normal
+      // behavior for any future auth events (e.g. a stray session restore).
+      submittingRef.current = false;
       const message =
-        err instanceof Error ? err.message : "Unable to sign in. Please try again.";
+        err instanceof Error ? err.message : "Unable to continue. Please try again.";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -73,12 +113,16 @@ export default function LoginPage() {
     );
   }
 
+  const isSignup = mode === "signup";
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 py-12">
       <div className="w-full max-w-md rounded-2xl border border-slate-700/80 bg-slate-800/90 p-8 shadow-2xl shadow-black/40">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-white">Centravity</h1>
-          <p className="mt-2 text-sm text-slate-400">Sign in to your agency scoreboard</p>
+          <p className="mt-2 text-sm text-slate-400">
+            {isSignup ? "Create your agency's account" : "Sign in to your agency scoreboard"}
+          </p>
         </div>
 
         {error && (
@@ -115,8 +159,9 @@ export default function LoginPage() {
             <input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={isSignup ? "new-password" : "current-password"}
               required
+              minLength={isSignup ? 6 : undefined}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
@@ -133,13 +178,47 @@ export default function LoginPage() {
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Signing in…
+                {isSignup ? "Creating account…" : "Signing in…"}
               </>
+            ) : isSignup ? (
+              "Create Account"
             ) : (
               "Sign In"
             )}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-slate-400">
+          {isSignup ? (
+            <>
+              Already have an account?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signin");
+                  setError("");
+                }}
+                className="font-medium text-blue-400 hover:text-blue-300"
+              >
+                Sign in
+              </button>
+            </>
+          ) : (
+            <>
+              Setting up a new agency?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signup");
+                  setError("");
+                }}
+                className="font-medium text-blue-400 hover:text-blue-300"
+              >
+                Create an account
+              </button>
+            </>
+          )}
+        </p>
       </div>
     </div>
   );

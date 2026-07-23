@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { 
@@ -93,8 +94,10 @@ const makeLineAgg = (): LineAgg => ({ Auto: { premium: 0, apps: 0 }, Fire: { pre
 
 
 export default function Home() {
+  const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [agencySettings, setAgencySettings] = useState<Agency | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -208,7 +211,7 @@ export default function Home() {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session?.user && !isRecovery) {
+      if (session?.user?.id && !isRecovery) {
         fetchProfile(session.user.id);
       } else {
         setLoading(false);
@@ -219,10 +222,11 @@ export default function Home() {
       setSession(session);
       if (event === 'PASSWORD_RECOVERY' || isRecovery) {
         setAuthMode('reset_password');
-      } else if (event === 'SIGNED_IN' && session?.user) {
+      } else if (event === 'SIGNED_IN' && session?.user?.id) {
         if (!isRecovery) fetchProfile(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         setProfile(null);
+        setProfileLoadError(null);
         setTeam([]);
       }
     });
@@ -292,31 +296,97 @@ export default function Home() {
     return () => { supabase.removeChannel(policyChannel); };
   }, [profile?.agency_id]);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (error) console.error('[Settings] fetchProfile error', error);
-    if (data) {
-      setProfile(data);
-      
-      if (data.role === 'producer' || data.role === 'service') {
-        setSelectedProducer(data.id);
-      } else {
-        setSelectedProducer('all');
-      }
-      
-      fetchOffices(data.agency_id);
-      fetchCompPlans(data.agency_id); 
-      fetchAgencySettings(data.agency_id);
-      // Always load roster for Settings goals UI — custom roles with manage_settings
-      // are not always literally role === 'owner'|'manager', so gating on those strings
-      // left team/comp-plan bindings empty and hid member targets.
-      fetchTeam(data.agency_id);
-      fetchArchivedTeam(data.agency_id);
-
-      if (data.role === 'owner' || data.role === 'manager') {
-        fetchAgencyOverview(data.agency_id);
-      }
+  const fetchProfile = async (userId: string | null | undefined) => {
+    // Guard against a not-yet-established session firing this with an undefined id
+    // (e.g. a stray call site, or an auth event that races ahead of session hydration).
+    if (!userId) {
+      console.warn('[Settings] fetchProfile called with no userId — skipping fetch.');
+      setLoading(false);
+      return;
     }
+
+    // .maybeSingle() (instead of .single()) returns { data: null, error: null } for a
+    // genuine 0-row result instead of throwing a PostgREST "no rows" error — .single()
+    // is what was producing the confusing, near-empty error object.
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+
+    if (error) {
+      console.error('[Settings] fetchProfile error', error);
+      setProfileLoadError('We had trouble loading your account. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    // ---- Onboarding gatekeeper ----
+    // Two distinct "not fully set up yet" shapes both land here, and both mean the
+    // same thing: send them to /onboarding instead of the error screen.
+    //   1. `data` is null — no `profiles` row exists at all. This is the normal,
+    //      expected state for a brand-new signup: supabase.auth.signUp() only ever
+    //      creates the auth.users row, never a profiles row. (app/page.tsx now sends
+    //      fresh signups straight to /onboarding itself, so this is mostly a safety
+    //      net for anyone who lands on /dashboard directly, e.g. a stale bookmark or
+    //      browser back-button right after signing up.)
+    //   2. `data` exists but `agency_id` is null — the owner has a row (e.g. from the
+    //      legacy register_agency_owner RPC path) but never finished the wizard.
+    // Previously (1) retried 3x with backoff and then fell through to a
+    // "We couldn't load your account" error screen — but there's nothing erroneous
+    // about a brand-new user with no profile row yet, so there's nothing to retry
+    // for and nothing to show an error about. Redirect immediately instead.
+    if (!data) {
+      console.warn('[Onboarding Gate] No profile row for authenticated user — redirecting to /onboarding', userId);
+      router.replace('/onboarding');
+      return; // leave `loading` true; we're navigating away, not rendering the dashboard
+    }
+
+    if (!data.agency_id) {
+      console.warn('[Onboarding Gate] Profile has no agency_id yet — redirecting to /onboarding', userId);
+      router.replace('/onboarding');
+      return; // leave `loading` true; we're navigating away, not rendering the dashboard
+    }
+
+    // With the 5-step save-as-you-go wizard, agency_id gets set as early as
+    // Step 1 — long before setup is actually done — so it's no longer enough
+    // on its own to prove an OWNER is fully onboarded. Catch that case too,
+    // scoped tightly:
+    //   - role === 'owner' only. Team members never run the wizard themselves
+    //     (it's the owner's flow — see "Owner's Full Name" in Step 1), so
+    //     gating them on their own onboarding_completed would lock them out
+    //     over something they have no way to fix.
+    //   - only when `onboarding_step` is present at all on this row, which
+    //     proves scripts/add_onboarding_step4_5_columns.sql has actually run
+    //     in this environment. If it hasn't, onboarding_completed could be
+    //     undefined for EVERY existing owner (old migration never run either)
+    //     and this would incorrectly bounce already-live agencies back into
+    //     the wizard — so this whole check stays off until we have positive
+    //     proof the newer column exists.
+    if (data.role === 'owner' && typeof data.onboarding_step === 'number' && !data.onboarding_completed) {
+      console.warn('[Onboarding Gate] Owner has not finished the wizard yet — redirecting to /onboarding', userId);
+      router.replace('/onboarding');
+      return;
+    }
+
+    setProfileLoadError(null);
+    setProfile(data);
+
+    if (data.role === 'producer' || data.role === 'service') {
+      setSelectedProducer(data.id);
+    } else {
+      setSelectedProducer('all');
+    }
+
+    fetchOffices(data.agency_id);
+    fetchCompPlans(data.agency_id);
+    fetchAgencySettings(data.agency_id);
+    // Always load roster for Settings goals UI — custom roles with manage_settings
+    // are not always literally role === 'owner'|'manager', so gating on those strings
+    // left team/comp-plan bindings empty and hid member targets.
+    fetchTeam(data.agency_id);
+    fetchArchivedTeam(data.agency_id);
+
+    if (data.role === 'owner' || data.role === 'manager') {
+      fetchAgencyOverview(data.agency_id);
+    }
+
     setLoading(false);
   };
 
@@ -578,6 +648,37 @@ export default function Home() {
         if (chartDay) chartDay.Bound++;
       }
     });
+
+    // Fold in the onboarding "starting YTD" baseline (profiles.starting_ytd_*) for whichever
+    // producer(s) this fetch is scoped to — mirrors the same blend used for ytdOverviewData /
+    // agencyOverviewData / lifeOverviewData. Without this, MyPerformanceTab's individual YTD
+    // progress bars (stats.ytdAutoApps, stats.ytdLifePremium, etc.) always read as if the selected
+    // producer(s) had zero production before they started logging activity in Centravity.
+    // - userId === 'all': sum every team member within the active office filter (if any).
+    // - userId === a specific id: that one member's baseline only.
+    // No baseline exists for Commercial (never collected by the wizard), so ytdCommApps is untouched.
+    const statsBaselineMembers = userId !== 'all'
+      ? team.filter(t => t.id === userId)
+      : (officeMemberIds ? team.filter(t => officeMemberIds.includes(t.id)) : team);
+    const statsBaseline = statsBaselineMembers.reduce(
+      (acc, m: any) => ({
+        autoApps: acc.autoApps + (Number(m.starting_ytd_auto_apps) || 0),
+        autoPremium: acc.autoPremium + (Number(m.starting_ytd_auto_premium) || 0),
+        fireApps: acc.fireApps + (Number(m.starting_ytd_fire_apps) || 0),
+        firePremium: acc.firePremium + (Number(m.starting_ytd_fire_premium) || 0),
+        lifeApps: acc.lifeApps + (Number(m.starting_ytd_life_apps) || 0),
+        lifePremium: acc.lifePremium + (Number(m.starting_ytd_life_premium) || 0),
+        healthApps: acc.healthApps + (Number(m.starting_ytd_health_apps) || 0),
+        healthPremium: acc.healthPremium + (Number(m.starting_ytd_health_premium) || 0),
+      }),
+      { autoApps: 0, autoPremium: 0, fireApps: 0, firePremium: 0, lifeApps: 0, lifePremium: 0, healthApps: 0, healthPremium: 0 }
+    );
+    tempStats.ytdAutoApps += statsBaseline.autoApps;
+    tempStats.ytdFireApps += statsBaseline.fireApps;
+    tempStats.ytdHealthApps += statsBaseline.healthApps;
+    tempStats.ytdLifeApps += statsBaseline.lifeApps;
+    tempStats.ytdLifePremium += statsBaseline.lifePremium;
+    tempStats.ytdBound += statsBaseline.autoApps + statsBaseline.fireApps + statsBaseline.lifeApps + statsBaseline.healthApps;
 
     setStats(tempStats);
     setAgencyStats(tempAgencyStats);
@@ -2383,6 +2484,35 @@ export default function Home() {
         }
       });
 
+      // Fold this member's own onboarding "starting YTD" baseline (profiles.starting_ytd_*) into
+      // their individual YTD aggregates — mirrors the same blend ytdOverviewData's calculateStats()
+      // does for the agency-wide totals, just scoped to one producer. Without this, every YTD-mode
+      // leaderboard stat (avg premium by line, accelerator thresholds, the What-If YTD engine) read
+      // as if the member had zero production before they started logging activity in Centravity.
+      // No baseline exists for Commercial (never collected by the wizard), so it's untouched here.
+      const memberAutoBaselineApps = Number((member as any).starting_ytd_auto_apps) || 0;
+      const memberAutoBaselinePremium = Number((member as any).starting_ytd_auto_premium) || 0;
+      const memberFireBaselineApps = Number((member as any).starting_ytd_fire_apps) || 0;
+      const memberFireBaselinePremium = Number((member as any).starting_ytd_fire_premium) || 0;
+      const memberLifeBaselineApps = Number((member as any).starting_ytd_life_apps) || 0;
+      const memberLifeBaselinePremium = Number((member as any).starting_ytd_life_premium) || 0;
+      const memberHealthBaselineApps = Number((member as any).starting_ytd_health_apps) || 0;
+      const memberHealthBaselinePremium = Number((member as any).starting_ytd_health_premium) || 0;
+
+      ytdLineAgg.Auto.apps += memberAutoBaselineApps;
+      ytdLineAgg.Auto.premium += memberAutoBaselinePremium;
+      ytdLineAgg.Fire.apps += memberFireBaselineApps;
+      ytdLineAgg.Fire.premium += memberFireBaselinePremium;
+      ytdLineAgg.Life.apps += memberLifeBaselineApps;
+      ytdLineAgg.Life.premium += memberLifeBaselinePremium;
+      ytdLineAgg.Health.apps += memberHealthBaselineApps;
+      ytdLineAgg.Health.premium += memberHealthBaselinePremium;
+
+      ytdBound += memberAutoBaselineApps + memberFireBaselineApps + memberLifeBaselineApps + memberHealthBaselineApps;
+      ytdPremium += memberAutoBaselinePremium + memberFireBaselinePremium + memberLifeBaselinePremium + memberHealthBaselinePremium;
+      ytdLifeApps += memberLifeBaselineApps;
+      ytdLifePremium += memberLifeBaselinePremium;
+
       const memberYtdAvgPremium = PARENT_CATEGORIES.reduce((acc, line) => {
         acc[line] = ytdLineAgg[line].apps > 0 ? ytdLineAgg[line].premium / ytdLineAgg[line].apps : (agencyAvgPremiumYtd[line] || agencyAvgPremiumYtd.Blended);
         return acc;
@@ -2510,6 +2640,13 @@ export default function Home() {
             ytdPrem += Number(pol.premium_amount);
         }
       });
+
+      // Fold in this member's onboarding "starting YTD" Life baseline (profiles.starting_ytd_life_*)
+      // so the Life Module's Annual Progress bars don't start at zero for an agency that hasn't
+      // logged real Life policies yet — mirrors the same blend used everywhere else.
+      ytdApps += Number((member as any).starting_ytd_life_apps) || 0;
+      ytdPrem += Number((member as any).starting_ytd_life_premium) || 0;
+
       return { ...member, lifeWritten: mWritten, lifeIssued: mIssued, lifePremium: mPremium, lifeQuotes: mQuotes, closeRate: mQuotes > 0 ? ((mWritten / mQuotes) * 100).toFixed(1) : "0.0", ytdApps, ytdPrem };
     });
 
@@ -2571,6 +2708,52 @@ export default function Home() {
                     else if (pol.status === 'bound' || pol.status === 'quoted') pendingHealthCred += prem;
                 }
             }
+        });
+
+        // Blend in each team member's onboarding "starting YTD" baseline — production that
+        // already happened before the agency started logging activity in Centravity. Without
+        // this, an agency that onboards mid-year always starts every pacing/conversion widget
+        // (Gross/Net apps, run rates, Revenue & VC) from zero even though real production
+        // already exists. Populated by OnboardingWizard Step 3 → saveStep3YTD, and read here via
+        // `team`'s wildcard select (see fetchTeam) so no extra fetch is needed. Scoped to the
+        // team members assigned to `specificOffice` when drilled into one location, otherwise
+        // every active team member counts toward the Enterprise / All Locations totals.
+        const baselineMembers = specificOffice ? team.filter((t: any) => t.office_id === specificOffice.id) : team;
+        const baseline = baselineMembers.reduce(
+            (acc: any, m: any) => ({
+                autoApps: acc.autoApps + (Number(m.starting_ytd_auto_apps) || 0),
+                autoPremium: acc.autoPremium + (Number(m.starting_ytd_auto_premium) || 0),
+                fireApps: acc.fireApps + (Number(m.starting_ytd_fire_apps) || 0),
+                firePremium: acc.firePremium + (Number(m.starting_ytd_fire_premium) || 0),
+                lifeApps: acc.lifeApps + (Number(m.starting_ytd_life_apps) || 0),
+                lifePremium: acc.lifePremium + (Number(m.starting_ytd_life_premium) || 0),
+                healthApps: acc.healthApps + (Number(m.starting_ytd_health_apps) || 0),
+                healthPremium: acc.healthPremium + (Number(m.starting_ytd_health_premium) || 0),
+            }),
+            { autoApps: 0, autoPremium: 0, fireApps: 0, firePremium: 0, lifeApps: 0, lifePremium: 0, healthApps: 0, healthPremium: 0 }
+        );
+
+        totals.ytdAutoApps += baseline.autoApps;
+        totals.ytdFireApps += baseline.fireApps;
+        totals.ytdLifeApps += baseline.lifeApps;
+        totals.ytdLifePremium += baseline.lifePremium;
+        totals.ytdHealthApps += baseline.healthApps;
+        totals.ytdHealthPremium += baseline.healthPremium;
+        totals.ytdPremium += baseline.autoPremium + baseline.firePremium + baseline.lifePremium + baseline.healthPremium;
+        totals.ytdBound += baseline.autoApps + baseline.fireApps + baseline.lifeApps + baseline.healthApps;
+
+        // Baseline Life/Health premium is already-earned credit (real production that already
+        // happened), not a pending pipeline item, so it counts toward the Travel Qualifier the
+        // same way an "issued" policy would.
+        issuedLifeCred += baseline.lifePremium;
+        issuedHealthCred += baseline.healthPremium;
+
+        console.log('[YTD] baseline blend', {
+            name,
+            specificOfficeId: specificOffice?.id ?? null,
+            baselineMemberCount: baselineMembers.length,
+            baseline,
+            totalsAfterBlend: totals,
         });
 
         const travelTiers = [
@@ -2819,6 +3002,26 @@ export default function Home() {
             }
         });
 
+        // Fold in the onboarding "starting YTD" baseline premium (profiles.starting_ytd_*_premium)
+        // the same way calculateStats() does for ytdOverviewData — without this, New Business (YTD)
+        // always read $0 for an agency that hasn't logged real policies yet, even though the owner
+        // entered real Step 3 production numbers. No baseline exists for Commercial (never
+        // collected by the wizard), so nbCommPrem is intentionally left untouched.
+        const nbBaselineMembers = specificOffice ? team.filter((t: any) => t.office_id === specificOffice.id) : team;
+        const nbBaseline = nbBaselineMembers.reduce(
+            (acc: any, m: any) => ({
+                autoPremium: acc.autoPremium + (Number(m.starting_ytd_auto_premium) || 0),
+                firePremium: acc.firePremium + (Number(m.starting_ytd_fire_premium) || 0),
+                lifePremium: acc.lifePremium + (Number(m.starting_ytd_life_premium) || 0),
+                healthPremium: acc.healthPremium + (Number(m.starting_ytd_health_premium) || 0),
+            }),
+            { autoPremium: 0, firePremium: 0, lifePremium: 0, healthPremium: 0 }
+        );
+        nbAutoPrem += nbBaseline.autoPremium;
+        nbFirePrem += nbBaseline.firePremium;
+        nbLifePrem += nbBaseline.lifePremium;
+        nbHealthPrem += nbBaseline.healthPremium;
+
         const vcRate = (specificOffice?.current_vc_rate ?? agencySettings?.current_vc_rate ?? 0) / 100;
         const bAuto = (specificOffice?.base_comm_auto ?? agencySettings?.base_comm_auto ?? 8) / 100;
         const bFire = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100;
@@ -2884,9 +3087,37 @@ export default function Home() {
     }
 
     return { global: globalRev, locations: locationsRev };
-  }, [filteredPolicies, agencyPolicies, offices, agencySettings, ytdOverviewData, globalOfficeFilter, canViewRevenueVc]);
+  }, [filteredPolicies, agencyPolicies, offices, team, agencySettings, ytdOverviewData, globalOfficeFilter, canViewRevenueVc]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Centravity HQ...</div>;
+
+  // Signed in, but fetchProfile hit a real Supabase error (network/RLS/etc) — NOT a
+  // missing-row case, since that's now handled by the onboarding gatekeeper redirect
+  // above. Showing the generic login form here would be misleading — the user IS
+  // authenticated, we just couldn't load their row. Surface that distinctly with a retry.
+  if (session && !profile && profileLoadError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 text-center">
+        <AlertCircle className="text-amber-500 mb-4" size={48} />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">We couldn't load your account</h2>
+        <p className="text-sm text-gray-500 max-w-sm mb-6">{profileLoadError}</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => { setLoading(true); fetchProfile(session.user?.id); }}
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 transition"
+          >
+            Try Again
+          </button>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); }}
+            className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!session || !profile) {
     return (
