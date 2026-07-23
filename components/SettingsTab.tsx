@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore } from 'lucide-react';
+import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { DEFAULT_COMMISSION_RATES, resolveCommissionRates, type LifeSubType, type HealthSubType } from '../utils/commissionRates';
+
+const LIFE_SUBTYPE_LABELS: Record<LifeSubType, string> = {
+  term: 'Term',
+  traditional_ordinary: 'Traditional Ordinary',
+  single_premium: 'Single Premium',
+};
+
+const HEALTH_SUBTYPE_LABELS: Record<HealthSubType, string> = {
+  medicare_supplement: 'Medicare Supplement',
+  long_term_care_and_disability: 'Long-Term Care & Disability',
+  hospital_income: 'Hospital Income',
+};
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'view_agency_dash', label: 'View Agency Scoreboard', desc: 'Allows access to macro team stats and global pacing.' },
@@ -48,7 +61,7 @@ export default function SettingsTab({
   const [newProductLine, setNewProductLine] = useState(""); 
   const [newProductParent, setNewProductParent] = useState("Auto"); 
   const [editingPlan, setEditingPlan] = useState<any>(null);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles'>('agency');
+  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates'>('agency');
   const [importMode, setImportMode] = useState<'matrix' | 'csv'>('matrix');
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
@@ -72,11 +85,56 @@ export default function SettingsTab({
   const [editingRole, setEditingRole] = useState<any>(null);
   const roles = agencySettings?.custom_roles || DEFAULT_ROLES;
 
+  // Commission Rate Engine (Life/Health carrier tables — decoupled from P&C VC).
+  // Local draft state so the financial controller can edit freely and only commit
+  // on "Save Commission Rates" — mirrors the roles editor's save-on-demand pattern
+  // rather than riding the broader unsaved "Save All Global Settings" flow, since
+  // these are sensitive $ rates that shouldn't get persisted as a side effect of
+  // saving some unrelated field elsewhere on this page.
+  const [commissionRatesDraft, setCommissionRatesDraft] = useState(DEFAULT_COMMISSION_RATES);
+  const [isSavingCommissionRates, setIsSavingCommissionRates] = useState(false);
+
   useEffect(() => {
     const mapped: any = {};
     offices.forEach((o: any) => mapped[o.id] = { ...o });
     setLocalOfficeData(mapped);
   }, [offices]);
+
+  useEffect(() => {
+    setCommissionRatesDraft(resolveCommissionRates(agencySettings?.commission_rates));
+  }, [agencySettings?.commission_rates]);
+
+  const updateLifeRate = (subType: LifeSubType, field: 'year1' | 'year2_to_5' | 'year6_plus', pct: number) => {
+    setCommissionRatesDraft(prev => ({
+      ...prev,
+      life: { ...prev.life, [subType]: { ...prev.life[subType], [field]: pct / 100 } },
+    }));
+  };
+
+  const updateHealthRate = (subType: HealthSubType, field: 'first_year' | 'servicing', pct: number) => {
+    setCommissionRatesDraft(prev => ({
+      ...prev,
+      health: { ...prev.health, [subType]: { ...prev.health[subType], [field]: pct / 100 } },
+    }));
+  };
+
+  const saveCommissionRates = async () => {
+    if (!agencySettings?.id) return;
+    setIsSavingCommissionRates(true);
+    try {
+      const { error } = await supabase
+        .from('agencies')
+        .update({ commission_rates: commissionRatesDraft })
+        .eq('id', agencySettings.id);
+      if (error) throw error;
+      setAgencySettings({ ...agencySettings, commission_rates: commissionRatesDraft });
+      showToast('Commission rates updated successfully!', 'success');
+    } catch (err: any) {
+      showToast('Failed to save commission rates: ' + err.message, 'error');
+    } finally {
+      setIsSavingCommissionRates(false);
+    }
+  };
 
   const updateLocalOffice = (id: string, field: string, val: any) => { setLocalOfficeData((prev: any) => ({ ...prev, [id]: { ...prev[id], [field]: val }})); };
   const updateRule = (category: string, field: string, value: any) => { setEditingPlan((prev: any) => ({ ...prev, rules: { ...prev.rules, [category]: { ...(prev.rules[category] || {}), [field]: value } } })); };
@@ -177,6 +235,7 @@ export default function SettingsTab({
         <button onClick={() => setActiveSettingsSection('team')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'team' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Users size={16}/> Team Management</button>
         <button onClick={() => setActiveSettingsSection('roles')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'roles' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Shield size={16}/> Roles & Permissions</button>
         <button onClick={() => setActiveSettingsSection('compplans')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'compplans' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DollarSign size={16}/> Compensation Plans</button>
+        <button onClick={() => setActiveSettingsSection('commission_rates')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'commission_rates' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Percent size={16}/> Life/Health Commission Rates</button>
         <button onClick={() => setActiveSettingsSection('promotions')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'promotions' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Trophy size={16}/> Corporate Promotions</button>
         <button onClick={() => setActiveSettingsSection('locations')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'locations' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><MapPin size={16}/> Office Locations</button>
         <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DownloadCloud size={16}/> Import Historical Data</button>
@@ -1086,6 +1145,154 @@ export default function SettingsTab({
 
             </div>
           )}
+        </div>
+      )}
+
+      {/* --- SECTION: LIFE/HEALTH COMMISSION RATE ENGINE --- */}
+      {activeSettingsSection === 'commission_rates' && (
+        <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle size={18} className="text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-900">
+              These rates apply <strong>only</strong> to Life &amp; Health revenue projections and are completely
+              independent of the Variable Comp (VC) rate above — VC applies exclusively to Auto, Fire, and Commercial.
+              <strong> New Business</strong> uses the Year 1 / First Year column; <strong>Renewals &amp; existing book</strong>
+              use the Servicing / Year 2+ column.
+            </p>
+          </div>
+
+          {/* LIFE */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Shield size={20} /></div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Life Insurance</h3>
+                  <p className="text-xs text-gray-500">Carrier compensation table by product type</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <th className="pb-3 pr-4">Product Type</th>
+                    <th className="pb-3 pr-4">Year 1 (New Business) %</th>
+                    <th className="pb-3 pr-4">Year 2&ndash;5 (Servicing) %</th>
+                    <th className="pb-3 pr-4">Year 6+ (Servicing) %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(Object.keys(LIFE_SUBTYPE_LABELS) as LifeSubType[]).map((subType) => {
+                    const band = commissionRatesDraft.life[subType];
+                    return (
+                      <tr key={subType}>
+                        <td className="py-3 pr-4 font-bold text-gray-900 whitespace-nowrap">{LIFE_SUBTYPE_LABELS[subType]}</td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={Math.round(band.year1 * 1000) / 10}
+                            onChange={(e) => updateLifeRate(subType, 'year1', Number(e.target.value))}
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={Math.round(band.year2_to_5 * 1000) / 10}
+                            onChange={(e) => updateLifeRate(subType, 'year2_to_5', Number(e.target.value))}
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={Math.round(band.year6_plus * 1000) / 10}
+                            onChange={(e) => updateLifeRate(subType, 'year6_plus', Number(e.target.value))}
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
+                <strong>Note:</strong> Traditional Ordinary rates are an average across the carrier&apos;s mid-tier age
+                brackets for projection simplicity. Aggregate Life premium (which isn&apos;t yet broken out by product
+                type per policy) is projected using the <strong>Term</strong> rate as the blended default.
+              </p>
+            </div>
+          </div>
+
+          {/* HEALTH */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><HeartPulse size={20} /></div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Health Insurance</h3>
+                  <p className="text-xs text-gray-500">Carrier compensation table by product type</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <th className="pb-3 pr-4">Product Type</th>
+                    <th className="pb-3 pr-4">First Year (New Business) %</th>
+                    <th className="pb-3 pr-4">Servicing (Renewal) %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(Object.keys(HEALTH_SUBTYPE_LABELS) as HealthSubType[]).map((subType) => {
+                    const band = commissionRatesDraft.health[subType];
+                    return (
+                      <tr key={subType}>
+                        <td className="py-3 pr-4 font-bold text-gray-900 whitespace-nowrap">{HEALTH_SUBTYPE_LABELS[subType]}</td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={Math.round(band.first_year * 1000) / 10}
+                            onChange={(e) => updateHealthRate(subType, 'first_year', Number(e.target.value))}
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={Math.round(band.servicing * 1000) / 10}
+                            onChange={(e) => updateHealthRate(subType, 'servicing', Number(e.target.value))}
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
+                <strong>Note:</strong> Aggregate Health premium is projected using the <strong>Medicare Supplement</strong>{' '}
+                rate as the blended default until per-policy product-type data exists.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={saveCommissionRates}
+              disabled={isSavingCommissionRates}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-8 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm"
+            >
+              <Save size={18} /> {isSavingCommissionRates ? 'Saving...' : 'Save Commission Rates'}
+            </button>
+          </div>
         </div>
       )}
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
+import { resolveCommissionRates, calculateLifeHealthRevenue } from "../../utils/commissionRates";
 import { 
   BarChart3, Settings, Target, PhoneCall, 
   FileText, ShieldCheck, LogOut, CheckCircle2, 
@@ -75,7 +76,7 @@ const GlobalStyles = () => (
 );
 
 type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; monthly_target_life_apps: number; monthly_target_life_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; };
-type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string;};
+type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates;};
 type Policy = { id: string; user_id: string; customer_name: string; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
 type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
@@ -2856,6 +2857,10 @@ export default function Home() {
     const linesDict = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
     const getParentLine = (line: string) => resolveParentLine(line, linesDict);
 
+    // Carrier-accurate Life/Health commission table (agencies.commission_rates) — Life & Health
+    // revenue is intentionally decoupled from current_vc_rate entirely; see utils/commissionRates.ts.
+    const commissionRates = resolveCommissionRates(agencySettings?.commission_rates);
+
     const calcPoints = (actual: number, min: number, max: number, maxPct: number) => {
         if (actual <= min) return 0;
         if (actual >= max) return maxPct;
@@ -2920,12 +2925,11 @@ export default function Home() {
         const fireLapse = (num(office?.ytd_lapse_cancel_fire, num(agencySettings?.ytd_lapse_cancel_fire)) / 100) * ytdTimeFraction;
         const commLapse = (num(office?.ytd_lapse_cancel_commercial, num(agencySettings?.ytd_lapse_cancel_commercial)) / 100) * ytdTimeFraction;
 
+        // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health.
         const vcRate = num(office?.current_vc_rate, num(agencySettings?.current_vc_rate)) / 100;
         const bAuto = num(office?.base_comm_auto, num(agencySettings?.base_comm_auto, 8)) / 100;
         const bFire = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
         const bComm = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
-        const bLife = num(office?.base_comm_life, num(agencySettings?.base_comm_life, 20)) / 100;
-        const bHealth = num(office?.base_comm_health, num(agencySettings?.base_comm_health, 20)) / 100;
 
         const bookAuto = readBookField(office, 'book_size_auto');
         const bookFire = readBookField(office, 'book_size_fire');
@@ -2933,13 +2937,21 @@ export default function Home() {
         const bookLife = readBookField(office, 'book_size_life');
         const bookHealth = readBookField(office, 'book_size_health');
 
+        // Existing book = "renewal" phase → servicing / year2_to_5 carrier rates, no VC.
+        const { lifeRevenue: bookLifeRev, healthRevenue: bookHealthRev } = calculateLifeHealthRevenue({
+          lifePremium: bookLife,
+          healthPremium: bookHealth,
+          phase: 'renewal',
+          rates: commissionRates,
+        });
+
         const totalBookPremium = bookAuto + bookFire + bookComm + bookLife + bookHealth;
         const totalRenRev =
           bookAuto * (1 - autoLapse) * (bAuto + vcRate) +
           bookFire * (1 - fireLapse) * (bFire + vcRate) +
           bookComm * (1 - commLapse) * (bComm + vcRate) +
-          bookLife * bLife +
-          bookHealth * bHealth;
+          bookLifeRev +
+          bookHealthRev;
 
         return { totalBookPremium, totalRenRev };
     };
@@ -3022,16 +3034,23 @@ export default function Home() {
         nbLifePrem += nbBaseline.lifePremium;
         nbHealthPrem += nbBaseline.healthPremium;
 
+        // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health.
         const vcRate = (specificOffice?.current_vc_rate ?? agencySettings?.current_vc_rate ?? 0) / 100;
         const bAuto = (specificOffice?.base_comm_auto ?? agencySettings?.base_comm_auto ?? 8) / 100;
         const bFire = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100;
         const bComm = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100;
 
+        // New business = "new_business" phase → year1 / first_year carrier rates, no VC.
+        const { lifeRevenue: nbLifeRev, healthRevenue: nbHealthRev } = calculateLifeHealthRevenue({
+          lifePremium: nbLifePrem,
+          healthPremium: nbHealthPrem,
+          phase: 'new_business',
+          rates: commissionRates,
+        });
+
         const nbAutoRev = nbAutoPrem * (bAuto + vcRate);
         const nbFireRev = nbFirePrem * (bFire + vcRate);
         const nbCommRev = nbCommPrem * (bComm + vcRate);
-        const nbLifeRev = nbLifePrem * bLife;
-        const nbHealthRev = nbHealthPrem * bHealth;
         const totalNbRev = nbAutoRev + nbFireRev + nbCommRev + nbLifeRev + nbHealthRev;
 
         const ytdTimeFraction = ytdNode.daysPassed / ytdNode.daysInYear;

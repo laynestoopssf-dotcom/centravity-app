@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../../utils/supabase";
 import { resolveParentLine } from "../../../utils/productLines";
+import { resolveCommissionRates, calculateLifeHealthRevenue } from "../../../utils/commissionRates";
 
 // =============================================================================
 // Protected route: /dashboard/reveal
@@ -181,6 +182,10 @@ export default function RevealPage() {
     const linesDict = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
     const getParentLine = (line: string) => resolveParentLine(line, linesDict);
 
+    // Carrier-accurate Life/Health commission table (agencies.commission_rates) — Life & Health
+    // revenue is intentionally decoupled from current_vc_rate entirely; see utils/commissionRates.ts.
+    const commissionRates = resolveCommissionRates(agencySettings?.commission_rates);
+
     const today = new Date();
     const startOfYear = new Date(today.getFullYear(), 0, 1);
     const daysPassed = Math.max(1, Math.floor((today.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)));
@@ -298,12 +303,11 @@ export default function RevealPage() {
       const commLapse =
         (num(office?.ytd_lapse_cancel_commercial, num(agencySettings?.ytd_lapse_cancel_commercial)) / 100) * ytdTimeFraction;
 
+      // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health.
       const vcRate = num(office?.current_vc_rate, vcRateAgency) / 100;
       const bAuto = num(office?.base_comm_auto, num(agencySettings?.base_comm_auto, 8)) / 100;
       const bFire = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
       const bComm = bFire; // matches the existing Revenue & VC engine's convention
-      const bLife = num(office?.base_comm_life, num(agencySettings?.base_comm_life, 20)) / 100;
-      const bHealth = num(office?.base_comm_health, num(agencySettings?.base_comm_health, 20)) / 100;
 
       const oAuto = num(office.book_size_auto);
       const oFire = num(office.book_size_fire);
@@ -311,13 +315,21 @@ export default function RevealPage() {
       const oLife = num(office.book_size_life);
       const oHealth = num(office.book_size_health);
 
+      // Existing book = "renewal" phase → servicing / year2_to_5 carrier rates, no VC.
+      const { lifeRevenue: oLifeRev, healthRevenue: oHealthRev } = calculateLifeHealthRevenue({
+        lifePremium: oLife,
+        healthPremium: oHealth,
+        phase: "renewal",
+        rates: commissionRates,
+      });
+
       return (
         sum +
         oAuto * (1 - autoLapse) * (bAuto + vcRate) +
         oFire * (1 - fireLapse) * (bFire + vcRate) +
         oComm * (1 - commLapse) * (bComm + vcRate) +
-        oLife * bLife +
-        oHealth * bHealth
+        oLifeRev +
+        oHealthRev
       );
     }, 0);
 
@@ -326,6 +338,8 @@ export default function RevealPage() {
     const bAutoAgency = num(agencySettings?.base_comm_auto, 8) / 100;
     const bFireAgency = num(agencySettings?.base_comm_fire, 8) / 100;
     const bCommAgency = bFireAgency;
+    // Display-only base comp %s (baseCompLife/baseCompHealth below) — no longer feed totalNbRev,
+    // which is computed via the carrier-rate engine (calculateLifeHealthRevenue) below instead.
     const bLifeAgency = num(agencySettings?.base_comm_life, 20) / 100;
     const bHealthAgency = num(agencySettings?.base_comm_health, 20) / 100;
     const vcRate = vcRateAgency / 100;
@@ -355,12 +369,20 @@ export default function RevealPage() {
     nbLifePrem += baseline.lifePremium;
     nbHealthPrem += baseline.healthPremium;
 
+    // New business = "new_business" phase → year1 / first_year carrier rates, no VC.
+    const { lifeRevenue: nbLifeRev, healthRevenue: nbHealthRev } = calculateLifeHealthRevenue({
+      lifePremium: nbLifePrem,
+      healthPremium: nbHealthPrem,
+      phase: "new_business",
+      rates: commissionRates,
+    });
+
     const totalNbRev =
       nbAutoPrem * (bAutoAgency + vcRate) +
       nbFirePrem * (bFireAgency + vcRate) +
       nbCommPrem * (bCommAgency + vcRate) +
-      nbLifePrem * bLifeAgency +
-      nbHealthPrem * bHealthAgency;
+      nbLifeRev +
+      nbHealthRev;
 
     const totalAgencyRev = totalNbRev + totalRenRev;
 
