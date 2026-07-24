@@ -17,7 +17,9 @@ import {
 } from "lucide-react";
 import { supabase } from "../../../utils/supabase";
 import { resolveParentLine } from "../../../utils/productLines";
-import { resolveCommissionRates, calculateLifeHealthRevenue } from "../../../utils/commissionRates";
+import { resolveCommissionRates } from "../../../utils/commissionRates";
+import { sumOfficeBookSizes, totalBookPremiumOf } from "../../../utils/officeFields";
+import { resolveOfficeRates, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../../utils/revenueEngine";
 
 // =============================================================================
 // Protected route: /dashboard/reveal
@@ -144,6 +146,24 @@ export default function RevealPage() {
       if (agencyRes.error) {
         console.error("[Reveal] agency lookup failed", agencyRes.error);
         setErrorMsg("We couldn't load your agency settings.");
+        setStatus("error");
+        return;
+      }
+      if (officesRes.error) {
+        console.error("[Reveal] offices lookup failed", officesRes.error);
+        setErrorMsg("We couldn't load your office locations.");
+        setStatus("error");
+        return;
+      }
+      if (teamRes.error) {
+        console.error("[Reveal] team lookup failed", teamRes.error);
+        setErrorMsg("We couldn't load your team roster.");
+        setStatus("error");
+        return;
+      }
+      if (policiesRes.error) {
+        console.error("[Reveal] policies lookup failed", policiesRes.error);
+        setErrorMsg("We couldn't load your production data.");
         setStatus("error");
         return;
       }
@@ -281,69 +301,22 @@ export default function RevealPage() {
     const netAutoApps = Math.round(totals.autoApps - lostAuto);
     const netFireApps = Math.round(totals.fireApps - lostFire);
 
-    // 5. Book size, renewals & VC — mirrors RevenueTab's
-    // sumOfficeBookSizes()/calculateEnterpriseBookAndRenewals() exactly, just
+    // 5. Book size, renewals & VC — delegates to the same shared formula the
+    // main dashboard and Cockpit use (utils/revenueEngine.ts / officeFields.ts),
     // condensed into one pass since this page is always "Enterprise-wide."
-    const bookSize = offices.reduce(
-      (acc, o) => ({
-        auto: acc.auto + num(o.book_size_auto),
-        fire: acc.fire + num(o.book_size_fire),
-        commercial: acc.commercial + num(o.book_size_commercial),
-        life: acc.life + num(o.book_size_life),
-        health: acc.health + num(o.book_size_health),
-      }),
-      { auto: 0, fire: 0, commercial: 0, life: 0, health: 0 }
-    );
-    const totalBookPremium = bookSize.auto + bookSize.fire + bookSize.commercial + bookSize.life + bookSize.health;
-
-    const vcRateAgency = num(agencySettings?.current_vc_rate);
-    const totalRenRev = offices.reduce((sum, office) => {
-      const autoLapse = (num(office?.ytd_lapse_cancel_auto, num(agencySettings?.ytd_lapse_cancel_auto)) / 100) * ytdTimeFraction;
-      const fireLapse = (num(office?.ytd_lapse_cancel_fire, num(agencySettings?.ytd_lapse_cancel_fire)) / 100) * ytdTimeFraction;
-      const commLapse =
-        (num(office?.ytd_lapse_cancel_commercial, num(agencySettings?.ytd_lapse_cancel_commercial)) / 100) * ytdTimeFraction;
-
-      // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health.
-      const vcRate = num(office?.current_vc_rate, vcRateAgency) / 100;
-      const bAuto = num(office?.base_comm_auto, num(agencySettings?.base_comm_auto, 8)) / 100;
-      const bFire = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
-      const bComm = bFire; // matches the existing Revenue & VC engine's convention
-
-      const oAuto = num(office.book_size_auto);
-      const oFire = num(office.book_size_fire);
-      const oComm = num(office.book_size_commercial);
-      const oLife = num(office.book_size_life);
-      const oHealth = num(office.book_size_health);
-
-      // Existing book = "renewal" phase → servicing / year2_to_5 carrier rates, no VC.
-      const { lifeRevenue: oLifeRev, healthRevenue: oHealthRev } = calculateLifeHealthRevenue({
-        lifePremium: oLife,
-        healthPremium: oHealth,
-        phase: "renewal",
-        rates: commissionRates,
-      });
-
-      return (
-        sum +
-        oAuto * (1 - autoLapse) * (bAuto + vcRate) +
-        oFire * (1 - fireLapse) * (bFire + vcRate) +
-        oComm * (1 - commLapse) * (bComm + vcRate) +
-        oLifeRev +
-        oHealthRev
-      );
-    }, 0);
+    const bookSizeSummed = sumOfficeBookSizes(offices);
+    const bookSize = {
+      auto: bookSizeSummed.book_size_auto,
+      fire: bookSizeSummed.book_size_fire,
+      commercial: bookSizeSummed.book_size_commercial,
+      life: bookSizeSummed.book_size_life,
+      health: bookSizeSummed.book_size_health,
+    };
+    const totalBookPremium = totalBookPremiumOf(bookSizeSummed);
+    const { totalRenRev } = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
 
     // 6. New business (real production only — near-zero on Day 1, but kept
     // accurate for whenever the owner actually lands on this page).
-    const bAutoAgency = num(agencySettings?.base_comm_auto, 8) / 100;
-    const bFireAgency = num(agencySettings?.base_comm_fire, 8) / 100;
-    const bCommAgency = bFireAgency;
-    // Display-only base comp %s (baseCompLife/baseCompHealth below) — no longer feed totalNbRev,
-    // which is computed via the carrier-rate engine (calculateLifeHealthRevenue) below instead.
-    const bLifeAgency = num(agencySettings?.base_comm_life, 20) / 100;
-    const bHealthAgency = num(agencySettings?.base_comm_health, 20) / 100;
-    const vcRate = vcRateAgency / 100;
-
     let nbAutoPrem = 0,
       nbFirePrem = 0,
       nbCommPrem = 0,
@@ -369,20 +342,14 @@ export default function RevealPage() {
     nbLifePrem += baseline.lifePremium;
     nbHealthPrem += baseline.healthPremium;
 
-    // New business = "new_business" phase → year1 / first_year carrier rates, no VC.
-    const { lifeRevenue: nbLifeRev, healthRevenue: nbHealthRev } = calculateLifeHealthRevenue({
-      lifePremium: nbLifePrem,
-      healthPremium: nbHealthPrem,
-      phase: "new_business",
-      rates: commissionRates,
-    });
-
-    const totalNbRev =
-      nbAutoPrem * (bAutoAgency + vcRate) +
-      nbFirePrem * (bFireAgency + vcRate) +
-      nbCommPrem * (bCommAgency + vcRate) +
-      nbLifeRev +
-      nbHealthRev;
+    // Reveal is always Enterprise-wide, so office=null → resolveOfficeRates() falls
+    // straight through to the agency-wide defaults, exactly like before.
+    const { totalNbRev } = calculateNewBusinessRevenue(
+      { autoPremium: nbAutoPrem, firePremium: nbFirePrem, commercialPremium: nbCommPrem, lifePremium: nbLifePrem, healthPremium: nbHealthPrem },
+      null,
+      agencySettings,
+      commissionRates
+    );
 
     const totalAgencyRev = totalNbRev + totalRenRev;
 
@@ -390,6 +357,9 @@ export default function RevealPage() {
     // `offices`, not `agencies`) — read off the first/primary office, which is
     // the one the wizard actually created in Step 1.
     const primaryOffice = offices[0] || null;
+    const primaryRates = resolveOfficeRates(primaryOffice, agencySettings);
+    const bLifeAgency = num(agencySettings?.base_comm_life, 20) / 100;
+    const bHealthAgency = num(agencySettings?.base_comm_health, 20) / 100;
 
     console.log("[Reveal] computed agency health", {
       baseline,
@@ -416,11 +386,11 @@ export default function RevealPage() {
       totalRenRev,
       totalNbRev,
       totalAgencyRev,
-      vcRate: primaryOffice ? num(primaryOffice.current_vc_rate, vcRateAgency) : vcRateAgency,
-      baseCompAuto: primaryOffice ? num(primaryOffice.base_comm_auto, bAutoAgency * 100) : bAutoAgency * 100,
-      baseCompFire: primaryOffice ? num(primaryOffice.base_comm_fire, bFireAgency * 100) : bFireAgency * 100,
-      baseCompLife: primaryOffice ? num(primaryOffice.base_comm_life, bLifeAgency * 100) : bLifeAgency * 100,
-      baseCompHealth: primaryOffice ? num(primaryOffice.base_comm_health, bHealthAgency * 100) : bHealthAgency * 100,
+      vcRate: primaryRates.vcRate * 100,
+      baseCompAuto: primaryRates.bAuto * 100,
+      baseCompFire: primaryRates.bFire * 100,
+      baseCompLife: bLifeAgency * 100,
+      baseCompHealth: bHealthAgency * 100,
     };
   }, [status, agencySettings, offices, team, policies]);
 

@@ -20,8 +20,10 @@ import {
 } from "lucide-react";
 import { supabase } from "../../../utils/supabase";
 import { resolveParentLine } from "../../../utils/productLines";
-import { resolveCommissionRates, calculateLifeHealthRevenue, getLifeRate, getHealthRate } from "../../../utils/commissionRates";
+import { resolveCommissionRates, getLifeRate, getHealthRate } from "../../../utils/commissionRates";
 import { getWorkingDaysRemainingInYear } from "../../../utils/pacing";
+import { sumOfficeBookSizes, totalBookPremiumOf } from "../../../utils/officeFields";
+import { resolveOfficeRates, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../../utils/revenueEngine";
 
 // =============================================================================
 // Protected route: /dashboard/cockpit — the "Executive Cockpit" What-If Engine.
@@ -178,6 +180,24 @@ export default function CockpitPage() {
         setStatus("error");
         return;
       }
+      if (officesRes.error) {
+        console.error("[Cockpit] offices lookup failed", officesRes.error);
+        setErrorMsg("We couldn't load your office locations.");
+        setStatus("error");
+        return;
+      }
+      if (teamRes.error) {
+        console.error("[Cockpit] team lookup failed", teamRes.error);
+        setErrorMsg("We couldn't load your team roster.");
+        setStatus("error");
+        return;
+      }
+      if (policiesRes.error) {
+        console.error("[Cockpit] policies lookup failed", policiesRes.error);
+        setErrorMsg("We couldn't load your production data.");
+        setStatus("error");
+        return;
+      }
 
       setAgencySettings(agencyRes.data || null);
       setOffices(officesRes.data || []);
@@ -327,55 +347,37 @@ export default function CockpitPage() {
     const fsVcPts = calcPoints(ytdFsComm, vcMinFs, vcMaxFs, 2.0);
     const currentVcTotal = Math.min(3.0, autoVcPts + fireVcPts + fsVcPts);
 
-    // --- 4. Projected annual revenue (for the Cash Flow Architect) ---
-    const bookSize = offices.reduce(
-      (acc: any, o: any) => ({
-        auto: acc.auto + num(o.book_size_auto),
-        fire: acc.fire + num(o.book_size_fire),
-        commercial: acc.commercial + num(o.book_size_commercial),
-        life: acc.life + num(o.book_size_life),
-        health: acc.health + num(o.book_size_health),
-      }),
-      { auto: 0, fire: 0, commercial: 0, life: 0, health: 0 }
+    // --- 4. Projected annual revenue (for the Cash Flow Architect) — delegates to the
+    // same shared formula the main dashboard and Reveal use (utils/revenueEngine.ts /
+    // officeFields.ts), so this can never silently drift from those pages' math.
+    const bookSizeSummed = sumOfficeBookSizes(offices);
+    const bookSize = {
+      auto: bookSizeSummed.book_size_auto,
+      fire: bookSizeSummed.book_size_fire,
+      commercial: bookSizeSummed.book_size_commercial,
+      life: bookSizeSummed.book_size_life,
+      health: bookSizeSummed.book_size_health,
+    };
+
+    // Cockpit is always Enterprise-wide, so office=null → resolveOfficeRates() falls
+    // straight through to the agency-wide defaults.
+    const { vcRate: vcRateDecimal, bAuto: bAutoAgency, bFire: bFireAgency } = resolveOfficeRates(null, agencySettings);
+    const vcRateAgency = vcRateDecimal * 100;
+
+    const { totalRenRev } = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
+
+    const { totalNbRev } = calculateNewBusinessRevenue(
+      {
+        autoPremium: agencyTotals.auto.premium,
+        firePremium: agencyTotals.fire.premium,
+        commercialPremium: nbCommPrem,
+        lifePremium: agencyTotals.life.premium,
+        healthPremium: agencyTotals.health.premium,
+      },
+      null,
+      agencySettings,
+      commissionRates
     );
-
-    const vcRateAgency = num(agencySettings?.current_vc_rate);
-    const vcRateDecimal = vcRateAgency / 100;
-    const bAutoAgency = num(agencySettings?.base_comm_auto, 8) / 100;
-    const bFireAgency = num(agencySettings?.base_comm_fire, 8) / 100;
-    const bCommAgency = bFireAgency;
-
-    const totalRenRev = offices.reduce((sum: number, office: any) => {
-      const vcOfficeRate = num(office?.current_vc_rate, vcRateAgency) / 100;
-      const bAuto = num(office?.base_comm_auto, num(agencySettings?.base_comm_auto, 8)) / 100;
-      const bFire = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
-      const bComm = bFire;
-      const oAuto = num(office.book_size_auto);
-      const oFire = num(office.book_size_fire);
-      const oComm = num(office.book_size_commercial);
-      const oLife = num(office.book_size_life);
-      const oHealth = num(office.book_size_health);
-      const { lifeRevenue: oLifeRev, healthRevenue: oHealthRev } = calculateLifeHealthRevenue({
-        lifePremium: oLife,
-        healthPremium: oHealth,
-        phase: "renewal",
-        rates: commissionRates,
-      });
-      return sum + oAuto * (bAuto + vcOfficeRate) + oFire * (bFire + vcOfficeRate) + oComm * (bComm + vcOfficeRate) + oLifeRev + oHealthRev;
-    }, 0);
-
-    const { lifeRevenue: nbLifeRev, healthRevenue: nbHealthRev } = calculateLifeHealthRevenue({
-      lifePremium: agencyTotals.life.premium,
-      healthPremium: agencyTotals.health.premium,
-      phase: "new_business",
-      rates: commissionRates,
-    });
-    const totalNbRev =
-      agencyTotals.auto.premium * (bAutoAgency + vcRateDecimal) +
-      agencyTotals.fire.premium * (bFireAgency + vcRateDecimal) +
-      nbCommPrem * (bCommAgency + vcRateDecimal) +
-      nbLifeRev +
-      nbHealthRev;
     const projectedAnnualRevenue = totalNbRev + totalRenRev;
 
     // Slider reverse-math rates — Life/Health use the carrier table's
@@ -518,11 +520,12 @@ export default function CockpitPage() {
 
   // --- Activity Pacing Engine (Tweak 4): required apps → required quotes → daily target ---
   const globalCloseRateDecimal = model.globalCloseRate / 100;
+  const canPace = globalCloseRateDecimal > 0 && workingDaysRemaining > 0;
   const globalDailyTargets: Record<LineKey, number | null> = {
-    auto: requiredApps.auto !== null && workingDaysRemaining > 0 ? Math.ceil(requiredApps.auto / globalCloseRateDecimal / workingDaysRemaining) : null,
-    fire: requiredApps.fire !== null && workingDaysRemaining > 0 ? Math.ceil(requiredApps.fire / globalCloseRateDecimal / workingDaysRemaining) : null,
-    life: requiredApps.life !== null && workingDaysRemaining > 0 ? Math.ceil(requiredApps.life / globalCloseRateDecimal / workingDaysRemaining) : null,
-    health: requiredApps.health !== null && workingDaysRemaining > 0 ? Math.ceil(requiredApps.health / globalCloseRateDecimal / workingDaysRemaining) : null,
+    auto: requiredApps.auto !== null && canPace ? Math.ceil(requiredApps.auto / globalCloseRateDecimal / workingDaysRemaining) : null,
+    fire: requiredApps.fire !== null && canPace ? Math.ceil(requiredApps.fire / globalCloseRateDecimal / workingDaysRemaining) : null,
+    life: requiredApps.life !== null && canPace ? Math.ceil(requiredApps.life / globalCloseRateDecimal / workingDaysRemaining) : null,
+    health: requiredApps.health !== null && canPace ? Math.ceil(requiredApps.health / globalCloseRateDecimal / workingDaysRemaining) : null,
   };
 
   const producerBreakdown = team.map((m: any) => {

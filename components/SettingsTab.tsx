@@ -101,6 +101,10 @@ export default function SettingsTab({
   // agency-wide assumption. Same local-draft/save-on-demand pattern as the
   // commission rate engine above.
   const [globalCloseRateDraft, setGlobalCloseRateDraft] = useState<number>(20);
+  // Raw text mirror of globalCloseRateDraft so the input can be freely typed/cleared
+  // without immediately committing an invalid (empty or 0) value — see the onBlur
+  // safeguard below, which is what actually reconciles this back into the number.
+  const [globalCloseRateInput, setGlobalCloseRateInput] = useState<string>('20');
   const [individualCloseRatesDraft, setIndividualCloseRatesDraft] = useState<Record<string, number | ''>>({});
   const [isSavingConversionMetrics, setIsSavingConversionMetrics] = useState(false);
 
@@ -115,7 +119,9 @@ export default function SettingsTab({
   }, [agencySettings?.commission_rates]);
 
   useEffect(() => {
-    setGlobalCloseRateDraft(agencySettings?.global_close_rate ?? 20);
+    const rate = agencySettings?.global_close_rate ?? 20;
+    setGlobalCloseRateDraft(rate);
+    setGlobalCloseRateInput(String(rate));
   }, [agencySettings?.global_close_rate]);
 
   useEffect(() => {
@@ -162,11 +168,21 @@ export default function SettingsTab({
 
   const saveConversionMetrics = async () => {
     if (!agencySettings?.id) return;
+    // Belt-and-suspenders: never let a literal 0 (or blank) global close rate
+    // reach the database, since the Cockpit divides required-apps by this rate.
+    const safeGlobalCloseRate = Number.isFinite(globalCloseRateDraft) && globalCloseRateDraft > 0
+      ? globalCloseRateDraft
+      : (agencySettings?.global_close_rate ?? 20);
+    if (safeGlobalCloseRate !== globalCloseRateDraft) {
+      setGlobalCloseRateDraft(safeGlobalCloseRate);
+      setGlobalCloseRateInput(String(safeGlobalCloseRate));
+      showToast('Global close rate must be greater than 0% — kept the previous value.', 'error');
+    }
     setIsSavingConversionMetrics(true);
     try {
       const { error: agencyErr } = await supabase
         .from('agencies')
-        .update({ global_close_rate: globalCloseRateDraft })
+        .update({ global_close_rate: safeGlobalCloseRate })
         .eq('id', agencySettings.id);
       if (agencyErr) throw agencyErr;
 
@@ -179,7 +195,7 @@ export default function SettingsTab({
       const failed = results.find(r => r.error);
       if (failed?.error) throw failed.error;
 
-      setAgencySettings({ ...agencySettings, global_close_rate: globalCloseRateDraft });
+      setAgencySettings({ ...agencySettings, global_close_rate: safeGlobalCloseRate });
       setTeam((prev: any[]) => prev.map(m => ({ ...m, close_rate: individualCloseRatesDraft[m.id] === '' ? null : Number(individualCloseRatesDraft[m.id]) })));
       showToast('Conversion metrics updated successfully!', 'success');
     } catch (err: any) {
@@ -190,6 +206,26 @@ export default function SettingsTab({
   };
 
   const updateLocalOffice = (id: string, field: string, val: any) => { setLocalOfficeData((prev: any) => ({ ...prev, [id]: { ...prev[id], [field]: val }})); };
+
+  // Guards against saving an inverted VC min/max range (which would make every
+  // gain "out of range" and silently zero out that line's variable comp).
+  const VC_MIN_MAX_PAIRS: Array<{ min: string; max: string; label: string }> = [
+    { min: 'vc_min_auto_gain', max: 'vc_max_auto_gain', label: 'Auto Gain Limits' },
+    { min: 'vc_min_fire_gain', max: 'vc_max_fire_gain', label: 'Fire Gain Limits' },
+    { min: 'vc_min_fs_comm', max: 'vc_max_fs_comm', label: 'FS Comm Limits' },
+  ];
+  const handleSaveBranchClick = (officeId: string) => {
+    const draft = localOfficeData[officeId] || {};
+    for (const pair of VC_MIN_MAX_PAIRS) {
+      const min = Number(draft[pair.min] ?? 0);
+      const max = Number(draft[pair.max] ?? 0);
+      if (min >= max) {
+        showToast(`${pair.label}: Min (${min}) must be less than Max (${max}).`, 'error');
+        return;
+      }
+    }
+    handleSaveOfficeGoals && handleSaveOfficeGoals(officeId, draft);
+  };
   const updateRule = (category: string, field: string, value: any) => { setEditingPlan((prev: any) => ({ ...prev, rules: { ...prev.rules, [category]: { ...(prev.rules[category] || {}), [field]: value } } })); };
   const addAccelerator = () => { setEditingPlan((prev: any) => ({ ...prev, rules: { ...prev.rules, accelerators: [...(prev.rules.accelerators || []), { metric: 'total_premium', threshold: 0, reward_type: 'rate_bump', target_line: 'pnc_base', bump_percent: 1, bonus_amount: 0 }] } })); };
   const updateAccelerator = (index: number, field: string, value: any) => { const updated = [...(editingPlan.rules.accelerators || [])]; updated[index] = { ...updated[index], [field]: value }; setEditingPlan((prev: any) => ({ ...prev, rules: { ...prev.rules, accelerators: updated } })); };
@@ -800,7 +836,7 @@ export default function SettingsTab({
                        )}
 
                        <div className="flex justify-end border-t border-indigo-100 pt-4">
-                          <button onClick={() => handleSaveOfficeGoals && handleSaveOfficeGoals(office.id, localOfficeData[office.id])} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm">
+                          <button onClick={() => handleSaveBranchClick(office.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm">
                              <Save size={18} /> Save Branch Settings
                           </button>
                        </div>
@@ -1375,8 +1411,20 @@ export default function SettingsTab({
               <input
                 type="number"
                 step="0.1"
-                value={globalCloseRateDraft}
-                onChange={(e) => setGlobalCloseRateDraft(Number(e.target.value))}
+                value={globalCloseRateInput}
+                onChange={(e) => setGlobalCloseRateInput(e.target.value)}
+                onBlur={() => {
+                  // A 0% (or blank) close rate would divide-by-zero the Cockpit's
+                  // Activity Pacing Engine, so it can never be committed — revert
+                  // to the last known-good value the moment the field loses focus.
+                  const parsed = Number(globalCloseRateInput);
+                  if (globalCloseRateInput === '' || !Number.isFinite(parsed) || parsed <= 0) {
+                    setGlobalCloseRateInput(String(globalCloseRateDraft));
+                    showToast('Close rate must be greater than 0% — reverted to the last saved value.', 'error');
+                    return;
+                  }
+                  setGlobalCloseRateDraft(parsed);
+                }}
                 className="w-40 p-3 bg-gray-50 border border-gray-200 rounded-lg text-lg font-bold text-gray-900"
               />
             </div>

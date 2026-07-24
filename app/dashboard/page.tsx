@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
-import { resolveCommissionRates, calculateLifeHealthRevenue } from "../../utils/commissionRates";
+import { resolveCommissionRates } from "../../utils/commissionRates";
+import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
 import { 
   BarChart3, Settings, Target, PhoneCall, 
   FileText, ShieldCheck, LogOut, CheckCircle2, 
@@ -467,19 +468,31 @@ export default function Home() {
 
     let actQuery = supabase.from('activities').select('user_id, office_id, activity_type, logged_at').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) actQuery = actQuery.in('user_id', officeMemberIds);
-    const { data: activities } = await actQuery;
+    const { data: activities, error: activitiesError } = await actQuery;
+    if (activitiesError) {
+      console.error('[Dashboard] activities fetch failed', activitiesError);
+      showToast('Failed to load activity data — numbers below may be incomplete.', 'error');
+    }
 
     // NOTE: `id` must be selected here - monthPolicies feeds CommissionTab's itemized statement
     // table, which keys each <tr> off pol.id. Omitting it left every row keyed as undefined,
     // triggering React's "missing unique key" warning for the whole list.
     let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, customer_name').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) polQuery = polQuery.in('user_id', officeMemberIds);
-    const { data: policies } = await polQuery;
+    const { data: policies, error: policiesError } = await polQuery;
+    if (policiesError) {
+      console.error('[Dashboard] policies fetch failed', policiesError);
+      showToast('Failed to load policy data — revenue numbers below may be incomplete.', 'error');
+    }
 
     setMonthPolicies(policies?.filter(p => isSameMonth(new Date(p.logged_at), targetDate)) || []);
 
     let bonusQuery = supabase.from('manual_bonuses').select('*').eq('agency_id', agencyId).gte('logged_at', firstDayOfMonth.toISOString());
-    const { data: fetchedBonuses } = await bonusQuery;
+    const { data: fetchedBonuses, error: bonusesError } = await bonusQuery;
+    if (bonusesError) {
+      console.error('[Dashboard] manual_bonuses fetch failed', bonusesError);
+      showToast('Failed to load manual bonuses.', 'error');
+    }
     
     let validBonuses = fetchedBonuses?.filter(b => isSameMonth(new Date(b.logged_at), targetDate)) || [];
     if (userId !== 'all') validBonuses = validBonuses.filter(b => b.user_id === userId);
@@ -796,7 +809,15 @@ export default function Home() {
   };
 
   const fetchAgencySettings = async (agencyId: string) => {
-    const { data } = await supabase.from('agencies').select('*').eq('id', agencyId).single();
+    const { data, error } = await supabase.from('agencies').select('*').eq('id', agencyId).single();
+    if (error) {
+      console.error('[Settings] fetchAgencySettings error', error);
+      // Revenue/VC math falls back to hardcoded defaults (8% base comm, 0% VC, etc.)
+      // whenever agencySettings is null — that's a silent, misleading "$0-ish" render
+      // rather than an obvious failure, so surface it instead of failing quietly.
+      showToast('Failed to load agency settings — revenue and VC numbers may be inaccurate.', 'error');
+      return;
+    }
     if (data) setAgencySettings(data);
   };
 
@@ -2876,109 +2897,23 @@ export default function Home() {
       return Number.isFinite(n) ? n : fallback;
     };
 
-    // Book sizes live on `offices` only (Settings → Office Goals). Never read agency.book_size_*.
-    // Also accept common alternate key spellings if a row was saved under a variant name.
-    const readBookField = (office: any, field: string) => {
-      const alts: Record<string, string[]> = {
-        book_size_auto: ['book_size_auto', 'auto_book', 'auto_book_size'],
-        book_size_fire: ['book_size_fire', 'fire_book', 'fire_book_size', 'book_size_home'],
-        book_size_commercial: ['book_size_commercial', 'commercial_book', 'comm_book'],
-        book_size_life: ['book_size_life', 'life_book'],
-        book_size_health: ['book_size_health', 'health_book'],
-      };
-      for (const key of alts[field] || [field]) {
-        if (office?.[key] != null && office[key] !== '') return num(office[key]);
-      }
-      return 0;
-    };
+    // Per-office renewal $ using that office's book + rates (rates may fall back to agency
+    // defaults). Enterprise / All Locations sums every office's book + renewal instead of
+    // reading a nonexistent agency.book_size_* aggregate. Both delegate to the single shared
+    // formula in utils/revenueEngine.ts so this page, Reveal, and Cockpit can never drift.
+    const calculateRenewalsForOffice = (office: any, ytdTimeFraction: number) =>
+      calculateOfficeRenewalRevenue(office, agencySettings, commissionRates, ytdTimeFraction);
 
-    const sumOfficeBookSizes = (officeList: any[]) => {
-      const result = (officeList || []).reduce(
-        (acc, office) => ({
-          book_size_auto: acc.book_size_auto + readBookField(office, 'book_size_auto'),
-          book_size_fire: acc.book_size_fire + readBookField(office, 'book_size_fire'),
-          book_size_commercial: acc.book_size_commercial + readBookField(office, 'book_size_commercial'),
-          book_size_life: acc.book_size_life + readBookField(office, 'book_size_life'),
-          book_size_health: acc.book_size_health + readBookField(office, 'book_size_health'),
-        }),
-        { book_size_auto: 0, book_size_fire: 0, book_size_commercial: 0, book_size_life: 0, book_size_health: 0 }
-      );
-      console.log('[Revenue] sumOfficeBookSizes', {
-        officeCount: officeList?.length ?? 0,
-        result,
-        perOffice: (officeList || []).map((o: any) => ({
-          id: o.id,
-          name: o.name,
-          auto: readBookField(o, 'book_size_auto'),
-          fire: readBookField(o, 'book_size_fire'),
-          commercial: readBookField(o, 'book_size_commercial'),
-          life: readBookField(o, 'book_size_life'),
-          health: readBookField(o, 'book_size_health'),
-        })),
-      });
-      return result;
-    };
-
-    // Per-office renewal $ using that office's book + rates (rates may fall back to agency defaults).
-    const calculateRenewalsForOffice = (office: any, ytdTimeFraction: number) => {
-        const autoLapse = (num(office?.ytd_lapse_cancel_auto, num(agencySettings?.ytd_lapse_cancel_auto)) / 100) * ytdTimeFraction;
-        const fireLapse = (num(office?.ytd_lapse_cancel_fire, num(agencySettings?.ytd_lapse_cancel_fire)) / 100) * ytdTimeFraction;
-        const commLapse = (num(office?.ytd_lapse_cancel_commercial, num(agencySettings?.ytd_lapse_cancel_commercial)) / 100) * ytdTimeFraction;
-
-        // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health.
-        const vcRate = num(office?.current_vc_rate, num(agencySettings?.current_vc_rate)) / 100;
-        const bAuto = num(office?.base_comm_auto, num(agencySettings?.base_comm_auto, 8)) / 100;
-        const bFire = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
-        const bComm = num(office?.base_comm_fire, num(agencySettings?.base_comm_fire, 8)) / 100;
-
-        const bookAuto = readBookField(office, 'book_size_auto');
-        const bookFire = readBookField(office, 'book_size_fire');
-        const bookComm = readBookField(office, 'book_size_commercial');
-        const bookLife = readBookField(office, 'book_size_life');
-        const bookHealth = readBookField(office, 'book_size_health');
-
-        // Existing book = "renewal" phase → servicing / year2_to_5 carrier rates, no VC.
-        const { lifeRevenue: bookLifeRev, healthRevenue: bookHealthRev } = calculateLifeHealthRevenue({
-          lifePremium: bookLife,
-          healthPremium: bookHealth,
-          phase: 'renewal',
-          rates: commissionRates,
-        });
-
-        const totalBookPremium = bookAuto + bookFire + bookComm + bookLife + bookHealth;
-        const totalRenRev =
-          bookAuto * (1 - autoLapse) * (bAuto + vcRate) +
-          bookFire * (1 - fireLapse) * (bFire + vcRate) +
-          bookComm * (1 - commLapse) * (bComm + vcRate) +
-          bookLifeRev +
-          bookHealthRev;
-
-        return { totalBookPremium, totalRenRev };
-    };
-
-    // Enterprise / All Locations: SUM every office's book + renewal (never agency.book_size_*).
     const calculateEnterpriseBookAndRenewals = (ytdTimeFraction: number) => {
-      const summedBook = sumOfficeBookSizes(offices);
-      const totalBookPremium =
-        summedBook.book_size_auto +
-        summedBook.book_size_fire +
-        summedBook.book_size_commercial +
-        summedBook.book_size_life +
-        summedBook.book_size_health;
-
-      const totalRenRev = (offices || []).reduce((sum, office) => {
-        return sum + calculateRenewalsForOffice(office, ytdTimeFraction).totalRenRev;
-      }, 0);
-
+      const result = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
       console.log('[Revenue] calculateEnterpriseBookAndRenewals', {
         officeCount: offices?.length ?? 0,
         ytdTimeFraction,
-        totalBookPremium,
-        totalRenRev,
-        summedBook,
+        totalBookPremium: result.totalBookPremium,
+        totalRenRev: result.totalRenRev,
+        summedBook: result.summedBook,
       });
-
-      return { totalBookPremium, totalRenRev, summedBook };
+      return result;
     };
 
     const calculateRev = (ytdNode: any, policies: any[], name: string, specificOffice?: any) => {
@@ -3034,24 +2969,14 @@ export default function Home() {
         nbLifePrem += nbBaseline.lifePremium;
         nbHealthPrem += nbBaseline.healthPremium;
 
-        // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health.
-        const vcRate = (specificOffice?.current_vc_rate ?? agencySettings?.current_vc_rate ?? 0) / 100;
-        const bAuto = (specificOffice?.base_comm_auto ?? agencySettings?.base_comm_auto ?? 8) / 100;
-        const bFire = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100;
-        const bComm = (specificOffice?.base_comm_fire ?? agencySettings?.base_comm_fire ?? 8) / 100;
-
-        // New business = "new_business" phase → year1 / first_year carrier rates, no VC.
-        const { lifeRevenue: nbLifeRev, healthRevenue: nbHealthRev } = calculateLifeHealthRevenue({
-          lifePremium: nbLifePrem,
-          healthPremium: nbHealthPrem,
-          phase: 'new_business',
-          rates: commissionRates,
-        });
-
-        const nbAutoRev = nbAutoPrem * (bAuto + vcRate);
-        const nbFireRev = nbFirePrem * (bFire + vcRate);
-        const nbCommRev = nbCommPrem * (bComm + vcRate);
-        const totalNbRev = nbAutoRev + nbFireRev + nbCommRev + nbLifeRev + nbHealthRev;
+        // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health. Delegates
+        // to the same shared formula Reveal and Cockpit use (utils/revenueEngine.ts).
+        const { totalNbRev } = calculateNewBusinessRevenue(
+          { autoPremium: nbAutoPrem, firePremium: nbFirePrem, commercialPremium: nbCommPrem, lifePremium: nbLifePrem, healthPremium: nbHealthPrem },
+          specificOffice,
+          agencySettings,
+          commissionRates
+        );
 
         const ytdTimeFraction = ytdNode.daysPassed / ytdNode.daysInYear;
 
