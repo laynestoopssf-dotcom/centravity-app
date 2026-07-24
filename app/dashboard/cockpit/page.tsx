@@ -94,6 +94,51 @@ const actualForPoints = (points: number, min: number, max: number, maxPct: numbe
   return min + (clamped / maxPct) * (max - min);
 };
 
+// Water-fills a point gap across auto/fire/fs proportional to `weights` (the agency's real
+// YTD point-earning velocity), capping each bucket at its remaining `caps` (headroom) and
+// redistributing any overflow to the still-open buckets — so the suggested path is both
+// tailored to how the agency actually earns points AND still respects each bucket's max.
+const waterFillAllocate = (
+  gap: number,
+  weights: { auto: number; fire: number; fs: number },
+  caps: { auto: number; fire: number; fs: number }
+): { auto: number; fire: number; fs: number } => {
+  const keys: Array<"auto" | "fire" | "fs"> = ["auto", "fire", "fs"];
+  const alloc = { auto: 0, fire: 0, fs: 0 };
+  let remaining = gap;
+  let active = new Set(keys.filter((k) => caps[k] > 1e-9));
+  // If every open bucket has zero weight (shouldn't normally happen — velocityWeights always
+  // sums to 1 — but guard anyway), fall back to an even split so the gap still gets allocated.
+  if (active.size > 0 && [...active].every((k) => weights[k] <= 0)) {
+    active.forEach((k) => (weights = { ...weights, [k]: 1 }));
+  }
+
+  for (let iter = 0; iter < keys.length && remaining > 1e-9 && active.size > 0; iter++) {
+    const totalWeight = [...active].reduce((s, k) => s + weights[k], 0);
+    if (totalWeight <= 0) break;
+    let anyOverflow = false;
+    for (const k of Array.from(active)) {
+      const proposed = remaining * (weights[k] / totalWeight);
+      const room = caps[k] - alloc[k];
+      if (proposed >= room - 1e-9) {
+        alloc[k] += room;
+        remaining -= room;
+        active.delete(k);
+        anyOverflow = true;
+      }
+    }
+    if (!anyOverflow) {
+      const finalTotalWeight = [...active].reduce((s, k) => s + weights[k], 0);
+      active.forEach((k) => {
+        alloc[k] += remaining * (weights[k] / finalTotalWeight);
+      });
+      remaining = 0;
+    }
+  }
+
+  return alloc;
+};
+
 interface LineTotals {
   apps: number;
   premium: number;
@@ -115,6 +160,7 @@ export default function CockpitPage() {
   const [offices, setOffices] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
 
   // --- Card 1: VC Tier Sniper ---
   const [targetVcInput, setTargetVcInput] = useState<string>("");
@@ -165,12 +211,24 @@ export default function CockpitPage() {
       ]);
 
       const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString();
-      const policiesRes = await supabase
-        .from("policies")
-        .select("id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at")
-        .eq("agency_id", agencyId)
-        .gte("logged_at", startOfYear)
-        .limit(20000);
+      const [policiesRes, activitiesRes] = await Promise.all([
+        supabase
+          .from("policies")
+          .select("id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at")
+          .eq("agency_id", agencyId)
+          .gte("logged_at", startOfYear)
+          .limit(20000),
+        // Fuels the Activity Pacing Engine's live-calculated close rate (Logged Quotes vs.
+        // Bound Apps) for producers with no Settings override — see the producerBreakdown
+        // 3-tier fallback below.
+        supabase
+          .from("activities")
+          .select("user_id, activity_type, logged_at")
+          .eq("agency_id", agencyId)
+          .in("activity_type", ["quote", "complex_res"])
+          .gte("logged_at", startOfYear)
+          .limit(20000),
+      ]);
 
       if (!mounted) return;
 
@@ -198,11 +256,18 @@ export default function CockpitPage() {
         setStatus("error");
         return;
       }
+      if (activitiesRes.error) {
+        console.error("[Cockpit] activities lookup failed", activitiesRes.error);
+        setErrorMsg("We couldn't load your activity data.");
+        setStatus("error");
+        return;
+      }
 
       setAgencySettings(agencyRes.data || null);
       setOffices(officesRes.data || []);
       setTeam(teamRes.data || []);
       setPolicies(policiesRes.data || []);
+      setActivities(activitiesRes.data || []);
       setStatus("ready");
     };
 
@@ -288,6 +353,16 @@ export default function CockpitPage() {
       });
     });
 
+    // Per-producer YTD logged quotes (activity_type 'quote'/'complex_res') — tier 2 of the
+    // Activity Pacing Engine's close-rate fallback chain (Settings override → live YTD rate →
+    // agency global_close_rate).
+    const memberQuoteCounts = new Map<string, number>();
+    activities.forEach((act: any) => {
+      const logDate = new Date(act.logged_at);
+      if (logDate.getFullYear() !== currentYear) return;
+      memberQuoteCounts.set(act.user_id, (memberQuoteCounts.get(act.user_id) || 0) + 1);
+    });
+
     // Average premium/app per line — the "Translation Layer" (Tweak 3).
     const avgPremiumPerApp: Record<LineKey, number | null> = {
       auto: agencyTotals.auto.apps > 0 ? agencyTotals.auto.premium / agencyTotals.auto.apps : null,
@@ -354,6 +429,17 @@ export default function CockpitPage() {
     const fsVcPts = calcPoints(ytdFsComm, vcMinFs, vcMaxFs, 2.0);
     const currentVcTotal = Math.min(3.0, autoVcPts + fireVcPts + fsVcPts);
 
+    // Tailored blended pathing: weight the VC Tier Sniper's suggested path by how the agency
+    // has ACTUALLY been earning points YTD (Auto/Fire/FS Comm ratio), not an even/headroom-only
+    // split — an agency that earns points primarily via P&C gain should see the gap pushed
+    // toward more Auto/Fire apps, not an unrealistic FS commission ask. Falls back to an even
+    // split only for a brand-new agency with zero points earned yet.
+    const totalPtsSoFar = autoVcPts + fireVcPts + fsVcPts;
+    const velocityWeights =
+      totalPtsSoFar > 0
+        ? { auto: autoVcPts / totalPtsSoFar, fire: fireVcPts / totalPtsSoFar, fs: fsVcPts / totalPtsSoFar }
+        : { auto: 1 / 3, fire: 1 / 3, fs: 1 / 3 };
+
     // --- 4. Projected annual revenue (for the Cash Flow Architect) — delegates to the
     // same shared formula the main dashboard and Reveal use (utils/revenueEngine.ts /
     // officeFields.ts), so this can never silently drift from those pages' math.
@@ -400,11 +486,13 @@ export default function CockpitPage() {
 
     return {
       memberTotals,
+      memberQuoteCounts,
       agencyTotals,
       avgPremiumPerApp,
       historicalMix,
       netAutoApps,
       netFireApps,
+      velocityWeights,
       vcMinAuto,
       vcMaxAuto,
       vcMinFire,
@@ -430,7 +518,7 @@ export default function CockpitPage() {
       globalCloseRate,
       productionDaysPerWeek,
     };
-  }, [status, agencySettings, offices, team, policies]);
+  }, [status, agencySettings, offices, team, policies, activities]);
 
   // Default the target VC input to the next reasonable milestone above where the agency stands today.
   useEffect(() => {
@@ -438,15 +526,29 @@ export default function CockpitPage() {
     setTargetVcInput((Math.min(3, Math.round((model.currentVcTotal + 0.5) * 10) / 10)).toFixed(1));
   }, [model, targetVcInput]);
 
-  // Default + auto-distribute the target revenue once the model is ready (Tweak 2: "initially auto-distribute").
+  // Default + auto-distribute the target revenue once the model is ready (Tweak 2: "initially
+  // auto-distribute"). IMPORTANT: historicalMix is a REVENUE-dollar mix, but sliders are
+  // PREMIUM-dollar values converted to revenue at each line's own commission rate (which
+  // differs — P&C's base+VC rate vs. Life/Health's carrier rate). Splitting the gap by mix and
+  // handing each line the raw dollars as premium (the old behavior) under/over-shot the gap
+  // once each line's differing rate was applied. Instead: split the gap by mix IN REVENUE
+  // terms, then convert each line's revenue share back to premium via ITS OWN rate — so
+  // fills[k] = sliders[k] * sliderRates[k] reconstructs exactly the intended revenue share,
+  // and the sum across all four lines is always exactly 100% of the gap.
   const distributeSliders = (targetRevenue: number) => {
     if (!model) return;
     const gap = Math.max(0, targetRevenue - model.projectedAnnualRevenue);
-    setSliders({
+    const revenueShare: Record<LineKey, number> = {
       auto: gap * model.historicalMix.auto,
       fire: gap * model.historicalMix.fire,
       life: gap * model.historicalMix.life,
       health: gap * model.historicalMix.health,
+    };
+    setSliders({
+      auto: model.sliderRates.auto > 0 ? revenueShare.auto / model.sliderRates.auto : 0,
+      fire: model.sliderRates.fire > 0 ? revenueShare.fire / model.sliderRates.fire : 0,
+      life: model.sliderRates.life > 0 ? revenueShare.life / model.sliderRates.life : 0,
+      health: model.sliderRates.health > 0 ? revenueShare.health / model.sliderRates.health : 0,
     });
   };
 
@@ -494,9 +596,13 @@ export default function CockpitPage() {
   const totalHeadroom = headroomAuto + headroomFire + headroomFs;
   const gapPts = Math.min(rawGapPts, totalHeadroom);
   const isMaxedOut = rawGapPts > totalHeadroom + 0.0001;
-  const allocAuto = totalHeadroom > 0 ? gapPts * (headroomAuto / totalHeadroom) : 0;
-  const allocFire = totalHeadroom > 0 ? gapPts * (headroomFire / totalHeadroom) : 0;
-  const allocFs = totalHeadroom > 0 ? gapPts * (headroomFs / totalHeadroom) : 0;
+  // Tailored blended pathing: weight by the agency's real YTD point velocity (model.velocityWeights),
+  // water-filled against each bucket's remaining headroom — see waterFillAllocate above.
+  const { auto: allocAuto, fire: allocFire, fs: allocFs } = waterFillAllocate(
+    gapPts,
+    model.velocityWeights,
+    { auto: headroomAuto, fire: headroomFire, fs: headroomFs }
+  );
 
   const newAutoApps = actualForPoints(model.autoVcPts + allocAuto, model.vcMinAuto, model.vcMaxAuto, 1.0);
   const newFireApps = actualForPoints(model.fireVcPts + allocFire, model.vcMinFire, model.vcMaxFire, 1.0);
@@ -521,7 +627,12 @@ export default function CockpitPage() {
   const totalFill = fills.auto + fills.fire + fills.life + fills.health;
   const remainingGapAfterSliders = Math.max(0, revenueGap - totalFill);
   const fillPct = revenueGap > 0 ? Math.min(100, (totalFill / revenueGap) * 100) : 100;
-  const sliderMax = Math.max(250000, Math.round((revenueGap || 100000) * 1.5));
+  // Sliders hold PREMIUM dollars (revenue / rate), which can run well above the revenue gap
+  // itself once divided by a line's own rate (e.g. a 9% P&C rate inflates premium ~11x vs.
+  // revenue) — size the range off the actual current slider values, not the raw revenue gap,
+  // so the auto-distributed value is never clipped by the slider's own max.
+  const maxSliderValue = Math.max(sliders.auto, sliders.fire, sliders.life, sliders.health, 100000);
+  const sliderMax = Math.round(maxSliderValue * 1.5);
 
   // --- Translation Layer: premium → required apps (Tweak 3) ---
   const requiredApps: Record<LineKey, number | null> = {
@@ -541,8 +652,26 @@ export default function CockpitPage() {
     health: requiredApps.health !== null && canPace ? Math.ceil(requiredApps.health / globalCloseRateDecimal / workingDaysRemaining) : null,
   };
 
+  // 3-tier close-rate fallback: Settings override (profiles.close_rate) → live-calculated YTD
+  // rate (logged quotes vs. bound apps, from model.memberQuoteCounts/memberTotals) →
+  // agencies.global_close_rate. Each producer's daily quote target below always uses this
+  // resolved rate, not a flat agency-wide number.
+  const resolveProducerCloseRate = (m: any): { pct: number; source: "override" | "live" | "global" } => {
+    if (m.close_rate !== null && m.close_rate !== undefined && m.close_rate !== "") {
+      const v = num(m.close_rate, model.globalCloseRate);
+      return { pct: v, source: "override" };
+    }
+    const memberQuotes = model.memberQuoteCounts.get(m.id) ?? 0;
+    if (memberQuotes > 0) {
+      const memberBoundApps = LINE_KEYS.reduce((sum, k) => sum + (model.memberTotals.get(m.id)?.[k]?.apps ?? 0), 0);
+      return { pct: (memberBoundApps / memberQuotes) * 100, source: "live" };
+    }
+    return { pct: model.globalCloseRate, source: "global" };
+  };
+
   const producerBreakdown = team.map((m: any) => {
-    const closeRate = num(m.close_rate, model.globalCloseRate) / 100;
+    const resolved = resolveProducerCloseRate(m);
+    const closeRate = resolved.pct / 100;
     const perLine: Record<LineKey, number | null> = { auto: null, fire: null, life: null, health: null };
     LINE_KEYS.forEach((k) => {
       const reqApps = requiredApps[k];
@@ -554,7 +683,7 @@ export default function CockpitPage() {
       const memberRequiredQuotes = closeRate > 0 ? memberRequiredApps / closeRate : 0;
       perLine[k] = Math.ceil(memberRequiredQuotes / workingDaysRemaining);
     });
-    return { id: m.id, name: `${m.first_name} ${m.last_name}`, closeRatePct: num(m.close_rate, model.globalCloseRate), perLine };
+    return { id: m.id, name: `${m.first_name} ${m.last_name}`, closeRatePct: resolved.pct, closeRateSource: resolved.source, perLine };
   });
 
   return (
@@ -788,7 +917,7 @@ export default function CockpitPage() {
 
             {/* TRANSLATION LAYER (Tweak 3): premium → required apps */}
             <div className="mt-6 pt-5 border-t border-slate-800">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Required Bound Apps</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Total Year-End Bound Apps Required</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {LINE_KEYS.map((k) => (
                   <div key={k} className="bg-slate-900/60 rounded-lg p-3 border border-slate-800 text-center">
@@ -797,6 +926,11 @@ export default function CockpitPage() {
                     <p className="text-[9px] text-slate-500">
                       {model.avgPremiumPerApp[k] ? `@ $${money(model.avgPremiumPerApp[k]!)}/app` : "no YTD data"}
                     </p>
+                    {requiredApps[k] !== null && (
+                      <p className="text-[9px] text-purple-400 font-bold mt-0.5">
+                        {(requiredApps[k]! / Math.max(1, weeksRemaining)).toFixed(1)} apps / week
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -846,7 +980,21 @@ export default function CockpitPage() {
                   {producerBreakdown.map((p) => (
                     <tr key={p.id}>
                       <td className="py-2.5 pr-4 font-bold text-white whitespace-nowrap">{p.name}</td>
-                      <td className="py-2.5 pr-4 text-slate-400">{p.closeRatePct}%</td>
+                      <td className="py-2.5 pr-4 text-slate-400">
+                        {p.closeRatePct.toFixed(1)}%{" "}
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wide text-slate-600"
+                          title={
+                            p.closeRateSource === "override"
+                              ? "Set manually in Settings → Conversion Metrics"
+                              : p.closeRateSource === "live"
+                              ? "Live YTD rate: logged quotes vs. bound apps"
+                              : "Agency-wide global fallback (no individual data yet)"
+                          }
+                        >
+                          {p.closeRateSource === "override" ? "(set)" : p.closeRateSource === "live" ? "(live)" : "(global)"}
+                        </span>
+                      </td>
                       {LINE_KEYS.map((k) => (
                         <td key={k} className="py-2.5 pr-4 text-slate-300 font-bold">{p.perLine[k] ?? "—"}</td>
                       ))}
