@@ -61,7 +61,7 @@ export default function SettingsTab({
   const [newProductLine, setNewProductLine] = useState(""); 
   const [newProductParent, setNewProductParent] = useState("Auto"); 
   const [editingPlan, setEditingPlan] = useState<any>(null);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates'>('agency');
+  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates' | 'conversion_metrics'>('agency');
   const [importMode, setImportMode] = useState<'matrix' | 'csv'>('matrix');
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
@@ -94,6 +94,16 @@ export default function SettingsTab({
   const [commissionRatesDraft, setCommissionRatesDraft] = useState(DEFAULT_COMMISSION_RATES);
   const [isSavingCommissionRates, setIsSavingCommissionRates] = useState(false);
 
+  // Conversion Metrics (Executive Cockpit's "Activity Pacing Engine" — see
+  // app/dashboard/cockpit/page.tsx). A global agency close rate plus optional
+  // per-producer overrides, so the Cockpit can reverse apps → quotes → daily
+  // pace using each producer's own historical conversion instead of one
+  // agency-wide assumption. Same local-draft/save-on-demand pattern as the
+  // commission rate engine above.
+  const [globalCloseRateDraft, setGlobalCloseRateDraft] = useState<number>(20);
+  const [individualCloseRatesDraft, setIndividualCloseRatesDraft] = useState<Record<string, number | ''>>({});
+  const [isSavingConversionMetrics, setIsSavingConversionMetrics] = useState(false);
+
   useEffect(() => {
     const mapped: any = {};
     offices.forEach((o: any) => mapped[o.id] = { ...o });
@@ -103,6 +113,16 @@ export default function SettingsTab({
   useEffect(() => {
     setCommissionRatesDraft(resolveCommissionRates(agencySettings?.commission_rates));
   }, [agencySettings?.commission_rates]);
+
+  useEffect(() => {
+    setGlobalCloseRateDraft(agencySettings?.global_close_rate ?? 20);
+  }, [agencySettings?.global_close_rate]);
+
+  useEffect(() => {
+    const mapped: Record<string, number | ''> = {};
+    team.forEach((m: any) => { mapped[m.id] = m.close_rate ?? ''; });
+    setIndividualCloseRatesDraft(mapped);
+  }, [team]);
 
   const updateLifeRate = (subType: LifeSubType, field: 'year1' | 'year2_to_5' | 'year6_plus', pct: number) => {
     setCommissionRatesDraft(prev => ({
@@ -133,6 +153,39 @@ export default function SettingsTab({
       showToast('Failed to save commission rates: ' + err.message, 'error');
     } finally {
       setIsSavingCommissionRates(false);
+    }
+  };
+
+  const updateIndividualCloseRate = (memberId: string, value: string) => {
+    setIndividualCloseRatesDraft(prev => ({ ...prev, [memberId]: value === '' ? '' : Number(value) }));
+  };
+
+  const saveConversionMetrics = async () => {
+    if (!agencySettings?.id) return;
+    setIsSavingConversionMetrics(true);
+    try {
+      const { error: agencyErr } = await supabase
+        .from('agencies')
+        .update({ global_close_rate: globalCloseRateDraft })
+        .eq('id', agencySettings.id);
+      if (agencyErr) throw agencyErr;
+
+      const updates = team.map((m: any) => {
+        const draft = individualCloseRatesDraft[m.id];
+        const closeRate = draft === '' || draft === undefined ? null : Number(draft);
+        return supabase.from('profiles').update({ close_rate: closeRate }).eq('id', m.id);
+      });
+      const results = await Promise.all(updates);
+      const failed = results.find(r => r.error);
+      if (failed?.error) throw failed.error;
+
+      setAgencySettings({ ...agencySettings, global_close_rate: globalCloseRateDraft });
+      setTeam((prev: any[]) => prev.map(m => ({ ...m, close_rate: individualCloseRatesDraft[m.id] === '' ? null : Number(individualCloseRatesDraft[m.id]) })));
+      showToast('Conversion metrics updated successfully!', 'success');
+    } catch (err: any) {
+      showToast('Failed to save conversion metrics: ' + err.message, 'error');
+    } finally {
+      setIsSavingConversionMetrics(false);
     }
   };
 
@@ -236,6 +289,7 @@ export default function SettingsTab({
         <button onClick={() => setActiveSettingsSection('roles')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'roles' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Shield size={16}/> Roles & Permissions</button>
         <button onClick={() => setActiveSettingsSection('compplans')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'compplans' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DollarSign size={16}/> Compensation Plans</button>
         <button onClick={() => setActiveSettingsSection('commission_rates')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'commission_rates' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Percent size={16}/> Life/Health Commission Rates</button>
+        <button onClick={() => setActiveSettingsSection('conversion_metrics')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'conversion_metrics' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Target size={16}/> Conversion Metrics</button>
         <button onClick={() => setActiveSettingsSection('promotions')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'promotions' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Trophy size={16}/> Corporate Promotions</button>
         <button onClick={() => setActiveSettingsSection('locations')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'locations' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><MapPin size={16}/> Office Locations</button>
         <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DownloadCloud size={16}/> Import Historical Data</button>
@@ -1291,6 +1345,96 @@ export default function SettingsTab({
               className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-8 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm"
             >
               <Save size={18} /> {isSavingCommissionRates ? 'Saving...' : 'Save Commission Rates'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* --- SECTION: CONVERSION METRICS (Executive Cockpit's "Activity Pacing Engine") --- */}
+      {activeSettingsSection === 'conversion_metrics' && (
+        <div className="space-y-6 animate-in fade-in duration-200 max-w-4xl">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle size={18} className="text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-900">
+              These close rates (quotes → bound apps) power the Executive Cockpit&apos;s &quot;Activity Pacing
+              Engine&quot; — it reverse-engineers required apps into a daily quoting target, globally and per
+              producer. Any producer without an override below uses the Global Agency Close Rate.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+              <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><Target size={20} /></div>
+              <div>
+                <h3 className="font-bold text-gray-900">Global Agency Close Rate</h3>
+                <p className="text-xs text-gray-500">Fallback conversion rate used for any producer without an individual override</p>
+              </div>
+            </div>
+            <div className="p-6">
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Close Rate (%)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={globalCloseRateDraft}
+                onChange={(e) => setGlobalCloseRateDraft(Number(e.target.value))}
+                className="w-40 p-3 bg-gray-50 border border-gray-200 rounded-lg text-lg font-bold text-gray-900"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+              <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><Users size={20} /></div>
+              <div>
+                <h3 className="font-bold text-gray-900">Individual Close Rates</h3>
+                <p className="text-xs text-gray-500">Optional per-producer overrides — leave blank to use the global rate</p>
+              </div>
+            </div>
+            <div className="p-6 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <th className="pb-3 pr-4">Team Member</th>
+                    <th className="pb-3 pr-4">Role</th>
+                    <th className="pb-3 pr-4">Close Rate (%)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {team.map((m: any) => (
+                    <tr key={m.id}>
+                      <td className="py-3 pr-4 font-bold text-gray-900 whitespace-nowrap">{m.first_name} {m.last_name}</td>
+                      <td className="py-3 pr-4 text-gray-500 capitalize">{ROLE_LABELS[m.role] || m.role}</td>
+                      <td className="py-3 pr-4">
+                        <input
+                          type="number"
+                          step="0.1"
+                          placeholder={`${globalCloseRateDraft} (global)`}
+                          value={individualCloseRatesDraft[m.id] ?? ''}
+                          onChange={(e) => updateIndividualCloseRate(m.id, e.target.value)}
+                          className="w-36 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                  {team.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-6 text-center text-gray-400 text-sm">
+                        No active team members yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={saveConversionMetrics}
+              disabled={isSavingConversionMetrics}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-8 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm"
+            >
+              <Save size={18} /> {isSavingConversionMetrics ? 'Saving...' : 'Save Conversion Metrics'}
             </button>
           </div>
         </div>
