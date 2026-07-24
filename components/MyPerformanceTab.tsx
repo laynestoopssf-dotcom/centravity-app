@@ -80,14 +80,20 @@ export default function MyPerformanceTab({
       monthlyAppTarget = Math.round((autoTarget + fireTarget + commTarget + healthTarget + annualLifeAppTarget) / 12);
       annualLifePremTarget = productionTeam.reduce((sum: number, m: any) => sum + (Number(m.annual_target_life_premium) || 0), 0) || 0;
     } else {
-      // 1B. GLOBAL VIEW: Pull from overall Agency Settings
-      monthlyPremTarget = Math.round((agencySettings?.annual_target_premium || 0) / 12);
-      autoTarget = agencySettings?.annual_target_auto_apps || 0;
-      fireTarget = agencySettings?.annual_target_fire_apps || 0;
-      commTarget = agencySettings?.annual_target_commercial_apps || 0;
-      healthTarget = agencySettings?.annual_target_health_apps || 0;
-      annualLifeAppTarget = agencySettings?.annual_target_life_apps || 0;
-      
+      // 1B. GLOBAL VIEW ("All Locations"): the live, actually-edited goals live
+      // per-office (Settings → Office Locations writes annual_target_* onto
+      // `offices`, never onto `agencies`). Sum across every office instead of
+      // reading agencySettings, which is only ever a stale onboarding-time
+      // snapshot — mirrors the exact convention app/dashboard/page.tsx's
+      // ytdOverviewData already uses for targetAuto/targetFire/etc.
+      const officeList = offices || [];
+      monthlyPremTarget = Math.round(officeList.reduce((sum: number, o: any) => sum + (Number(o.annual_target_premium) || 0), 0) / 12);
+      autoTarget = officeList.reduce((sum: number, o: any) => sum + (Number(o.annual_target_auto_apps) || 0), 0);
+      fireTarget = officeList.reduce((sum: number, o: any) => sum + (Number(o.annual_target_fire_apps) || 0), 0);
+      commTarget = officeList.reduce((sum: number, o: any) => sum + (Number(o.annual_target_commercial_apps) || 0), 0);
+      healthTarget = officeList.reduce((sum: number, o: any) => sum + (Number(o.annual_target_health_apps) || 0), 0);
+      annualLifeAppTarget = officeList.reduce((sum: number, o: any) => sum + (Number(o.annual_target_life_apps) || 0), 0);
+
       monthlyAppTarget = Math.round((autoTarget + fireTarget + commTarget + healthTarget + annualLifeAppTarget) / 12);
       annualLifePremTarget = productionTeam.reduce((sum: number, m: any) => sum + (Number(m.annual_target_life_premium) || 0), 0) || 0;
     }
@@ -104,9 +110,18 @@ export default function MyPerformanceTab({
     autoTarget = Math.round(remainingAppsForPnC * 0.60);
     fireTarget = Math.round(remainingAppsForPnC * 0.40);
     
+    // Commercial/Health targets aren't set per-producer, so split the office-level
+    // (not agency-level — see 1B above) goal evenly across the producer's office team.
     const producerShare = Math.max(1, productionTeam.length);
-    commTarget = Math.round((agencySettings?.annual_target_commercial_apps || 0) / producerShare);
-    healthTarget = Math.round((agencySettings?.annual_target_health_apps || 0) / producerShare);
+    const officeForTarget = activeOfficeVal !== 'all' && offices ? offices.find((o: any) => o.id === activeOfficeVal) : null;
+    const commAgencyTarget = officeForTarget
+      ? (Number(officeForTarget.annual_target_commercial_apps) || 0)
+      : (offices || []).reduce((sum: number, o: any) => sum + (Number(o.annual_target_commercial_apps) || 0), 0);
+    const healthAgencyTarget = officeForTarget
+      ? (Number(officeForTarget.annual_target_health_apps) || 0)
+      : (offices || []).reduce((sum: number, o: any) => sum + (Number(o.annual_target_health_apps) || 0), 0);
+    commTarget = Math.round(commAgencyTarget / producerShare);
+    healthTarget = Math.round(healthAgencyTarget / producerShare);
   }
 
   return (

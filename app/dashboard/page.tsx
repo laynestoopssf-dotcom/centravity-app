@@ -2815,13 +2815,17 @@ export default function Home() {
             lifeApps: targetLifeApps || teamSumTargets.lifeApps, 
             totalPremium: targetPremium || teamSumTargets.totalPremium,
             lapseRateGlobal: specificOffice?.ytd_lapse_cancel_rate ?? agencySettings?.ytd_lapse_cancel_rate ?? 0, 
-            autoApps: targetAuto || 500, 
+            // NOTE: no hardcoded literal fallbacks (previously 500/250/50/50) — those masked
+            // real, live per-office goals with fake numbers whenever targetAuto/etc. legitimately
+            // computed to 0 (e.g. a stale/never-synced `agencies` row). targetAuto/targetFire/
+            // targetCommercial/targetHealth are already correctly summed from `offices` above.
+            autoApps: targetAuto, 
             lapseAuto: specificOffice?.ytd_lapse_cancel_auto ?? agencySettings?.ytd_lapse_cancel_auto ?? 0,
-            fireApps: targetFire || 250, 
+            fireApps: targetFire, 
             lapseFire: specificOffice?.ytd_lapse_cancel_fire ?? agencySettings?.ytd_lapse_cancel_fire ?? 0, 
-            commercialApps: targetCommercial || 50,
+            commercialApps: targetCommercial,
             lapseCommercial: specificOffice?.ytd_lapse_cancel_commercial ?? agencySettings?.ytd_lapse_cancel_commercial ?? 0, 
-            healthApps: targetHealth || 50, 
+            healthApps: targetHealth, 
             lapseHealth: specificOffice?.ytd_lapse_cancel_health ?? agencySettings?.ytd_lapse_cancel_health ?? 0,
         };
 
@@ -2882,6 +2886,13 @@ export default function Home() {
     // revenue is intentionally decoupled from current_vc_rate entirely; see utils/commissionRates.ts.
     const commissionRates = resolveCommissionRates(agencySettings?.commission_rates);
 
+    // current_vc_rate/base_comm_auto/base_comm_fire are per-office settings (Settings → Office
+    // Locations writes them onto `offices`, never onto `agencies`) — so for the Enterprise / All
+    // Locations view (specificOffice === null), fall back to the primary office's live values
+    // instead of the perpetually-stale/unset agencySettings columns. Matches Reveal's and
+    // Cockpit's identical primaryOffice convention so all three baselines stay 100% in sync.
+    const primaryOffice = offices[0] || null;
+
     const calcPoints = (actual: number, min: number, max: number, maxPct: number) => {
         if (actual <= min) return 0;
         if (actual >= max) return maxPct;
@@ -2917,20 +2928,27 @@ export default function Home() {
     };
 
     const calculateRev = (ytdNode: any, policies: any[], name: string, specificOffice?: any) => {
-        const autoVc = calcPoints(ytdNode.netYtdAutoApps, specificOffice?.vc_min_auto_gain ?? agencySettings?.vc_min_auto_gain ?? 0, specificOffice?.vc_max_auto_gain ?? agencySettings?.vc_max_auto_gain ?? 100, 1.0);
-        const fireVc = calcPoints(ytdNode.netYtdFireApps, specificOffice?.vc_min_fire_gain ?? agencySettings?.vc_min_fire_gain ?? 0, specificOffice?.vc_max_fire_gain ?? agencySettings?.vc_max_fire_gain ?? 100, 1.0);
+        // vc_min_*/vc_max_*/base_comm_* are per-office settings. For a specific office
+        // view, specificOffice already carries the right, live values. For "Enterprise /
+        // All" (specificOffice === null), fall back to the primary office's live values
+        // instead of degrading straight to agencySettings, which is only ever a stale
+        // onboarding-time snapshot of these columns — keeps this in sync with primaryOffice
+        // used elsewhere below and in Reveal/Cockpit.
+        const rateOffice = specificOffice ?? primaryOffice;
+        const autoVc = calcPoints(ytdNode.netYtdAutoApps, rateOffice?.vc_min_auto_gain ?? agencySettings?.vc_min_auto_gain ?? 0, rateOffice?.vc_max_auto_gain ?? agencySettings?.vc_max_auto_gain ?? 100, 1.0);
+        const fireVc = calcPoints(ytdNode.netYtdFireApps, rateOffice?.vc_min_fire_gain ?? agencySettings?.vc_min_fire_gain ?? 0, rateOffice?.vc_max_fire_gain ?? agencySettings?.vc_max_fire_gain ?? 100, 1.0);
 
-        const bLife = (specificOffice?.base_comm_life ?? agencySettings?.base_comm_life ?? 20) / 100;
-        const bHealth = (specificOffice?.base_comm_health ?? agencySettings?.base_comm_health ?? 20) / 100;
+        const bLife = (rateOffice?.base_comm_life ?? agencySettings?.base_comm_life ?? 20) / 100;
+        const bHealth = (rateOffice?.base_comm_health ?? agencySettings?.base_comm_health ?? 20) / 100;
         const ytdFsComm = (ytdNode.totals.ytdLifePremium * bLife) + ((ytdNode.totals.ytdHealthPremium || 0) * bHealth);
 
-        const fsVc = calcPoints(ytdFsComm, specificOffice?.vc_min_fs_comm ?? agencySettings?.vc_min_fs_comm ?? 0, specificOffice?.vc_max_fs_comm ?? agencySettings?.vc_max_fs_comm ?? 10000, 2.0);
+        const fsVc = calcPoints(ytdFsComm, rateOffice?.vc_min_fs_comm ?? agencySettings?.vc_min_fs_comm ?? 0, rateOffice?.vc_max_fs_comm ?? agencySettings?.vc_max_fs_comm ?? 10000, 2.0);
         const projectedVc = Math.min(3.0, autoVc + fireVc + fsVc);
 
         const runRateFsComm = (ytdFsComm / ytdNode.daysPassed) * ytdNode.daysInYear;
-        const runRateAutoVc = calcPoints(ytdNode.runRateAutoApps, specificOffice?.vc_min_auto_gain ?? agencySettings?.vc_min_auto_gain ?? 0, specificOffice?.vc_max_auto_gain ?? agencySettings?.vc_max_auto_gain ?? 100, 1.0);
-        const runRateFireVc = calcPoints(ytdNode.runRateFireApps, specificOffice?.vc_min_fire_gain ?? agencySettings?.vc_min_fire_gain ?? 0, specificOffice?.vc_max_fire_gain ?? agencySettings?.vc_max_fire_gain ?? 100, 1.0);
-        const runRateFsVc = calcPoints(runRateFsComm, specificOffice?.vc_min_fs_comm ?? agencySettings?.vc_min_fs_comm ?? 0, specificOffice?.vc_max_fs_comm ?? agencySettings?.vc_max_fs_comm ?? 10000, 2.0);
+        const runRateAutoVc = calcPoints(ytdNode.runRateAutoApps, rateOffice?.vc_min_auto_gain ?? agencySettings?.vc_min_auto_gain ?? 0, rateOffice?.vc_max_auto_gain ?? agencySettings?.vc_max_auto_gain ?? 100, 1.0);
+        const runRateFireVc = calcPoints(ytdNode.runRateFireApps, rateOffice?.vc_min_fire_gain ?? agencySettings?.vc_min_fire_gain ?? 0, rateOffice?.vc_max_fire_gain ?? agencySettings?.vc_max_fire_gain ?? 100, 1.0);
+        const runRateFsVc = calcPoints(runRateFsComm, rateOffice?.vc_min_fs_comm ?? agencySettings?.vc_min_fs_comm ?? 0, rateOffice?.vc_max_fs_comm ?? agencySettings?.vc_max_fs_comm ?? 10000, 2.0);
         const runRateProjectedVc = Math.min(3.0, runRateAutoVc + runRateFireVc + runRateFsVc);
 
         let nbAutoPrem = 0, nbFirePrem = 0, nbCommPrem = 0, nbLifePrem = 0, nbHealthPrem = 0;
@@ -2971,9 +2989,9 @@ export default function Home() {
 
         // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health. Delegates
         // to the same shared formula Reveal and Cockpit use (utils/revenueEngine.ts).
-        const { totalNbRev } = calculateNewBusinessRevenue(
+        const { totalNbRev, pncNbRev, lifeHealthNbRev } = calculateNewBusinessRevenue(
           { autoPremium: nbAutoPrem, firePremium: nbFirePrem, commercialPremium: nbCommPrem, lifePremium: nbLifePrem, healthPremium: nbHealthPrem },
-          specificOffice,
+          specificOffice || primaryOffice,
           agencySettings,
           commissionRates
         );
@@ -2981,7 +2999,7 @@ export default function Home() {
         const ytdTimeFraction = ytdNode.daysPassed / ytdNode.daysInYear;
 
         // specificOffice set → one location. null (Enterprise / All) → SUM all offices.
-        const { totalBookPremium, totalRenRev } = specificOffice
+        const { totalBookPremium, totalRenRev, pncRenRev, lifeHealthRenRev } = specificOffice
           ? calculateRenewalsForOffice(specificOffice, ytdTimeFraction)
           : calculateEnterpriseBookAndRenewals(ytdTimeFraction);
 
@@ -2989,7 +3007,8 @@ export default function Home() {
           name, projectedVc, autoVc, fireVc, fsVc, ytdFsComm, 
           runRateAutoVc, runRateFireVc, runRateFsVc, runRateProjectedVc, runRateFsComm, 
           runRateAutoApps: ytdNode.runRateAutoApps, runRateFireApps: ytdNode.runRateFireApps,
-          lifeVc: fsVc, ytdLifePremium: ytdFsComm, totalNbRev, totalRenRev, totalBookPremium,
+          lifeVc: fsVc, ytdLifePremium: ytdFsComm, totalNbRev, pncNbRev, lifeHealthNbRev,
+          totalRenRev, pncRenRev, lifeHealthRenRev, totalBookPremium,
           totalAgencyRev: totalNbRev + totalRenRev, netYtdAutoApps: ytdNode.netYtdAutoApps, netYtdFireApps: ytdNode.netYtdFireApps 
         };
     };
@@ -3341,7 +3360,7 @@ export default function Home() {
         {activeTab === 'life' && canViewLifeModule && lifeOverviewData && <LifeTab lifeOverviewData={lifeOverviewData} team={team} updatePolicyStatus={updatePolicyStatus} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} />}
         
         {activeTab === 'ytd' && canViewYtdProjections && ytdOverviewData && <YtdTab ytdOverviewData={ytdOverviewData} />}
-        {activeTab === 'revenue' && canViewRevenueVc && ytdOverviewData && revenueOverviewData && <RevenueTab revenueOverviewData={revenueOverviewData} ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} />}
+        {activeTab === 'revenue' && canViewRevenueVc && ytdOverviewData && revenueOverviewData && <RevenueTab revenueOverviewData={revenueOverviewData} ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} primaryOffice={offices[0] || null} />}
         
         {activeTab === 'settings' && canManageSettings && (
           <SettingsTab 

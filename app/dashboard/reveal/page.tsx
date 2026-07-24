@@ -313,7 +313,7 @@ export default function RevealPage() {
       health: bookSizeSummed.book_size_health,
     };
     const totalBookPremium = totalBookPremiumOf(bookSizeSummed);
-    const { totalRenRev } = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
+    const { totalRenRev, pncRenRev, lifeHealthRenRev } = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
 
     // 6. New business (real production only — near-zero on Day 1, but kept
     // accurate for whenever the owner actually lands on this page).
@@ -342,24 +342,25 @@ export default function RevealPage() {
     nbLifePrem += baseline.lifePremium;
     nbHealthPrem += baseline.healthPremium;
 
-    // Reveal is always Enterprise-wide, so office=null → resolveOfficeRates() falls
-    // straight through to the agency-wide defaults, exactly like before.
-    const { totalNbRev } = calculateNewBusinessRevenue(
+    // Base Comp %s and VC Rate are per-office settings (Step 5 writes them onto
+    // `offices`, not `agencies`) — read off the first/primary office, which is
+    // the one the wizard actually created in Step 1. Reveal is always
+    // Enterprise-wide, so this same primaryOffice also feeds resolveOfficeRates()
+    // below for new business, instead of degrading straight to the stale/unset
+    // agency-wide columns — keeps this baseline 100% in sync with Cockpit's.
+    const primaryOffice = offices[0] || null;
+    const { totalNbRev, pncNbRev, lifeHealthNbRev } = calculateNewBusinessRevenue(
       { autoPremium: nbAutoPrem, firePremium: nbFirePrem, commercialPremium: nbCommPrem, lifePremium: nbLifePrem, healthPremium: nbHealthPrem },
-      null,
+      primaryOffice,
       agencySettings,
       commissionRates
     );
 
     const totalAgencyRev = totalNbRev + totalRenRev;
 
-    // Base Comp %s and VC Rate are per-office settings (Step 5 writes them onto
-    // `offices`, not `agencies`) — read off the first/primary office, which is
-    // the one the wizard actually created in Step 1.
-    const primaryOffice = offices[0] || null;
     const primaryRates = resolveOfficeRates(primaryOffice, agencySettings);
-    const bLifeAgency = num(agencySettings?.base_comm_life, 20) / 100;
-    const bHealthAgency = num(agencySettings?.base_comm_health, 20) / 100;
+    const bLifeAgency = num(primaryOffice?.base_comm_life, num(agencySettings?.base_comm_life, 20)) / 100;
+    const bHealthAgency = num(primaryOffice?.base_comm_health, num(agencySettings?.base_comm_health, 20)) / 100;
 
     console.log("[Reveal] computed agency health", {
       baseline,
@@ -384,7 +385,11 @@ export default function RevealPage() {
       netFireApps,
       totalBookPremium,
       totalRenRev,
+      pncRenRev,
+      lifeHealthRenRev,
       totalNbRev,
+      pncNbRev,
+      lifeHealthNbRev,
       totalAgencyRev,
       vcRate: primaryRates.vcRate * 100,
       baseCompAuto: primaryRates.bAuto * 100,
@@ -487,8 +492,12 @@ export default function RevealPage() {
                 <p className="text-xl font-bold">${money(health.totalNbRev)}</p>
               </div>
               <div>
-                <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals</p>
-                <p className="text-xl font-bold">${money(health.totalRenRev)}</p>
+                <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals (P&amp;C)</p>
+                <p className="text-xl font-bold">${money(health.pncRenRev)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Life/Health Renewals</p>
+                <p className="text-xl font-bold">${money(health.lifeHealthRenRev)}</p>
               </div>
             </div>
           </div>

@@ -38,6 +38,15 @@ export function resolveOfficeRates(office: any, agencySettings: any): OfficeRate
 export interface RenewalRevenueResult {
   totalBookPremium: number;
   totalRenRev: number;
+  // P&C (Auto/Fire/Commercial) and Life/Health are exposed separately, in
+  // addition to the combined totals above, so consumers can display "Net
+  // Renewals" as a strictly-isolated P&C figure instead of a blended number
+  // that silently folds in Life/Health servicing revenue (which has its own
+  // carrier-rate math and never touches VC — see calculateLifeHealthRevenue).
+  pncBookPremium: number;
+  lifeHealthBookPremium: number;
+  pncRenRev: number;
+  lifeHealthRenRev: number;
 }
 
 // Existing book (already-in-force premium) → renewal revenue for one office.
@@ -68,15 +77,18 @@ export function calculateOfficeRenewalRevenue(
     rates: commissionRates,
   });
 
-  const totalBookPremium = bookAuto + bookFire + bookComm + bookLife + bookHealth;
-  const totalRenRev =
+  const pncBookPremium = bookAuto + bookFire + bookComm;
+  const lifeHealthBookPremium = bookLife + bookHealth;
+  const totalBookPremium = pncBookPremium + lifeHealthBookPremium;
+
+  const pncRenRev =
     bookAuto * (1 - autoLapse) * (bAuto + vcRate) +
     bookFire * (1 - fireLapse) * (bFire + vcRate) +
-    bookComm * (1 - commLapse) * (bComm + vcRate) +
-    bookLifeRev +
-    bookHealthRev;
+    bookComm * (1 - commLapse) * (bComm + vcRate);
+  const lifeHealthRenRev = bookLifeRev + bookHealthRev;
+  const totalRenRev = pncRenRev + lifeHealthRenRev;
 
-  return { totalBookPremium, totalRenRev };
+  return { totalBookPremium, totalRenRev, pncBookPremium, lifeHealthBookPremium, pncRenRev, lifeHealthRenRev };
 }
 
 export interface EnterpriseRenewalRevenueResult extends RenewalRevenueResult {
@@ -98,13 +110,18 @@ export function calculateEnterpriseRenewalRevenue(
     summedBook.book_size_commercial +
     summedBook.book_size_life +
     summedBook.book_size_health;
+  const pncBookPremium = summedBook.book_size_auto + summedBook.book_size_fire + summedBook.book_size_commercial;
+  const lifeHealthBookPremium = summedBook.book_size_life + summedBook.book_size_health;
 
-  const totalRenRev = (offices || []).reduce(
-    (sum, office) => sum + calculateOfficeRenewalRevenue(office, agencySettings, commissionRates, ytdTimeFraction).totalRenRev,
-    0
+  const totals = (offices || []).reduce(
+    (sum, office) => {
+      const r = calculateOfficeRenewalRevenue(office, agencySettings, commissionRates, ytdTimeFraction);
+      return { totalRenRev: sum.totalRenRev + r.totalRenRev, pncRenRev: sum.pncRenRev + r.pncRenRev, lifeHealthRenRev: sum.lifeHealthRenRev + r.lifeHealthRenRev };
+    },
+    { totalRenRev: 0, pncRenRev: 0, lifeHealthRenRev: 0 }
   );
 
-  return { totalBookPremium, totalRenRev, summedBook };
+  return { totalBookPremium, pncBookPremium, lifeHealthBookPremium, ...totals, summedBook };
 }
 
 export interface NewBusinessPremiums {
@@ -124,6 +141,9 @@ export interface NewBusinessRevenueResult {
   healthRev: number;
   lifeRate: number;
   healthRate: number;
+  // Same P&C vs Life/Health isolation as RenewalRevenueResult, above.
+  pncNbRev: number;
+  lifeHealthNbRev: number;
 }
 
 // New business (freshly bound/logged premium this year) → revenue. Same
@@ -147,7 +167,9 @@ export function calculateNewBusinessRevenue(
   const autoRev = premiums.autoPremium * (bAuto + vcRate);
   const fireRev = premiums.firePremium * (bFire + vcRate);
   const commRev = premiums.commercialPremium * (bComm + vcRate);
-  const totalNbRev = autoRev + fireRev + commRev + lifeRev + healthRev;
+  const pncNbRev = autoRev + fireRev + commRev;
+  const lifeHealthNbRev = lifeRev + healthRev;
+  const totalNbRev = pncNbRev + lifeHealthNbRev;
 
-  return { totalNbRev, autoRev, fireRev, commRev, lifeRev, healthRev, lifeRate, healthRate };
+  return { totalNbRev, autoRev, fireRev, commRev, lifeRev, healthRev, lifeRate, healthRate, pncNbRev, lifeHealthNbRev };
 }

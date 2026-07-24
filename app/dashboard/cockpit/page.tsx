@@ -331,15 +331,22 @@ export default function CockpitPage() {
 
     // --- 3. The REAL VC points formula (Auto Gain + Fire Gain + FS Comm) ---
     // Exactly mirrors app/dashboard/page.tsx revenueOverviewData.calculateRev.
-    const vcMinAuto = num(agencySettings?.vc_min_auto_gain, 0);
-    const vcMaxAuto = num(agencySettings?.vc_max_auto_gain, 100);
-    const vcMinFire = num(agencySettings?.vc_min_fire_gain, 0);
-    const vcMaxFire = num(agencySettings?.vc_max_fire_gain, 100);
-    const vcMinFs = num(agencySettings?.vc_min_fs_comm, 0);
-    const vcMaxFs = num(agencySettings?.vc_max_fs_comm, 10000);
+    // IMPORTANT: vc_min_*/vc_max_*/current_vc_rate/base_comm_* are per-office settings —
+    // Settings → Office Locations writes them onto `offices`, never onto `agencies`. Reading
+    // straight off agencySettings (as this used to) meant these were almost always undefined
+    // or a stale onboarding-time snapshot, producing wildly wrong VC gain % and a Projected
+    // Revenue that could never match the Revenue & VC dashboard. Fall back to the primary
+    // office's live values first, exactly like Reveal's identical primaryOffice convention.
+    const primaryOffice = offices[0] || null;
+    const vcMinAuto = num(primaryOffice?.vc_min_auto_gain, num(agencySettings?.vc_min_auto_gain, 0));
+    const vcMaxAuto = num(primaryOffice?.vc_max_auto_gain, num(agencySettings?.vc_max_auto_gain, 100));
+    const vcMinFire = num(primaryOffice?.vc_min_fire_gain, num(agencySettings?.vc_min_fire_gain, 0));
+    const vcMaxFire = num(primaryOffice?.vc_max_fire_gain, num(agencySettings?.vc_max_fire_gain, 100));
+    const vcMinFs = num(primaryOffice?.vc_min_fs_comm, num(agencySettings?.vc_min_fs_comm, 0));
+    const vcMaxFs = num(primaryOffice?.vc_max_fs_comm, num(agencySettings?.vc_max_fs_comm, 10000));
 
-    const bLifeAgency = num(agencySettings?.base_comm_life, 20) / 100;
-    const bHealthAgency = num(agencySettings?.base_comm_health, 20) / 100;
+    const bLifeAgency = num(primaryOffice?.base_comm_life, num(agencySettings?.base_comm_life, 20)) / 100;
+    const bHealthAgency = num(primaryOffice?.base_comm_health, num(agencySettings?.base_comm_health, 20)) / 100;
     const ytdFsComm = agencyTotals.life.premium * bLifeAgency + agencyTotals.health.premium * bHealthAgency;
 
     const autoVcPts = calcPoints(netAutoApps, vcMinAuto, vcMaxAuto, 1.0);
@@ -359,14 +366,16 @@ export default function CockpitPage() {
       health: bookSizeSummed.book_size_health,
     };
 
-    // Cockpit is always Enterprise-wide, so office=null → resolveOfficeRates() falls
-    // straight through to the agency-wide defaults.
-    const { vcRate: vcRateDecimal, bAuto: bAutoAgency, bFire: bFireAgency } = resolveOfficeRates(null, agencySettings);
+    // Cockpit is always Enterprise-wide, but current_vc_rate/base_comm_auto/base_comm_fire
+    // are per-office settings — pass primaryOffice (not null) so resolveOfficeRates() picks
+    // up the live, actually-edited values instead of degrading straight to the stale/unset
+    // agency-wide columns. Same primaryOffice convention as Reveal, so both baselines match.
+    const { vcRate: vcRateDecimal, bAuto: bAutoAgency, bFire: bFireAgency } = resolveOfficeRates(primaryOffice, agencySettings);
     const vcRateAgency = vcRateDecimal * 100;
 
-    const { totalRenRev } = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
+    const { totalRenRev, pncRenRev, lifeHealthRenRev } = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
 
-    const { totalNbRev } = calculateNewBusinessRevenue(
+    const { totalNbRev, pncNbRev, lifeHealthNbRev } = calculateNewBusinessRevenue(
       {
         autoPremium: agencyTotals.auto.premium,
         firePremium: agencyTotals.fire.premium,
@@ -374,7 +383,7 @@ export default function CockpitPage() {
         lifePremium: agencyTotals.life.premium,
         healthPremium: agencyTotals.health.premium,
       },
-      null,
+      primaryOffice,
       agencySettings,
       commissionRates
     );
@@ -411,7 +420,11 @@ export default function CockpitPage() {
       totalBookPremium: bookSize.auto + bookSize.fire + bookSize.commercial + bookSize.life + bookSize.health,
       projectedAnnualRevenue,
       totalNbRev,
+      pncNbRev,
+      lifeHealthNbRev,
       totalRenRev,
+      pncRenRev,
+      lifeHealthRenRev,
       vcRateAgency,
       sliderRates,
       globalCloseRate,
@@ -870,8 +883,17 @@ export default function CockpitPage() {
               <Target size={18} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Net Renewals</p>
-              <p className="text-lg font-black text-white">${money(model.totalRenRev)}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Net Renewals (P&amp;C)</p>
+              <p className="text-lg font-black text-white">${money(model.pncRenRev)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-slate-800 rounded-lg text-slate-400">
+              <Target size={18} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Life/Health Renewals</p>
+              <p className="text-lg font-black text-white">${money(model.lifeHealthRenRev)}</p>
             </div>
           </div>
         </div>

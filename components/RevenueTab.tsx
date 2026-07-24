@@ -1,11 +1,17 @@
 import React from "react";
 import { DollarSign, RefreshCw, TrendingUp } from "lucide-react";
 
-export default function RevenueTab({ revenueOverviewData, agencySettings }: any) {
+export default function RevenueTab({ revenueOverviewData, agencySettings, primaryOffice }: any) {
   const money = (n: any) => {
     const v = Number(n);
     return Number.isFinite(v) ? Math.round(v).toLocaleString() : "0";
   };
+
+  // vc_min_*/vc_max_*/current_vc_rate are per-office settings (Settings → Office Locations
+  // writes them onto `offices`, never onto `agencies`) — fall back to the primary office's
+  // live values before the perpetually-stale/unset agencySettings columns, so these display
+  // labels never drift from the actual $ math driving the numbers above.
+  const rate = (field: string, fallback = 0) => primaryOffice?.[field] ?? agencySettings?.[field] ?? fallback;
 
   // Explicit mapping to the exact keys calculateRev()/calculateEnterpriseBookAndRenewals()
   // emit on the `global` node — destructuring (with safe defaults) instead of deep property
@@ -15,7 +21,13 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
     name: enterpriseName = "Enterprise Global",
     totalBookPremium = 0,
     totalNbRev = 0,
-    totalRenRev = 0,
+    // "Net Renewals" below is strictly isolated to the Auto/Fire/Commercial (P&C) book so it
+    // can be sanity-checked directly against Book Premium × (Base + VC) rate — Life/Health
+    // renewal revenue is real and still counted in the grand total, just surfaced in its own
+    // "Life/Health Renewals" tile instead of being silently blended in and looking like an
+    // unexplained overage.
+    pncRenRev = 0,
+    lifeHealthRenRev = 0,
     totalAgencyRev = 0,
   } = revenueOverviewData?.global || {};
 
@@ -41,8 +53,12 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
                <p className="text-xl font-bold">${money(totalNbRev)}</p>
              </div>
              <div>
-               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals</p>
-               <p className="text-xl font-bold">${money(totalRenRev)}</p>
+               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals (P&amp;C)</p>
+               <p className="text-xl font-bold">${money(pncRenRev)}</p>
+             </div>
+             <div>
+               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Life/Health Renewals</p>
+               <p className="text-xl font-bold">${money(lifeHealthRenRev)}</p>
              </div>
           </div>
         </div>
@@ -56,13 +72,13 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
                {revenueOverviewData.locations.map((loc: any, i: number) => (
                  <div key={i} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-200">
                     <span className="text-xs font-bold text-gray-600">{loc.name}</span>
-                    <span className="text-xl font-black text-gray-900">{agencySettings?.current_vc_rate || 0}%</span>
+                    <span className="text-xl font-black text-gray-900">{rate('current_vc_rate')}%</span>
                  </div>
                ))}
              </div>
            ) : (
              <>
-               <div className="text-5xl font-black text-gray-900 mb-2">{agencySettings?.current_vc_rate || 0}%</div>
+               <div className="text-5xl font-black text-gray-900 mb-2">{rate('current_vc_rate')}%</div>
                <p className="text-sm text-gray-500 font-medium">Applied to Auto & Fire base commissions.</p>
              </>
            )}
@@ -101,7 +117,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
                           <div className="w-full bg-gray-100 h-2 rounded-full mb-3 overflow-hidden">
                             <div className="bg-blue-500 h-full rounded-full transition-all duration-1000" style={{width: `${(locData.autoVc / 1.0) * 100}%`}}></div>
                           </div>
-                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: {agencySettings?.vc_min_auto_gain || 0}</span><span className="text-gray-900">YTD: {locData.netYtdAutoApps}</span><span>Max: {agencySettings?.vc_max_auto_gain || 0}</span></div>
+                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: {rate('vc_min_auto_gain')}</span><span className="text-gray-900">YTD: {locData.netYtdAutoApps}</span><span>Max: {rate('vc_max_auto_gain', 100)}</span></div>
                         </div>
                         <div className="bg-blue-50 border border-blue-100 rounded-lg p-2 text-center">
                           <span className="text-[10px] font-bold text-blue-700 uppercase">Pacing: {locData.runRateAutoApps} Apps <span className="font-black opacity-70">(+{locData.runRateAutoVc.toFixed(2)}%)</span></span>
@@ -114,7 +130,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
                           <div className="w-full bg-gray-100 h-2 rounded-full mb-3 overflow-hidden">
                             <div className="bg-red-500 h-full rounded-full transition-all duration-1000" style={{width: `${(locData.fireVc / 1.0) * 100}%`}}></div>
                           </div>
-                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: {agencySettings?.vc_min_fire_gain || 0}</span><span className="text-gray-900">YTD: {locData.netYtdFireApps}</span><span>Max: {agencySettings?.vc_max_fire_gain || 0}</span></div>
+                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: {rate('vc_min_fire_gain')}</span><span className="text-gray-900">YTD: {locData.netYtdFireApps}</span><span>Max: {rate('vc_max_fire_gain', 100)}</span></div>
                         </div>
                         <div className="bg-red-50 border border-red-100 rounded-lg p-2 text-center">
                           <span className="text-[10px] font-bold text-red-700 uppercase">Pacing: {locData.runRateFireApps} Apps <span className="font-black opacity-70">(+{locData.runRateFireVc.toFixed(2)}%)</span></span>
@@ -127,7 +143,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings }: any)
                           <div className="w-full bg-gray-100 h-2 rounded-full mb-3 overflow-hidden">
                             <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000" style={{width: `${(locData.fsVc / 2.0) * 100}%`}}></div>
                           </div>
-                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: ${agencySettings?.vc_min_fs_comm || 0}</span><span className="text-gray-900">YTD: ${Math.round(locData.ytdFsComm).toLocaleString()}</span><span>Max: ${agencySettings?.vc_max_fs_comm || 0}</span></div>
+                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: ${rate('vc_min_fs_comm')}</span><span className="text-gray-900">YTD: ${Math.round(locData.ytdFsComm).toLocaleString()}</span><span>Max: ${rate('vc_max_fs_comm', 10000)}</span></div>
                         </div>
                         <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
                           <span className="text-[10px] font-bold text-emerald-700 uppercase">Pacing: ${Math.round(locData.runRateFsComm).toLocaleString()} <span className="font-black opacity-70">(+{locData.runRateFsVc.toFixed(2)}%)</span></span>
