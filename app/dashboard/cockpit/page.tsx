@@ -17,6 +17,7 @@ import {
   Zap,
   Gauge,
   Users,
+  Plane,
 } from "lucide-react";
 import { supabase } from "../../../utils/supabase";
 import { resolveParentLine } from "../../../utils/productLines";
@@ -484,6 +485,80 @@ export default function CockpitPage() {
       health: getHealthRate(commissionRates, "new_business"),
     };
 
+    // --- 5. Travel & Incentive Qualifier baseline — mirrors app/dashboard/page.tsx's
+    // calculateStats() travel-credit logic exactly (same proration rules for monthly-pay
+    // policies, same issued-vs-bound/quoted split), so the Cockpit's qualification tier and
+    // "real" pipeline numbers can never drift from what the YTD Projections tab shows. The
+    // What-If layer (Cash Flow Architect sliders) is blended in below, outside this useMemo,
+    // since it needs to react instantly as the user drags a slider.
+    const currentMonthRemaining = 12 - today.getMonth();
+    let issuedLifeCred = 0;
+    let carryOverCred = 0;
+    let pendingLifeCred = 0;
+    let pendingCarryOver = 0;
+    let pendingLifeApps = 0;
+    let issuedHealthCred = 0;
+    let pendingHealthCred = 0;
+    policies.forEach((pol) => {
+      const logDate = new Date(pol.logged_at);
+      if (logDate.getFullYear() !== currentYear) return;
+      const prem = num(pol.premium_amount);
+      const isAnnual = pol.payment_cycle === "annual";
+      const parentLine = getParentLine(pol.product_line);
+      if (parentLine === "Life") {
+        let earnedThisYear = 0;
+        let carryOver = 0;
+        if (pol.status === "issued") {
+          if (isAnnual) {
+            earnedThisYear = prem;
+          } else {
+            earnedThisYear = (prem / 12) * (12 - logDate.getMonth());
+            carryOver = prem - earnedThisYear;
+          }
+          issuedLifeCred += earnedThisYear;
+          carryOverCred += carryOver;
+        } else if (pol.status === "bound" || pol.status === "quoted") {
+          if (pol.status !== "quoted") pendingLifeApps++;
+          if (isAnnual) {
+            earnedThisYear = prem;
+          } else {
+            earnedThisYear = (prem / 12) * currentMonthRemaining;
+            carryOver = prem - earnedThisYear;
+          }
+          pendingLifeCred += earnedThisYear;
+          pendingCarryOver += carryOver;
+        }
+      } else if (parentLine === "Health") {
+        if (pol.status === "issued") issuedHealthCred += prem;
+        else if (pol.status === "bound" || pol.status === "quoted") pendingHealthCred += prem;
+      }
+    });
+
+    // Baseline (onboarding starting_ytd_*) Life/Health premium is already-earned credit, same
+    // treatment as the dashboard's calculateStats() baseline blend.
+    const baselineLifePremium = team.reduce((s: number, m) => s + num(m.starting_ytd_life_premium), 0);
+    const baselineHealthPremium = team.reduce((s: number, m) => s + num(m.starting_ytd_health_premium), 0);
+    issuedLifeCred += baselineLifePremium;
+    issuedHealthCred += baselineHealthPremium;
+
+    const travelTiers = [
+      { name: "Level 1", apps: num(agencySettings?.travel_lvl1_apps, 70), lifeCred: num(agencySettings?.travel_lvl1_life_cred, 41300), totalCred: num(agencySettings?.travel_lvl1_total_cred, 59000) },
+      { name: "Level 2", apps: num(agencySettings?.travel_lvl2_apps, 70), lifeCred: num(agencySettings?.travel_lvl2_life_cred, 53200), totalCred: num(agencySettings?.travel_lvl2_total_cred, 76000) },
+      { name: "Level 3", apps: num(agencySettings?.travel_lvl3_apps, 75), lifeCred: num(agencySettings?.travel_lvl3_life_cred, 80500), totalCred: num(agencySettings?.travel_lvl3_total_cred, 115000) },
+      { name: "Exotic", apps: num(agencySettings?.travel_exotic_apps, 80), lifeCred: num(agencySettings?.travel_exotic_life_cred, 102500), totalCred: num(agencySettings?.travel_exotic_total_cred, 205000) },
+      { name: "Exotic Plus", apps: num(agencySettings?.travel_exotic_plus_apps, 110), lifeCred: num(agencySettings?.travel_exotic_plus_life_cred, 157500), totalCred: num(agencySettings?.travel_exotic_plus_total_cred, 315000) },
+    ];
+
+    // Qualification is strictly REAL production (issued credit, bound+issued gross apps) —
+    // exactly like the dashboard — never influenced by the hypothetical What-If sliders.
+    let travelTierIndex = -1;
+    for (let i = 0; i < travelTiers.length; i++) {
+      if (agencyTotals.life.apps >= travelTiers[i].apps && issuedLifeCred >= travelTiers[i].lifeCred && issuedLifeCred + issuedHealthCred >= travelTiers[i].totalCred) {
+        travelTierIndex = i;
+      }
+    }
+    const travelTargetTierIndex = travelTierIndex < travelTiers.length - 1 ? travelTierIndex + 1 : travelTiers.length - 1;
+
     return {
       memberTotals,
       memberQuoteCounts,
@@ -517,6 +592,17 @@ export default function CockpitPage() {
       sliderRates,
       globalCloseRate,
       productionDaysPerWeek,
+      travelTiers,
+      travelTierIndex,
+      travelTargetTierIndex,
+      issuedLifeApps: agencyTotals.life.apps,
+      pendingLifeApps,
+      issuedLifeCred,
+      pendingLifeCred,
+      issuedHealthCred,
+      pendingHealthCred,
+      carryOverCred,
+      pendingCarryOver,
     };
   }, [status, agencySettings, offices, team, policies, activities]);
 
@@ -686,6 +772,56 @@ export default function CockpitPage() {
     return { id: m.id, name: `${m.first_name} ${m.last_name}`, closeRatePct: resolved.pct, closeRateSource: resolved.source, perLine };
   });
 
+  // --- Travel & Incentive Qualifier: blend the real baseline (issued + real pipeline, from
+  // model's dashboard-mirrored travel math) with the Cash Flow Architect's hypothetical
+  // sliders, so this recalculates live as the user models "what if I write $X more" scenarios.
+  // Qualification tier itself (travelTierIndex/travelTargetTierIndex) is always real-only —
+  // only the progress bars/gap-to-close react to the sliders.
+  const travelTargetTier = model.travelTiers[model.travelTargetTierIndex];
+  const travelCurrentTierName = model.travelTierIndex >= 0 ? model.travelTiers[model.travelTierIndex].name : "Unqualified";
+  const travelMaxedOut = model.travelTierIndex === model.travelTiers.length - 1;
+  const travelWhatIfLifeApps = model.avgPremiumPerApp.life ? sliders.life / model.avgPremiumPerApp.life : 0;
+
+  const travelMetrics = (
+    [
+      {
+        key: "apps" as const,
+        label: "Life Apps",
+        current: model.issuedLifeApps + model.pendingLifeApps,
+        gain: travelWhatIfLifeApps,
+        target: travelTargetTier.apps,
+        format: "apps" as const,
+      },
+      {
+        key: "lifeCred" as const,
+        label: "Life Credit",
+        current: model.issuedLifeCred + model.pendingLifeCred,
+        gain: sliders.life,
+        target: travelTargetTier.lifeCred,
+        format: "money" as const,
+      },
+      {
+        key: "totalCred" as const,
+        label: "Total Credit (Life + Health)",
+        current: model.issuedLifeCred + model.pendingLifeCred + model.issuedHealthCred + model.pendingHealthCred,
+        gain: sliders.life + sliders.health,
+        target: travelTargetTier.totalCred,
+        format: "money" as const,
+      },
+    ]
+  ).map((m) => {
+    const projected = m.current + m.gain;
+    const progressReal = m.target > 0 ? Math.min(100, (m.current / m.target) * 100) : 100;
+    const progressProjected = m.target > 0 ? Math.min(100, (projected / m.target) * 100) : 100;
+    const gapProjected = Math.max(0, m.target - projected);
+    return { ...m, projected, progressReal, progressProjected, gapProjected };
+  });
+
+  // The bottleneck — whichever metric is furthest from its target even after the What-If
+  // gain — is the true rate-limiter for reaching the next tier, and drives the pacing line.
+  const travelBottleneck = travelMetrics.reduce((worst, m) => (m.progressProjected < worst.progressProjected ? m : worst), travelMetrics[0]);
+  const travelFullyQualifiedWithWhatIf = travelMetrics.every((m) => m.gapProjected <= 0);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-8">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -709,6 +845,9 @@ export default function CockpitPage() {
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* LEFT COLUMN: VC Tier Sniper stacked above the Travel & Incentive Qualifier, so this
+              column's total height balances against the taller Cash Flow Architect on the right. */}
+          <div className="flex flex-col gap-6">
           {/* ============================= CARD 1: VC TIER SNIPER ============================= */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl border border-cyan-900/50 shadow-[0_0_40px_-15px_rgba(34,211,238,0.3)] p-7">
             <div className="flex items-center gap-3 mb-5">
@@ -809,6 +948,91 @@ export default function CockpitPage() {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* ============================= CARD 1B: TRAVEL & INCENTIVE QUALIFIER ============================= */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl border border-amber-900/50 shadow-[0_0_40px_-15px_rgba(245,158,11,0.3)] p-7">
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl">
+                  <Plane size={22} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Travel &amp; Incentive Qualifier</h2>
+                  <p className="text-xs text-slate-500">Real YTD pipeline + Cash Flow Architect What-If</p>
+                </div>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                  model.travelTierIndex >= 0
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                    : "bg-slate-800 text-slate-400 border border-slate-700"
+                }`}
+              >
+                {model.travelTierIndex >= 0 ? `${travelCurrentTierName} Qualified` : "Unqualified"}
+              </span>
+            </div>
+
+            {travelMaxedOut ? (
+              <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-5 flex items-center gap-3">
+                <Trophy className="text-emerald-400 shrink-0" size={28} />
+                <p className="text-emerald-300 font-bold">Top tier unlocked — {travelCurrentTierName} secured!</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Next Milestone</p>
+                  <p className="text-sm font-black text-amber-400">{travelTargetTier.name}</p>
+                </div>
+
+                <div className="space-y-4 mb-5">
+                  {travelMetrics.map((m) => (
+                    <div key={m.key}>
+                      <div className="flex justify-between items-baseline mb-1.5">
+                        <span className="text-xs font-bold text-slate-400">{m.label}</span>
+                        <span className="text-xs font-black text-white">
+                          {m.format === "money" ? `$${money(m.current)}` : Math.round(m.current)}
+                          {m.gain > 0.5 && (
+                            <span className="text-emerald-400"> +{m.format === "money" ? `$${money(m.gain)}` : Math.round(m.gain)}</span>
+                          )}
+                          <span className="text-slate-500 font-semibold"> / {m.format === "money" ? `$${money(m.target)}` : m.target}</span>
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
+                        <div className="h-full bg-amber-500" style={{ width: `${m.progressReal}%` }} />
+                        <div className="h-full bg-amber-300/60" style={{ width: `${Math.max(0, m.progressProjected - m.progressReal)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {travelFullyQualifiedWithWhatIf ? (
+                  <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 flex items-center gap-3">
+                    <Sparkles className="text-emerald-400 shrink-0" size={20} />
+                    <p className="text-emerald-300 text-sm font-bold">Your What-If plan clears {travelTargetTier.name} — lock it in!</p>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-4">
+                    <p className="text-xs font-bold text-slate-400 mb-1.5">
+                      Bottleneck: <span className="text-amber-400">{travelBottleneck.label}</span>
+                    </p>
+                    <p className="text-sm text-slate-300">
+                      <span className="text-white font-black">
+                        {travelBottleneck.format === "money" ? `$${money(travelBottleneck.gapProjected)}` : Math.ceil(travelBottleneck.gapProjected)}
+                      </span>{" "}
+                      more needed to reach {travelTargetTier.name}
+                    </p>
+                    <p className="text-[10px] text-amber-400 mt-1.5">
+                      {travelBottleneck.format === "money"
+                        ? `$${money(travelBottleneck.gapProjected / Math.max(1, weeksRemaining))}/week`
+                        : `${(travelBottleneck.gapProjected / Math.max(1, weeksRemaining)).toFixed(1)} apps/week`}{" "}
+                      needed the rest of the year
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
           </div>
 
           {/* ============================= CARD 2: CASH FLOW ARCHITECT ============================= */}
