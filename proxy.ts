@@ -124,10 +124,41 @@ export default async function proxy(request: NextRequest) {
 
     if (!user) {
       const destination = routeIsProtected ? "/" : "(none — pass through)";
+
+      // authError present (as opposed to simply no cookie at all) means the
+      // browser IS holding a session — it's just permanently invalid (e.g.
+      // "User from sub claim in JWT does not exist": a valid, correctly
+      // signed token for a user that's since been deleted from auth.users,
+      // most likely a leftover from earlier test-account cleanup). That
+      // token will never become valid again no matter how many times it's
+      // resent, so it must be actively cleared here.
+      //
+      // THIS WAS THE ROOT CAUSE of the persistent "/" <-> "/dashboard" loop
+      // surviving the earlier hard-navigation and cookie-preservation fixes:
+      // /dashboard's getUser() (server-side, actually validates against
+      // Supabase) correctly rejects the dead session every time and bounces
+      // to "/" — but "/"'s own client-side getSession() only ever decodes
+      // the cookie locally, never revalidating it against the server, so it
+      // still "sees" that same dead session and immediately fires
+      // window.location.href back to "/dashboard". Neither hard navigation
+      // nor redirect-cookie-preservation touches this, because the session
+      // itself — not the navigation method — is the problem: nothing was
+      // ever clearing the broken cookie, so it just gets resent forever.
+      // signOut() is specifically built to handle this: per
+      // @supabase/auth-js's GoTrueClient._signOut, a 401/403/404 from the
+      // remote revocation call is explicitly ignored ("user might not exist
+      // anymore") and the local cookie is cleared regardless — exactly this
+      // scenario. { scope: "local" } skips trying to revoke a token that's
+      // already meaningless server-side and only clears this browser's copy.
+      if (authError) {
+        await supabase.auth.signOut({ scope: "local" });
+      }
+
       trace({
         hasSession: false,
         authError: authError?.message || null,
         authErrorStatus: (authError as { status?: number } | null)?.status ?? null,
+        clearedStaleCookie: !!authError,
         routeIsProtected,
         redirectingTo: destination,
       });
@@ -221,5 +252,7 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|manifest.json).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon-.*\\.png|apple-icon.*\\.png|sitemap.xml|robots.txt|manifest.json).*)",
+  ],
 };
