@@ -186,6 +186,13 @@ export default function Home() {
   const [expandedProducerId, setExpandedProducerId] = useState<string | null>(null);
 
   const [isLoggingModalOpen, setIsLoggingModalOpen] = useState(false);
+  // Guards against an accidental double-click firing submitLogActivity twice in a row (two
+  // fully separate submissions, each with its own uuids) - this used to be "handled" by a
+  // blunt same-user/same-activity-type/3-second DB trigger that also silently ate legitimate
+  // multi-line submissions. That trigger has been narrowed to drop only its flawed dedup
+  // heuristic (see scripts/fix_ledger_integrity_trigger.sql); double-click protection now
+  // belongs here instead, where it can't be confused with intentional multi-unit submissions.
+  const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [loggingType, setLoggingType] = useState<'quote' | 'bound' | 'complex_res' | 'cross_sell'>('quote');
   const [resolutionStatus, setResolutionStatus] = useState<'positive' | 'negative'>('positive');
   const [isExistingQuote, setIsExistingQuote] = useState(false);
@@ -1717,7 +1724,12 @@ export default function Home() {
   const submitLogActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
-    
+    // Blocks a second submission from firing while one is already in flight (e.g. an accidental
+    // double-click on Save) - see the isSubmittingActivity declaration above for why this replaced
+    // a DB-side trigger that used to (over-broadly) try to catch the same thing.
+    if (isSubmittingActivity) return;
+    setIsSubmittingActivity(true);
+
     const finalFirstName = custFirstName.charAt(0).toUpperCase() + custFirstName.slice(1).toLowerCase();
     const finalFormattedName = `${finalFirstName.trim()} ${custLastInitial.toUpperCase()}.`;
 
@@ -1842,6 +1854,8 @@ export default function Home() {
     } catch (error: any) { 
       console.error(error); 
       showToast(error.message || "Error saving data", "error"); 
+    } finally {
+      setIsSubmittingActivity(false);
     }
   };
 
@@ -3630,8 +3644,8 @@ export default function Home() {
               )}
               
               <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
-                <button type="button" onClick={() => setIsLoggingModalOpen(false)} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
-                <button type="submit" className={`flex-1 py-3 px-4 text-white font-bold rounded-xl transition-colors ${loggingType === 'bound' ? 'bg-emerald-600 hover:bg-emerald-700' : loggingType === 'complex_res' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>Save {loggingType.replace('_', ' ')}</button>
+                <button type="button" onClick={() => setIsLoggingModalOpen(false)} disabled={isSubmittingActivity} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+                <button type="submit" disabled={isSubmittingActivity} className={`flex-1 py-3 px-4 text-white font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${loggingType === 'bound' ? 'bg-emerald-600 hover:bg-emerald-700' : loggingType === 'complex_res' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>{isSubmittingActivity ? 'Saving...' : `Save ${loggingType.replace('_', ' ')}`}</button>
               </div>
             </form>
           </div>
