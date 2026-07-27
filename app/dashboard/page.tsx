@@ -88,6 +88,14 @@ const DEFAULT_PRODUCT_LINES = [
   {name: 'Health', parent: 'Health'}
 ];
 
+// Explicit per-row ID generator for bulk activity/policy inserts - never rely on every row in a
+// batch getting a distinct value from a DB default alone. Mirrors the same fallback pattern used
+// in OnboardingWizard's makeId() for browsers without crypto.randomUUID.
+const makeRowId = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `row-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
 // Hoisted to module scope: pure constants with no dependency on props/state, shared by every
 // dynamic-average / dual-engine What-If calculation (agency-wide and per-producer alike).
 const PARENT_CATEGORIES = ['Auto', 'Fire', 'Commercial', 'Life', 'Health'] as const;
@@ -1709,11 +1717,11 @@ export default function Home() {
       const targetOffice = logOfficeId || profile.office_id;
 
       if (loggingType === 'complex_res') {
-        const { error: actErr } = await supabase.from('activities').insert([{ activity_type: 'complex_res', agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }]);
-        if (actErr) throw new Error(`Activity Error: ${actErr.message}`);
+        const { error: actErr } = await supabase.from('activities').insert([{ id: makeRowId(), activity_type: 'complex_res', agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }]);
+        if (actErr) { console.error('[submitLogActivity] complex_res activity insert failed:', actErr); throw new Error(`Activity Error: ${actErr.message}${actErr.details ? ` (${actErr.details})` : ''}`); }
 
-        const { error: polErr } = await supabase.from('policies').insert([{ agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
-        if (polErr) throw new Error(`Policy Error: ${polErr.message}`);
+        const { error: polErr } = await supabase.from('policies').insert([{ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
+        if (polErr) { console.error('[submitLogActivity] complex_res policy insert failed:', polErr); throw new Error(`Policy Error: ${polErr.message}${polErr.details ? ` (${polErr.details})` : ''}`); }
 
         showToast(`Resolution logged for ${finalFormattedName}!`);
         setIsLoggingModalOpen(false);
@@ -1734,19 +1742,39 @@ export default function Home() {
         console.log('[submitLogActivity] cards:', lineItems.map(i => ({ line: i.productLine, qty: qtyOf(i) })), '-> expanded units:', totalCount);
       }
 
+      // Every row gets its own client-generated UUID (never rely solely on a DB default being
+      // applied per-row in a batch) AND its own logged_at, nudged forward by 1ms per unit index.
+      // Neither field is allowed to collide across the batch - if a DB-side unique/PK constraint
+      // ever keyed off (user_id, logged_at) or the insert silently dropped "duplicate-looking"
+      // rows, this is what would cause a 6-unit submission to only register as 1.
+      const stampFor = (index: number) => new Date(new Date(currentTime).getTime() + index).toISOString();
+
       // One `activities` row per expanded unit - this is what the Cockpit's memberQuoteCounts /
       // Activity Pacing Engine sums, so the row count here must equal totalCount exactly.
-      const activitiesToLog = expandedUnits.map(() => ({ activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }));
-      const { error: actBulkErr } = await supabase.from('activities').insert(activitiesToLog);
-      if (actBulkErr) throw new Error(`Activity Bulk Error: ${actBulkErr.message}`);
+      const activitiesToLog = expandedUnits.map((_, idx) => ({ id: makeRowId(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: stampFor(idx) }));
+      const { error: actBulkErr, data: actInsertedRows } = await supabase.from('activities').insert(activitiesToLog).select('id');
+      if (actBulkErr) {
+        console.error('[submitLogActivity] activities batch insert failed:', actBulkErr, 'payload size:', activitiesToLog.length);
+        throw new Error(`Activity Bulk Error: ${actBulkErr.message}${actBulkErr.details ? ` (${actBulkErr.details})` : ''}`);
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[submitLogActivity] activities rows requested:', activitiesToLog.length, 'rows confirmed by Supabase:', actInsertedRows?.length ?? 'unknown (no .select())');
+      }
+      if (actInsertedRows && actInsertedRows.length !== activitiesToLog.length) {
+        console.error('[submitLogActivity] MISMATCH: requested', activitiesToLog.length, 'activity rows but only', actInsertedRows.length, 'were confirmed inserted.', actInsertedRows);
+        showToast(`Warning: requested ${activitiesToLog.length} quotes but only ${actInsertedRows.length} were saved. Please verify your Ledger.`, "error");
+      }
 
       if (loggingType === 'quote' || loggingType === 'cross_sell') {
         // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
         // entry books $100/unit instead of multiplying the household's premium by 3.
-        const policiesToLog = expandedUnits.map(item => ({ agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: currentTime, written_at: currentTime }));
+        const policiesToLog = expandedUnits.map((item, idx) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: stampFor(idx), written_at: stampFor(idx) }));
         const { error: polBulkErr } = await supabase.from('policies').insert(policiesToLog);
-        if (polBulkErr) throw new Error(`Policy Bulk Error: ${polBulkErr.message}`);
-        
+        if (polBulkErr) {
+          console.error('[submitLogActivity] policies batch insert failed:', polBulkErr, 'payload size:', policiesToLog.length);
+          throw new Error(`Policy Bulk Error: ${polBulkErr.message}${polBulkErr.details ? ` (${polBulkErr.details})` : ''}`);
+        }
+
         showToast(`Successfully logged ${totalCount} Items to your Pipeline!`);
         
       } else if (loggingType === 'bound') {
@@ -1754,18 +1782,19 @@ export default function Home() {
           if (isExistingQuote && item.existingQuoteIds.length > 0) {
             const idsToUpdate = item.existingQuoteIds.slice(0, item.count);
             if (idsToUpdate.length > 0) {
-              await supabase.from('policies').update({ status: 'bound', customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle }).in('id', idsToUpdate);
+              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle }).in('id', idsToUpdate);
+              if (updErr) { console.error('[submitLogActivity] bind existing-quote update failed:', updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
             }
             if (item.count > idsToUpdate.length) {
                const extraCount = item.count - idsToUpdate.length;
-               const extraPolicies: any[] = [];
-               for(let i = 0; i < extraCount; i++) extraPolicies.push({ agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: currentTime, written_at: currentTime });
-               await supabase.from('policies').insert(extraPolicies);
+               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i) }));
+               const { error: extraErr } = await supabase.from('policies').insert(extraPolicies);
+               if (extraErr) { console.error('[submitLogActivity] bind extra-policies insert failed:', extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
-            const policiesToLog: any[] = [];
-            for (let i = 0; i < item.count; i++) policiesToLog.push({ agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: currentTime, written_at: currentTime });
-            await supabase.from('policies').insert(policiesToLog);
+            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i) }));
+            const { error: bndErr } = await supabase.from('policies').insert(policiesToLog);
+            if (bndErr) { console.error('[submitLogActivity] bound policies insert failed:', bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
           }
         }
         showToast(`Successfully bound ${totalCount} items!`);
