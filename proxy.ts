@@ -63,6 +63,30 @@ export default async function proxy(request: NextRequest) {
 
   let response = NextResponse.next({ request });
 
+  // Wraps NextResponse.redirect() so any cookies already written onto
+  // `response` below (via setAll(), e.g. a rotated/refreshed auth token from
+  // supabase.auth.getUser() further down) survive the redirect instead of
+  // being silently dropped.
+  //
+  // THIS WAS THE ROOT CAUSE of a persistent "/" <-> "/dashboard" redirect
+  // loop: a request arriving with an expiring access token makes getUser()
+  // refresh it — Supabase refresh tokens are single-use/rotating, so the OLD
+  // one is invalidated server-side the instant the NEW one is issued. A bare
+  // `NextResponse.redirect(...)` is a brand-new response object with no
+  // memory of that refreshed cookie, so the browser never actually receives
+  // the replacement token and is left holding one that's already been burned.
+  // The very next request then fails authentication outright — not a
+  // one-off hiccup, but a self-sustaining loop, since every single pass
+  // through this exact path burns the current refresh token without ever
+  // successfully delivering its replacement back to the browser.
+  function redirectTo(destination: string): NextResponse {
+    const redirectResponse = NextResponse.redirect(new URL(destination, request.url));
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    return redirectResponse;
+  }
+
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       getAll() {
@@ -77,57 +101,67 @@ export default async function proxy(request: NextRequest) {
     },
   });
 
-  // Auth Check — getUser() actually validates the JWT against Supabase's Auth
-  // server rather than trusting a locally-decoded cookie, which is why this
-  // (not getSession()) is the correct call to make here.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    // Auth Check — getUser() actually validates the JWT against Supabase's Auth
+    // server rather than trusting a locally-decoded cookie, which is why this
+    // (not getSession()) is the correct call to make here.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  const routeIsProtected = isProtectedPath(pathname);
+    const routeIsProtected = isProtectedPath(pathname);
 
-  if (!user) {
-    if (routeIsProtected) {
-      return NextResponse.redirect(new URL("/", request.url));
+    if (!user) {
+      if (routeIsProtected) {
+        return redirectTo("/");
+      }
+      return response;
     }
+
+    // Only the two gated routes need the extra `profiles` round-trip — every
+    // other request (including the login/marketing page for an already-signed-in
+    // user) just gets the refreshed session cookies and moves on, per Next's
+    // guidance to keep Proxy's DB usage to a minimum since it runs on every
+    // navigation, including prefetches.
+    if (!routeIsProtected) {
+      return response;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role, onboarding_completed, onboarding_step")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      // Fail open — don't turn a transient DB blip into a redirect loop. The
+      // client-side gatekeepers (dashboard/onboarding pages) still run as a
+      // second line of defense.
+      console.error("[Proxy] profile lookup failed", profileError);
+      return response;
+    }
+
+    const needsOnboarding =
+      !profile || (profile.role === "owner" && typeof profile.onboarding_step === "number" && !profile.onboarding_completed);
+
+    if (pathname.startsWith("/dashboard") && needsOnboarding) {
+      return redirectTo("/onboarding");
+    }
+
+    if (pathname.startsWith("/onboarding") && !needsOnboarding) {
+      return redirectTo("/dashboard");
+    }
+
+    return response;
+  } catch (err) {
+    // Fail open, same rationale as the profileError branch above: an
+    // unexpected throw here (e.g. the fetch to Supabase's Auth server itself
+    // failing) must never turn into a hard proxy crash — or worse, a
+    // redirect that a client-side retry then hits again and again, which is
+    // its own flavor of the exact loop this file exists to prevent.
+    console.error("[Proxy] unexpected error", err);
     return response;
   }
-
-  // Only the two gated routes need the extra `profiles` round-trip — every
-  // other request (including the login/marketing page for an already-signed-in
-  // user) just gets the refreshed session cookies and moves on, per Next's
-  // guidance to keep Proxy's DB usage to a minimum since it runs on every
-  // navigation, including prefetches.
-  if (!routeIsProtected) {
-    return response;
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role, onboarding_completed, onboarding_step")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    // Fail open — don't turn a transient DB blip into a redirect loop. The
-    // client-side gatekeepers (dashboard/onboarding pages) still run as a
-    // second line of defense.
-    console.error("[Proxy] profile lookup failed", profileError);
-    return response;
-  }
-
-  const needsOnboarding =
-    !profile || (profile.role === "owner" && typeof profile.onboarding_step === "number" && !profile.onboarding_completed);
-
-  if (pathname.startsWith("/dashboard") && needsOnboarding) {
-    return NextResponse.redirect(new URL("/onboarding", request.url));
-  }
-
-  if (pathname.startsWith("/onboarding") && !needsOnboarding) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  return response;
 }
 
 export const config = {
