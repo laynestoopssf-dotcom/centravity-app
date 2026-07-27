@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // =============================================================================
 // Shared service-role Supabase client for Server Actions (server-only, bypasses RLS).
@@ -18,6 +18,20 @@ import { createClient } from "@supabase/supabase-js";
 // .../auth/v1/..., which 404s and surfaces as a generic, misleading
 // "Unauthorized: invalid session." Normalize it the same way so this client
 // is correct regardless of how the env var is formatted.
+//
+// LAZY INITIALIZATION — load-bearing, not a style choice: createClient() from
+// @supabase/supabase-js throws SYNCHRONOUSLY if the url/key are empty. This
+// used to be a plain top-level `const supabaseAdmin = createClient(...)`,
+// which runs the instant this module is imported — BEFORE any calling
+// action's own try/catch has started. A throw there crosses the Server
+// Action boundary completely uncaught, which is exactly what produces
+// Next's generic, unhelpful "An error occurred in the Server Components
+// render" message in production instead of a real error surfaced to the UI.
+// Wrapping it in a getter means the actual createClient() call happens
+// lazily, on first use, from *inside* whichever action's try/catch is
+// already running (e.g. joinAgency.ts / onboarding.ts) — so a missing/blank
+// env var becomes a normal caught error and a clean { success: false, error }
+// response instead of a hard server crash.
 // =============================================================================
 function normalizeSupabaseUrl(raw: string): string {
   let url = (raw || "").trim().replace(/['"]/g, "");
@@ -26,10 +40,39 @@ function normalizeSupabaseUrl(raw: string): string {
   return url.replace(/\/+$/, "");
 }
 
-export const supabaseAdmin = createClient(
-  normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL!),
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+let cachedClient: SupabaseClient | null = null;
+
+function getSupabaseAdmin(): SupabaseClient {
+  if (cachedClient) return cachedClient;
+
+  const url = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL || "");
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+  if (!url || !key) {
+    // Thrown from inside a lazy getter (called from within a caller's own
+    // try/catch), never from module-load time — see note above.
+    throw new Error(
+      "Server is misconfigured: missing Supabase service role credentials. Please contact support."
+    );
+  }
+
+  cachedClient = createClient(url, key);
+  return cachedClient;
+}
+
+// A Proxy so every existing call site (supabaseAdmin.from(...), .auth.getUser(...),
+// etc., all over onboarding.ts and joinAgency.ts) keeps working completely
+// unchanged, while the real client is only ever constructed lazily on first
+// property access via getSupabaseAdmin() above.
+export const supabaseAdmin: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabaseAdmin();
+    // Pass `client` (not the proxy) as the receiver so any internal getters
+    // on the real client resolve `this` correctly.
+    const value = Reflect.get(client, prop, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
 
 // Shared across every onboarding/join Server Action that needs to turn a
 // free-text "Full Name" field into profiles.first_name / profiles.last_name.

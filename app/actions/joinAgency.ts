@@ -73,8 +73,7 @@ export async function joinAgencyWithInviteCode(
     // Land the new producer on the agency's existing primary office (same
     // "just take the first one" convention used for primaryOffice fallbacks
     // elsewhere — e.g. app/dashboard/cockpit/page.tsx) so their activity has
-    // somewhere real to roll up into instead of a null office_id. Tolerate a
-    // brand-new agency with zero offices yet; that shouldn't block the join.
+    // somewhere real to roll up into instead of a null office_id.
     const { data: office, error: officeError } = await supabaseAdmin
       .from("offices")
       .select("id")
@@ -84,6 +83,26 @@ export async function joinAgencyWithInviteCode(
 
     if (officeError) {
       console.error("[joinAgency] office lookup failed (non-fatal)", officeError);
+    }
+
+    // An agency with a real invite code but zero offices yet is an edge case
+    // (e.g. the owner ran the legacy register_agency_owner RPC path, which
+    // never creates one) — rather than leaving this producer's office_id
+    // null, which several dashboard aggregations key off of, mint a minimal
+    // one on the fly so they always land somewhere real.
+    let officeId = office?.id || null;
+    if (!officeId) {
+      const { data: newOffice, error: createOfficeError } = await supabaseAdmin
+        .from("offices")
+        .insert([{ agency_id: agency.id, name: "Main Office" }])
+        .select("id")
+        .single();
+
+      if (createOfficeError || !newOffice) {
+        console.error("[joinAgency] fallback office creation failed (non-fatal)", createOfficeError);
+      } else {
+        officeId = newOffice.id as string;
+      }
     }
 
     const { first_name, last_name } = splitName(payload.fullName);
@@ -99,7 +118,7 @@ export async function joinAgencyWithInviteCode(
     const baseProfileFields = {
       id: userId,
       agency_id: agency.id,
-      office_id: office?.id || null,
+      office_id: officeId,
       role: "producer",
       first_name: first_name || "New",
       last_name: last_name || "Producer",
