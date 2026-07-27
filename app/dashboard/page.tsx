@@ -7,7 +7,6 @@ import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { resolveCommissionRates } from "../../utils/commissionRates";
 import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
-import { verifyRowsExist } from "../actions/diagnostics";
 import { 
   BarChart3, Settings, Target, PhoneCall, 
   FileText, ShieldCheck, LogOut, CheckCircle2, 
@@ -97,33 +96,6 @@ const makeRowId = (): string =>
     ? crypto.randomUUID()
     : `row-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-// Postgres only reports "the batch violated a constraint" for a bulk multi-row insert - it won't
-// say *which* row. When a bulk insert fails, re-attempt one row at a time purely to pinpoint the
-// exact offending row/value and surface the real Postgres error (code/details/hint) for it, then
-// delete any rows that *did* succeed during this diagnostic pass so nothing partial survives a
-// rejected submission - keeping the overall operation all-or-nothing from the user's perspective.
-const diagnoseFailedBatch = async (table: 'activities' | 'policies', rows: Record<string, any>[]) => {
-  const succeededIds: string[] = [];
-  let firstFailure: { index: number; row: Record<string, any>; error: any } | null = null;
-  for (let i = 0; i < rows.length; i++) {
-    const { error } = await supabase.from(table).insert([rows[i]]);
-    if (error) {
-      if (!firstFailure) firstFailure = { index: i, row: rows[i], error };
-    } else {
-      succeededIds.push(rows[i].id);
-    }
-  }
-  if (succeededIds.length > 0) {
-    const { error: cleanupErr } = await supabase.from(table).delete().in('id', succeededIds);
-    if (cleanupErr) console.error(`[diagnoseFailedBatch] CRITICAL: could not clean up ${succeededIds.length} diagnostic rows in ${table} - manual cleanup needed:`, succeededIds, cleanupErr);
-  }
-  if (firstFailure) {
-    console.error(`[diagnoseFailedBatch] ${table}: row #${firstFailure.index} of ${rows.length} is what actually failed:`, firstFailure.row, firstFailure.error);
-  } else {
-    console.error(`[diagnoseFailedBatch] ${table}: every row succeeded individually (rolled back ${succeededIds.length}) - the failure only happens as part of the bulk multi-row statement, suggesting a batch-level/statement-level constraint rather than a per-row one.`);
-  }
-  return firstFailure;
-};
 
 // Hoisted to module scope: pure constants with no dependency on props/state, shared by every
 // dynamic-average / dual-engine What-If calculation (agency-wide and per-producer alike).
@@ -1779,111 +1751,63 @@ export default function Home() {
         console.log('[submitLogActivity] cards:', lineItems.map(i => ({ line: i.productLine, qty: qtyOf(i) })), '-> expanded units:', totalCount);
       }
 
-      // Every row gets its own client-generated UUID (never rely solely on a DB default being
-      // applied per-row in a batch) AND its own logged_at, staggered a full second apart per unit
-      // index (previously 1ms - bumped up in case a trigger/constraint truncates timestamp
-      // precision, e.g. to the second, and was treating sub-second-apart rows as identical
-      // events). Neither field is allowed to collide across the batch - if a DB-side unique/PK
-      // constraint ever keyed off (user_id, logged_at) or a trigger silently dropped
-      // "duplicate-looking" rows, this is what would cause a 6-unit submission to only register
-      // as 1. NOTE: confirmed below this is a plain .insert(), never .upsert() - an upsert
-      // matching on some composite business key (e.g. user_id + activity_type) would be a much
-      // more likely explanation for a silent collapse than the row's own unique `id` ever could
-      // be, since .insert() has no ON CONFLICT target to merge against at all.
+      // Still used by the 'bound' branch below, which keeps its existing (working, per-line-item)
+      // batch insert shape untouched - only the quote/cross_sell path below switches to fully
+      // sequential single-row requests.
       const stampFor = (index: number) => new Date(new Date(currentTime).getTime() + index * 1000).toISOString();
 
-      // One `activities` row per expanded unit - this is what the Cockpit's memberQuoteCounts /
-      // Activity Pacing Engine sums, so the row count here must equal totalCount exactly.
-      // NOTE: deliberately NOT chaining .select() here - Supabase applies the table's SELECT RLS
-      // policy (which can differ from its INSERT policy) to whatever a post-insert .select()
-      // returns, so a restrictive SELECT policy can make a fully-successful multi-row insert
-      // *report back* fewer rows than were actually written. That's a false-positive "1 out of 6
-      // saved" signal we don't want to act on - the authoritative signal is `error`, not row count.
-      // Row objects are built as fresh literals (never a spread of `item`/`unit`, which carries the
-      // *card's own* id + fields like existingQuoteIds that don't belong in this table), so every
-      // makeRowId() call above already produces a distinct UUID per row. Still, per explicit
-      // request, this final pass re-stamps `id` immediately before the network call as a
-      // structural guarantee: even if a future refactor accidentally spread a shared object in,
-      // it is now physically impossible for two rows in this payload to share an id.
-      const activitiesPayload = expandedUnits.map((_, idx) => ({ id: crypto.randomUUID(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: stampFor(idx) }));
-      const { error: actBulkErr } = await supabase.from('activities').insert(activitiesPayload);
-      if (actBulkErr) {
-        console.error('[submitLogActivity] activities batch insert failed. Full Supabase error object below - check .code/.details/.hint for the exact Postgres constraint/RLS reason:', actBulkErr, 'payload:', activitiesPayload);
-        const diag = totalCount > 1 ? await diagnoseFailedBatch('activities', activitiesPayload) : null;
-        const diagErr = diag?.error;
-        throw new Error(`Activity Bulk Error [${(diagErr || actBulkErr).code || 'no code'}]: ${(diagErr || actBulkErr).message}${(diagErr || actBulkErr).details ? ` — ${(diagErr || actBulkErr).details}` : ''}${(diagErr || actBulkErr).hint ? ` (hint: ${(diagErr || actBulkErr).hint})` : ''}${diag ? ` [row ${diag.index + 1}/${activitiesPayload.length}]` : ''}`);
-      }
-      // Empirical write-side audit: `error` came back null, but re-select the exact ids we just
-      // asked for by their own primary key. If this ever returns fewer rows than we inserted, the
-      // client-side write was NOT the problem (every id really was unique and accepted) - the
-      // collapse is happening server-side, after the fact (e.g. a BEFORE INSERT trigger or an
-      // ON CONFLICT rule silently dropping/merging rows on a *different* key than `id`). This is
-      // the one query that can actually tell "write bug" and "read/aggregation bug" apart.
-      if (totalCount > 1) {
-        const { data: verifyRows, error: verifyErr } = await supabase.from('activities').select('id').in('id', activitiesPayload.map(a => a.id));
-        if (verifyErr) {
-          console.error('[submitLogActivity] post-insert verification query itself failed (inconclusive):', verifyErr);
-        } else if (!verifyRows || verifyRows.length !== activitiesPayload.length) {
-          console.error(`[submitLogActivity] CLIENT-SIDE (RLS-scoped) re-select is short: requested ${activitiesPayload.length} activity rows with ${new Set(activitiesPayload.map(a => a.id)).size} distinct client-generated ids, only ${verifyRows?.length ?? 0} visible to this session immediately after insert with no error reported. This alone is still ambiguous - it could mean a server-side trigger genuinely dropped the rows, OR it could mean the rows exist fine but this table's SELECT RLS policy (which can differ from its INSERT policy) is hiding some of them from this specific query. Running a service-role (RLS-bypassing) verification now for ground truth...`);
-          // The client-side re-select above is itself subject to `activities`' SELECT RLS policy,
-          // so a short result there is NOT proof of a real server-side drop - it's equally
-          // consistent with "the rows exist but this session's SELECT policy can't see them all."
-          // Only a service-role query (bypasses RLS entirely) can tell those two apart.
-          const groundTruth = await verifyRowsExist(session?.access_token, 'activities', activitiesPayload.map(a => a.id));
-          if (!groundTruth.ok) {
-            console.error('[submitLogActivity] service-role ground-truth check itself failed (inconclusive):', groundTruth.error);
-            showToast(`Warning: submitted ${activitiesPayload.length} items but only ${verifyRows?.length ?? 0} are confirmed visible. Could not verify further - details logged to console.`, 'error');
-          } else if (groundTruth.foundIds.length !== activitiesPayload.length) {
-            console.error(`[submitLogActivity] CONFIRMED SERVER-SIDE ROW COLLAPSE: service-role query (bypasses RLS) shows only ${groundTruth.foundIds.length} of ${activitiesPayload.length} rows actually exist in the database. This rules out RLS visibility entirely - a trigger, rule, or constraint on 'activities' is genuinely dropping/merging rows on some key other than id. Expected ids:`, activitiesPayload.map(a => a.id), 'Actually persisted ids:', groundTruth.foundIds);
-            showToast(`Confirmed: only ${groundTruth.foundIds.length} of ${activitiesPayload.length} items were actually saved to the database (server-side issue, verified). Details logged to console.`, 'error');
-          } else {
-            console.warn(`[submitLogActivity] FALSE ALARM - it's an RLS visibility gap, not a real collapse: service-role query confirms all ${groundTruth.foundIds.length} rows genuinely exist. This session's own SELECT policy on 'activities' is just not showing all of them back. The data is safe; only the client-side re-select (and possibly other reads gated by the same RLS policy) needs attention.`);
+      // BYPASS: a batch multi-row .insert() into `activities` was confirmed (via the previous
+      // diagnostic pass) to silently collapse down to 1 persisted row with zero error reported,
+      // even with every row carrying a provably distinct id. Rather than chase the exact
+      // trigger/rule causing that inside a single atomic multi-row statement, send each row as its
+      // own fully separate request/transaction - Postgres has no batch array to collapse if there
+      // never is one. The real wall-clock gap between sequential awaited network round-trips also
+      // naturally staggers `logged_at` far more than any client-computed offset could, which
+      // doubles as a bypass for a possible timestamp-based dedup trigger.
+      const activitiesPayload = expandedUnits.map(() => ({ id: crypto.randomUUID(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: new Date().toISOString() }));
+      const insertedActivityIds: string[] = [];
+      for (const activity of activitiesPayload) {
+        const { error: actErr } = await supabase.from('activities').insert(activity);
+        if (actErr) {
+          console.error(`[submitLogActivity] sequential activities insert failed at row ${insertedActivityIds.length + 1}/${activitiesPayload.length}. Full Supabase error - check .code/.details/.hint:`, actErr, 'row:', activity);
+          // Strict transaction: roll back every row from this submission that DID succeed before
+          // this one failed, so a partial submission never silently survives as a fraction of the
+          // real count.
+          if (insertedActivityIds.length > 0) {
+            const { error: rollbackErr } = await supabase.from('activities').delete().in('id', insertedActivityIds);
+            if (rollbackErr) console.error('[submitLogActivity] CRITICAL: failed to roll back partially-inserted activities - manual cleanup needed for ids:', insertedActivityIds, rollbackErr);
           }
-        } else if (process.env.NODE_ENV !== 'production') {
-          console.log('[submitLogActivity] post-insert verification confirmed all', verifyRows.length, 'activity rows exist.');
+          throw new Error(`Activity Insert Error [${actErr.code || 'no code'}] on row ${insertedActivityIds.length + 1}/${activitiesPayload.length}: ${actErr.message}${actErr.details ? ` — ${actErr.details}` : ''}${actErr.hint ? ` (hint: ${actErr.hint})` : ''}`);
         }
+        insertedActivityIds.push(activity.id);
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[submitLogActivity] sequentially inserted all', insertedActivityIds.length, 'activity rows.');
       }
 
       if (loggingType === 'quote' || loggingType === 'cross_sell') {
         // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
-        // entry books $100/unit instead of multiplying the household's premium by 3.
-        const policiesPayload = expandedUnits.map((item, idx) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: stampFor(idx), written_at: stampFor(idx) }));
-        const { error: polBulkErr } = await supabase.from('policies').insert(policiesPayload);
-        if (polBulkErr) {
-          console.error('[submitLogActivity] policies batch insert failed. Full Supabase error object below - check .code/.details/.hint for the exact Postgres constraint/RLS reason:', polBulkErr, 'payload:', policiesPayload);
-          const diag = totalCount > 1 ? await diagnoseFailedBatch('policies', policiesPayload) : null;
-          const diagErr = diag?.error;
-          // Compensating rollback: `activities` already committed in its own request above (it's
-          // a separate REST call, not a shared DB transaction with this one), so without this a
-          // failed policies insert would still silently credit the producer with N quotes in their
-          // pacing/streak counters despite zero matching Pipeline rows. Delete those rows by the
-          // exact ids we just generated so the whole submission fails as a single unit - no
-          // "optimistic" partial state survives a rejected payload.
-          const rollbackIds = activitiesPayload.map(a => a.id);
-          const { error: rollbackErr } = await supabase.from('activities').delete().in('id', rollbackIds);
-          if (rollbackErr) console.error('[submitLogActivity] CRITICAL: failed to roll back orphaned activities after policy insert failure - manual cleanup needed for ids:', rollbackIds, rollbackErr);
-          throw new Error(`Policy Bulk Error [${(diagErr || polBulkErr).code || 'no code'}]: ${(diagErr || polBulkErr).message}${(diagErr || polBulkErr).details ? ` — ${(diagErr || polBulkErr).details}` : ''}${(diagErr || polBulkErr).hint ? ` (hint: ${(diagErr || polBulkErr).hint})` : ''}${diag ? ` [row ${diag.index + 1}/${policiesPayload.length}]` : ''}`);
-        }
-        // Same empirical audit as the activities insert above - confirms the Pipeline table
-        // actually holds every row we just asked for, independent of whatever the dashboard's
-        // later read/aggregation queries choose to display.
-        if (totalCount > 1) {
-          const { data: verifyPolRows, error: verifyPolErr } = await supabase.from('policies').select('id').in('id', policiesPayload.map(p => p.id));
-          if (verifyPolErr) {
-            console.error('[submitLogActivity] post-insert policies verification query itself failed (inconclusive):', verifyPolErr);
-          } else if (!verifyPolRows || verifyPolRows.length !== policiesPayload.length) {
-            console.error(`[submitLogActivity] CLIENT-SIDE (RLS-scoped) re-select is short for policies: requested ${policiesPayload.length}, only ${verifyPolRows?.length ?? 0} visible. Running service-role ground-truth check...`);
-            const groundTruthPol = await verifyRowsExist(session?.access_token, 'policies', policiesPayload.map(p => p.id));
-            if (!groundTruthPol.ok) {
-              console.error('[submitLogActivity] service-role ground-truth check (policies) itself failed (inconclusive):', groundTruthPol.error);
-              showToast(`Warning: submitted ${policiesPayload.length} pipeline items but only ${verifyPolRows?.length ?? 0} are confirmed visible. Could not verify further - details logged to console.`, 'error');
-            } else if (groundTruthPol.foundIds.length !== policiesPayload.length) {
-              console.error(`[submitLogActivity] CONFIRMED SERVER-SIDE ROW COLLAPSE (policies): service-role query shows only ${groundTruthPol.foundIds.length} of ${policiesPayload.length} rows actually exist. Not an RLS visibility gap - a trigger/rule/constraint on 'policies' is genuinely dropping or merging rows. Expected ids:`, policiesPayload.map(p => p.id), 'Actually persisted ids:', groundTruthPol.foundIds);
-              showToast(`Confirmed: only ${groundTruthPol.foundIds.length} of ${policiesPayload.length} pipeline items were actually saved (server-side issue, verified). Details logged to console.`, 'error');
-            } else {
-              console.warn(`[submitLogActivity] FALSE ALARM (policies) - RLS visibility gap, not a real collapse: service-role query confirms all ${groundTruthPol.foundIds.length} rows genuinely exist.`);
+        // entry books $100/unit instead of multiplying the household's premium by 3. Same
+        // sequential-insert bypass as activities above.
+        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: new Date().toISOString(), written_at: new Date().toISOString() }));
+        const insertedPolicyIds: string[] = [];
+        for (const policy of policiesPayload) {
+          const { error: polErr } = await supabase.from('policies').insert(policy);
+          if (polErr) {
+            console.error(`[submitLogActivity] sequential policies insert failed at row ${insertedPolicyIds.length + 1}/${policiesPayload.length}. Full Supabase error - check .code/.details/.hint:`, polErr, 'row:', policy);
+            // Roll back this submission's policies that DID succeed, plus every activities row
+            // from above (separate table/request, not a shared DB transaction) - so a partial
+            // pipeline write never leaves orphaned "phantom" activity credit with no matching
+            // Pipeline entries.
+            if (insertedPolicyIds.length > 0) {
+              const { error: rbPolErr } = await supabase.from('policies').delete().in('id', insertedPolicyIds);
+              if (rbPolErr) console.error('[submitLogActivity] CRITICAL: failed to roll back partially-inserted policies - manual cleanup needed for ids:', insertedPolicyIds, rbPolErr);
             }
+            const { error: rbActErr } = await supabase.from('activities').delete().in('id', insertedActivityIds);
+            if (rbActErr) console.error('[submitLogActivity] CRITICAL: failed to roll back activities after policy insert failure - manual cleanup needed for ids:', insertedActivityIds, rbActErr);
+            throw new Error(`Policy Insert Error [${polErr.code || 'no code'}] on row ${insertedPolicyIds.length + 1}/${policiesPayload.length}: ${polErr.message}${polErr.details ? ` — ${polErr.details}` : ''}${polErr.hint ? ` (hint: ${polErr.hint})` : ''}`);
           }
+          insertedPolicyIds.push(policy.id);
         }
 
         showToast(`Successfully logged ${totalCount} Items to your Pipeline!`);
