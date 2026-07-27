@@ -1722,23 +1722,28 @@ export default function Home() {
         return;
       }
 
-      let totalCount = 0;
-      lineItems.forEach(item => totalCount += item.count);
+      // Flatten every submitted line-item card into one "unit" per Quantity - a card is just a
+      // grouping for data entry (Category/Product/Premium/Renewal Cycle); the actual quote/bound
+      // credit is per-unit. So Card 1 (Auto, Qty 3) + Card 2 (Fire, Qty 1) expands to 4 units
+      // (3x Auto, 1x Fire) before anything is written to Supabase.
+      const qtyOf = (item: LineItemData) => Math.max(1, Math.trunc(Number(item.count)) || 1);
+      const expandedUnits = lineItems.flatMap(item => Array.from({ length: qtyOf(item) }, () => item));
+      const totalCount = expandedUnits.length;
 
-      const activitiesToLog: any[] = [];
-      for (let i = 0; i < totalCount; i++) {
-        activitiesToLog.push({ activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime });
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[submitLogActivity] cards:', lineItems.map(i => ({ line: i.productLine, qty: qtyOf(i) })), '-> expanded units:', totalCount);
       }
+
+      // One `activities` row per expanded unit - this is what the Cockpit's memberQuoteCounts /
+      // Activity Pacing Engine sums, so the row count here must equal totalCount exactly.
+      const activitiesToLog = expandedUnits.map(() => ({ activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }));
       const { error: actBulkErr } = await supabase.from('activities').insert(activitiesToLog);
       if (actBulkErr) throw new Error(`Activity Bulk Error: ${actBulkErr.message}`);
 
       if (loggingType === 'quote' || loggingType === 'cross_sell') {
-        const policiesToLog: any[] = [];
-        lineItems.forEach(item => {
-          for (let i = 0; i < item.count; i++) {
-            policiesToLog.push({ agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'quoted', logged_at: currentTime, written_at: currentTime });
-          }
-        });
+        // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
+        // entry books $100/unit instead of multiplying the household's premium by 3.
+        const policiesToLog = expandedUnits.map(item => ({ agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: currentTime, written_at: currentTime }));
         const { error: polBulkErr } = await supabase.from('policies').insert(policiesToLog);
         if (polBulkErr) throw new Error(`Policy Bulk Error: ${polBulkErr.message}`);
         
