@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { joinAgencyWithInviteCode } from "./actions/joinAgency";
@@ -19,7 +18,9 @@ import { joinAgencyWithInviteCode } from "./actions/joinAgency";
 // =============================================================================
 
 export default function LoginPage() {
-  const router = useRouter();
+  // Every redirect on this page is a hard `window.location.href` navigation,
+  // never next/navigation's router — see the mount effect below for why. No
+  // Next router instance is needed as a result.
   const [mode, setMode] = useState<"signin" | "signup" | "join">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,20 +31,39 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   // supabase.auth.signUp() fires its own SIGNED_IN event once the session is
   // established — same as signInWithPassword. Without this flag, that event
-  // would race the explicit router.push("/onboarding") in handleSubmit's signup
-  // branch against this listener's router.replace("/dashboard"), since both
-  // fire almost simultaneously. Set right before either auth call, so the
-  // listener knows "this SIGNED_IN came from our own form submit, which already
-  // owns routing for it" and should stay hands-off.
+  // would race the explicit window.location.href navigation in handleSubmit's
+  // signup branch against this listener's own redirect, since both fire
+  // almost simultaneously. Set right before either auth call, so the listener
+  // knows "this SIGNED_IN came from our own form submit, which already owns
+  // routing for it" and should stay hands-off.
   const submittingRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
 
+    // Safety net: if getSession() below never resolves (a stalled network
+    // request, a browser extension interfering, etc.) this page must never
+    // trap the user on the spinner with zero way to interact — fall through
+    // to rendering the form after a few seconds no matter what.
+    const stuckTimer = setTimeout(() => {
+      if (mounted) setCheckingSession(false);
+    }, 4000);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
+      clearTimeout(stuckTimer);
       if (session) {
-        router.replace("/dashboard");
+        // Hard navigation, not router.replace(): /dashboard is gated by
+        // proxy.ts, which re-validates the session server-side (getUser())
+        // against real request cookies. A client-side SPA transition can
+        // fire a beat before a just-written auth cookie is fully attached to
+        // the next request, so proxy.ts bounces it back to "/" — which
+        // immediately sees a session again via this same getSession() call
+        // and retries, producing a rapid "/" <-> "/dashboard" loop that
+        // looks exactly like an infinite spinner. A full navigation always
+        // carries whatever cookies are actually in the jar at request time,
+        // so there's no window for that race to exist in the first place.
+        window.location.href = "/dashboard";
         return;
       }
       setCheckingSession(false);
@@ -53,15 +73,16 @@ export default function LoginPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session && !submittingRef.current) {
-        router.replace("/dashboard");
+        window.location.href = "/dashboard";
       }
     });
 
     return () => {
       mounted = false;
+      clearTimeout(stuckTimer);
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -84,7 +105,10 @@ export default function LoginPage() {
 
         if (signUpError) throw signUpError;
 
-        router.push("/onboarding");
+        // Hard navigation — see the mount effect's comment above for why
+        // router.push()/router.replace() can race proxy.ts's server-side
+        // cookie check and bounce back to "/", looking like a hung spinner.
+        window.location.href = "/onboarding";
         return;
       }
 
@@ -95,7 +119,7 @@ export default function LoginPage() {
 
       if (signInError) throw signInError;
 
-      router.replace("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: unknown) {
       // Failed — we're not navigating away, so let the listener resume normal
       // behavior for any future auth events (e.g. a stray session restore).
@@ -152,7 +176,8 @@ export default function LoginPage() {
         throw new Error(result.error || "That invite code didn't work. Please double-check it and try again.");
       }
 
-      router.replace("/dashboard");
+      // Hard navigation — see the mount effect's comment above.
+      window.location.href = "/dashboard";
     } catch (err: unknown) {
       // Failed — the account may already exist (created on this attempt or a
       // prior one) with a live session but no profile row yet, which is
