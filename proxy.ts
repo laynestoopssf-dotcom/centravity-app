@@ -101,17 +101,36 @@ export default async function proxy(request: NextRequest) {
     },
   });
 
+  // TEMPORARY DIAGNOSTIC LOGGING — every branch below logs a single
+  // "[MIDDLEWARE TRACE]" line with the full decision state at that point, so
+  // a persistent redirect loop shows up unambiguously in Vercel's function
+  // logs as a rapidly repeating pattern instead of us having to guess at it
+  // from client-side symptoms alone. Safe to strip once the live loop is
+  // confirmed fixed — it's on every request, so it's chatty by design.
+  const trace = (fields: Record<string, unknown>) => {
+    console.log("[MIDDLEWARE TRACE]", JSON.stringify({ path: pathname, ...fields }));
+  };
+
   try {
     // Auth Check — getUser() actually validates the JWT against Supabase's Auth
     // server rather than trusting a locally-decoded cookie, which is why this
     // (not getSession()) is the correct call to make here.
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
     const routeIsProtected = isProtectedPath(pathname);
 
     if (!user) {
+      const destination = routeIsProtected ? "/" : "(none — pass through)";
+      trace({
+        hasSession: false,
+        authError: authError?.message || null,
+        authErrorStatus: (authError as { status?: number } | null)?.status ?? null,
+        routeIsProtected,
+        redirectingTo: destination,
+      });
       if (routeIsProtected) {
         return redirectTo("/");
       }
@@ -124,12 +143,13 @@ export default async function proxy(request: NextRequest) {
     // guidance to keep Proxy's DB usage to a minimum since it runs on every
     // navigation, including prefetches.
     if (!routeIsProtected) {
+      trace({ hasSession: true, userId: user.id, routeIsProtected: false, redirectingTo: "(none — pass through)" });
       return response;
     }
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("role, onboarding_completed, onboarding_step")
+      .select("role, onboarding_completed, onboarding_step, agency_id, office_id")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -138,20 +158,55 @@ export default async function proxy(request: NextRequest) {
       // client-side gatekeepers (dashboard/onboarding pages) still run as a
       // second line of defense.
       console.error("[Proxy] profile lookup failed", profileError);
+      trace({ hasSession: true, userId: user.id, hasProfile: null, profileError: profileError.message, redirectingTo: "(none — fail open)" });
       return response;
     }
 
+    // NOTE: this intentionally does NOT check office_id — a producer with a
+    // profiles row but a null office_id (e.g. joinAgency's fallback office
+    // creation failing) is still considered fully onboarded here. Gating on
+    // office_id too would send producers into the owner-only wizard they have
+    // no way to complete, trading a data-completeness bug for an unescapable
+    // redirect loop, which is strictly worse.
     const needsOnboarding =
       !profile || (profile.role === "owner" && typeof profile.onboarding_step === "number" && !profile.onboarding_completed);
 
     if (pathname.startsWith("/dashboard") && needsOnboarding) {
+      trace({
+        hasSession: true,
+        userId: user.id,
+        hasProfile: !!profile,
+        role: profile?.role ?? null,
+        agencyId: profile?.agency_id ?? null,
+        officeId: profile?.office_id ?? null,
+        onboardingCompleted: profile?.onboarding_completed ?? null,
+        needsOnboarding: true,
+        redirectingTo: "/onboarding",
+      });
       return redirectTo("/onboarding");
     }
 
     if (pathname.startsWith("/onboarding") && !needsOnboarding) {
+      trace({
+        hasSession: true,
+        userId: user.id,
+        hasProfile: !!profile,
+        role: profile?.role ?? null,
+        onboardingCompleted: profile?.onboarding_completed ?? null,
+        needsOnboarding: false,
+        redirectingTo: "/dashboard",
+      });
       return redirectTo("/dashboard");
     }
 
+    trace({
+      hasSession: true,
+      userId: user.id,
+      hasProfile: !!profile,
+      role: profile?.role ?? null,
+      needsOnboarding,
+      redirectingTo: "(none — pass through)",
+    });
     return response;
   } catch (err) {
     // Fail open, same rationale as the profileError branch above: an
@@ -160,6 +215,7 @@ export default async function proxy(request: NextRequest) {
     // redirect that a client-side retry then hits again and again, which is
     // its own flavor of the exact loop this file exists to prevent.
     console.error("[Proxy] unexpected error", err);
+    trace({ unexpectedError: err instanceof Error ? err.message : String(err), redirectingTo: "(none — fail open)" });
     return response;
   }
 }

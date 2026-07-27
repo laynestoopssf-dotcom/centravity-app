@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import OnboardingWizard from "../../components/OnboardingWizard";
@@ -22,10 +21,18 @@ import OnboardingWizard from "../../components/OnboardingWizard";
 //      mirror image of the /dashboard gatekeeper check (app/dashboard/page.tsx),
 //      so a fully-onboarded user can never land back on the wizard by
 //      navigating here directly, while a mid-setup user always can.
+//
+// All three redirects below use hard `window.location.href` navigation, never
+// next/navigation's router — same reasoning as app/page.tsx's mount effect:
+// an SPA transition here would race proxy.ts's own server-side re-validation
+// of this exact same onboarding_completed gate, which is exactly the kind of
+// "/onboarding" <-> "/dashboard" (or "/") ping-pong this guard exists to
+// prevent, not cause. This file used to be the one remaining spot still doing
+// router.replace() for an auth-boundary-crossing redirect after that fix
+// shipped for "/" — inconsistent, and a live instance of the same race.
 // =============================================================================
 
 export default function OnboardingPage() {
-  const router = useRouter();
   const [status, setStatus] = useState<"checking" | "ready">("checking");
 
   useEffect(() => {
@@ -33,7 +40,7 @@ export default function OnboardingPage() {
 
     const checkAccess = async (session: any) => {
       if (!session?.user?.id) {
-        router.replace("/");
+        window.location.href = "/";
         return;
       }
 
@@ -61,7 +68,7 @@ export default function OnboardingPage() {
       // the wizard, since the worst case is showing it to someone who doesn't
       // need it (harmless), not hiding it from someone who does.
       if (existingProfile?.onboarding_completed) {
-        router.replace("/dashboard");
+        window.location.href = "/dashboard";
         return;
       }
 
@@ -77,7 +84,7 @@ export default function OnboardingPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
-        router.replace("/");
+        window.location.href = "/";
       }
     });
 
@@ -85,7 +92,7 @@ export default function OnboardingPage() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
   if (status === "checking") {
     return (
@@ -98,5 +105,5 @@ export default function OnboardingPage() {
   // Land on the one-time "Reveal" page first (Agency Health overview) instead of jumping
   // straight to the full dashboard — see app/dashboard/reveal/page.tsx. Its own CTA button
   // is what actually sends the user on to "/dashboard" from there.
-  return <OnboardingWizard onSuccess={() => router.replace("/dashboard/reveal")} />;
+  return <OnboardingWizard onSuccess={() => { window.location.href = "/dashboard/reveal"; }} />;
 }

@@ -360,13 +360,18 @@ export default function Home() {
     // for and nothing to show an error about. Redirect immediately instead.
     if (!data) {
       console.warn('[Onboarding Gate] No profile row for authenticated user — redirecting to /onboarding', userId);
-      router.replace('/onboarding');
+      // Hard navigation, not router.replace() — see app/page.tsx's mount effect
+      // comment for why: an SPA transition here would race proxy.ts's own
+      // server-side re-validation of this exact same gate, which is exactly
+      // the kind of "/dashboard" <-> "/onboarding" ping-pong this gatekeeper
+      // exists to prevent, not cause.
+      window.location.href = '/onboarding';
       return; // leave `loading` true; we're navigating away, not rendering the dashboard
     }
 
     if (!data.agency_id) {
       console.warn('[Onboarding Gate] Profile has no agency_id yet — redirecting to /onboarding', userId);
-      router.replace('/onboarding');
+      window.location.href = '/onboarding';
       return; // leave `loading` true; we're navigating away, not rendering the dashboard
     }
 
@@ -387,7 +392,7 @@ export default function Home() {
     //     proof the newer column exists.
     if (data.role === 'owner' && typeof data.onboarding_step === 'number' && !data.onboarding_completed) {
       console.warn('[Onboarding Gate] Owner has not finished the wizard yet — redirecting to /onboarding', userId);
-      router.replace('/onboarding');
+      window.location.href = '/onboarding';
       return;
     }
 
