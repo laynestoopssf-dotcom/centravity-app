@@ -77,7 +77,14 @@ function getSupabaseAdmin(): SupabaseClient {
     console.error(
       "[supabaseAdmin] missing service-role credentials:",
       `NEXT_PUBLIC_SUPABASE_URL ${url ? "present" : "MISSING"},`,
-      `SUPABASE_SERVICE_ROLE_KEY ${key ? "present" : "MISSING"}`
+      `SUPABASE_SERVICE_ROLE_KEY ${key ? "present" : "MISSING"},`,
+      // Vercel's own built-in var — tells us exactly which environment scope
+      // (production / preview / development) this deployment was built for,
+      // so a "works in Production, fails on a Preview URL" scoping gap in
+      // the Vercel dashboard's env var checkboxes shows up immediately in
+      // the log instead of looking identical to the var being unset outright.
+      `VERCEL_ENV=${process.env.VERCEL_ENV || "unknown"}`,
+      `VERCEL_URL=${process.env.VERCEL_URL || "unknown"}`
     );
     // Thrown from inside a lazy getter (called from within a caller's own
     // try/catch), never from module-load time — see note above.
