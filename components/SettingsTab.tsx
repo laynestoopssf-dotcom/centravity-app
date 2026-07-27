@@ -1021,15 +1021,21 @@ export default function SettingsTab({
                   <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2">Monthly Goals & Pay</h4>
                   <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Total Apps</label><input type="number" value={member.monthly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
                   <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Total Prem ($)</label><input type="number" value={member.monthly_target_premium ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_premium', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-purple-600 uppercase mb-1">Life Apps</label><input type="number" value={member.monthly_target_life_apps ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_life_apps', Number(e.target.value))} className="w-full p-2.5 bg-purple-50/50 border border-purple-200 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-purple-600 uppercase mb-1">Life Prem ($)</label><input type="number" value={member.monthly_target_life_premium ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_life_premium', Number(e.target.value))} className="w-full p-2.5 bg-purple-50/50 border border-purple-200 rounded-lg text-sm font-bold" /></div>
                   <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><input type="number" value={member.monthly_base_salary ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_base_salary', Number(e.target.value))} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
                 </div>
 
                 <div className="space-y-4">
+                  {/* Life goals are captured as ANNUAL targets only — monthly_target_life_apps/
+                      monthly_target_life_premium used to live here but were write-only (saved to
+                      profiles, never read by any pacing calculation anywhere in the app). Every
+                      real Life consumer (MyPerformanceTab, LifeTab, dashboard YTD/leaderboards)
+                      already reads annual_target_life_apps/annual_target_life_premium directly,
+                      and derives a monthly pace from it (annual / 12) wherever a monthly figure is
+                      actually needed — see MyPerformanceTab's monthlyAppTarget calc. */}
                   <h4 className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-2">Life / Annual</h4>
                   <div><label className="block text-[10px] font-bold text-red-600 uppercase mb-1">Yr Life Apps</label><input type="number" value={member.annual_target_life_apps ?? 0} onChange={e => updateTeamMember(member.id, 'annual_target_life_apps', Number(e.target.value))} className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-red-400" /></div>
                   <div><label className="block text-[10px] font-bold text-red-600 uppercase mb-1">Yr Life Prem ($)</label><input type="number" value={member.annual_target_life_premium ?? 0} onChange={e => updateTeamMember(member.id, 'annual_target_life_premium', Number(e.target.value))} className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-red-400" /></div>
+                  <p className="text-[10px] text-gray-400 leading-snug pt-1">Monthly pacing is calculated automatically as Annual ÷ 12 wherever needed — no separate monthly input required.</p>
                 </div>
               </div>
 
