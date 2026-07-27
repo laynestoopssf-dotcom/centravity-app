@@ -1,3 +1,4 @@
+import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // =============================================================================
@@ -8,6 +9,19 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 // wants async functions on it. This plain module just exports a client
 // instance, imported by onboarding.ts, joinAgency.ts, and any future Server
 // Action that needs admin access.
+//
+// `import "server-only"` (Next's own package for exactly this) turns any
+// accidental client-side inclusion of this module into a hard BUILD ERROR
+// instead of a silent runtime failure. This module touches
+// SUPABASE_SERVICE_ROLE_KEY, a secret with zero NEXT_PUBLIC_ prefix — Next
+// only ever inlines NEXT_PUBLIC_-prefixed vars into the client bundle, so if
+// this module were ever pulled into client code, that read would silently
+// resolve to undefined and getSupabaseAdmin() below would throw exactly the
+// "missing Supabase service role credentials" error this file's own guard
+// produces — which is indistinguishable, from the UI, from the variable
+// genuinely being unset in the deployment. `server-only` converts that whole
+// failure mode into a loud, immediate `next build` failure instead, so it's
+// caught in CI rather than by a user submitting a form in production.
 //
 // NEXT_PUBLIC_SUPABASE_URL in .env.local has a `/rest/v1/` suffix baked in
 // (see the identical auto-fixer in utils/supabase.ts, which strips it before
@@ -49,6 +63,22 @@ function getSupabaseAdmin(): SupabaseClient {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
   if (!url || !key) {
+    // Log exactly which var is missing (never the key's value) — this is
+    // the one piece a redacted-in-production client error can never show,
+    // and it's the difference between "wrong env var scoping in Vercel" and
+    // "some other bug" the next time this fires. Confirmed via `import
+    // "server-only"` (see above) that this module is never reachable from a
+    // client bundle, so a missing `key` here means the deployment's own
+    // process.env genuinely doesn't have SUPABASE_SERVICE_ROLE_KEY set for
+    // whichever environment (Production/Preview) served this request — most
+    // commonly because the var was added/edited in Vercel's dashboard with
+    // only some of the Production/Preview/Development checkboxes ticked, and
+    // needs a fresh deployment to take effect even after it's fixed there.
+    console.error(
+      "[supabaseAdmin] missing service-role credentials:",
+      `NEXT_PUBLIC_SUPABASE_URL ${url ? "present" : "MISSING"},`,
+      `SUPABASE_SERVICE_ROLE_KEY ${key ? "present" : "MISSING"}`
+    );
     // Thrown from inside a lazy getter (called from within a caller's own
     // try/catch), never from module-load time — see note above.
     throw new Error(
