@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../utils/supabase";
+import { joinAgencyWithInviteCode } from "./actions/joinAgency";
 
 // =============================================================================
 // "/" — standard login / signup page ONLY.
@@ -19,9 +20,11 @@ import { supabase } from "../utils/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "join">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -105,6 +108,67 @@ export default function LoginPage() {
     }
   };
 
+  const handleJoinSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+    submittingRef.current = true;
+
+    try {
+      const trimmedInviteCode = inviteCode.trim();
+      if (!trimmedInviteCode) {
+        throw new Error("Please enter your agency's invite code.");
+      }
+
+      // Reuse an existing session if this is a retry after an earlier failed
+      // invite code (e.g. a typo) — supabase.auth.signUp() would otherwise
+      // error out on "already registered" for the account we already created
+      // on the first attempt.
+      const {
+        data: { session: existingSession },
+      } = await supabase.auth.getSession();
+      let accessToken = existingSession?.access_token;
+
+      if (!accessToken) {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
+        if (signUpError) throw signUpError;
+        accessToken = signUpData.session?.access_token;
+      }
+
+      if (!accessToken) {
+        throw new Error("Account created, but we couldn't establish your session. Please try signing in.");
+      }
+
+      const result = await joinAgencyWithInviteCode({
+        accessToken,
+        inviteCode: trimmedInviteCode,
+        fullName: fullName.trim(),
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "That invite code didn't work. Please double-check it and try again.");
+      }
+
+      router.replace("/dashboard");
+    } catch (err: unknown) {
+      // Failed — the account may already exist (created on this attempt or a
+      // prior one) with a live session but no profile row yet, which is
+      // exactly the same "not fully set up" shape /dashboard's own gatekeeper
+      // already knows how to handle. Let the listener resume normal behavior
+      // so nothing here fights that if the user navigates away instead of
+      // retrying the code.
+      submittingRef.current = false;
+      const message =
+        err instanceof Error ? err.message : "Unable to continue. Please try again.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
@@ -114,6 +178,18 @@ export default function LoginPage() {
   }
 
   const isSignup = mode === "signup";
+  const isJoin = mode === "join";
+
+  const switchMode = (next: "signin" | "signup" | "join") => {
+    setMode(next);
+    setError("");
+  };
+
+  const tabs: { id: "signin" | "signup" | "join"; label: string }[] = [
+    { id: "signin", label: "Sign In" },
+    { id: "signup", label: "Create Agency" },
+    { id: "join", label: "Join a Team" },
+  ];
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 py-12">
@@ -121,8 +197,30 @@ export default function LoginPage() {
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-white">Centravity</h1>
           <p className="mt-2 text-sm text-slate-400">
-            {isSignup ? "Create your agency's account" : "Sign in to your agency scoreboard"}
+            {isSignup
+              ? "Create your agency's account"
+              : isJoin
+              ? "Join your agency's existing scoreboard"
+              : "Sign in to your agency scoreboard"}
           </p>
+        </div>
+
+        <div className="mb-6 grid grid-cols-3 gap-1 rounded-lg bg-slate-900/80 p-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => switchMode(tab.id)}
+              disabled={isLoading}
+              className={`rounded-md px-2 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm ${
+                mode === tab.id
+                  ? "bg-blue-600 text-white shadow"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {error && (
@@ -134,91 +232,149 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-300">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+        {isJoin ? (
+          <form onSubmit={handleJoinSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-slate-300">
+                Full Name
+              </label>
+              <input
+                id="fullName"
+                type="text"
+                autoComplete="name"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                disabled={isLoading}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                placeholder="Jane Producer"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="join-email" className="mb-1.5 block text-sm font-medium text-slate-300">
+                Email
+              </label>
+              <input
+                id="join-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                placeholder="you@agency.com"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="join-password" className="mb-1.5 block text-sm font-medium text-slate-300">
+                Password
+              </label>
+              <input
+                id="join-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="inviteCode" className="mb-1.5 block text-sm font-medium text-slate-300">
+                Invite Code
+              </label>
+              <input
+                id="inviteCode"
+                type="text"
+                required
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                disabled={isLoading}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 font-mono"
+                placeholder="Ask your agency admin for this code"
+              />
+              <p className="mt-1.5 text-xs text-slate-500">
+                Your agency admin can find this under Settings → Team.
+              </p>
+            </div>
+
+            <button
+              type="submit"
               disabled={isLoading}
-              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
-              placeholder="you@agency.com"
-            />
-          </div>
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Joining team…
+                </>
+              ) : (
+                "Join Team"
+              )}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-300">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                placeholder="you@agency.com"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-300">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete={isSignup ? "new-password" : "current-password"}
-              required
-              minLength={isSignup ? 6 : undefined}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+            <div>
+              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-300">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete={isSignup ? "new-password" : "current-password"}
+                required
+                minLength={isSignup ? 6 : undefined}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
               disabled={isLoading}
-              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                {isSignup ? "Creating account…" : "Signing in…"}
-              </>
-            ) : isSignup ? (
-              "Create Account"
-            ) : (
-              "Sign In"
-            )}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-slate-400">
-          {isSignup ? (
-            <>
-              Already have an account?{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("signin");
-                  setError("");
-                }}
-                className="font-medium text-blue-400 hover:text-blue-300"
-              >
-                Sign in
-              </button>
-            </>
-          ) : (
-            <>
-              Setting up a new agency?{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("signup");
-                  setError("");
-                }}
-                className="font-medium text-blue-400 hover:text-blue-300"
-              >
-                Create an account
-              </button>
-            </>
-          )}
-        </p>
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  {isSignup ? "Creating account…" : "Signing in…"}
+                </>
+              ) : isSignup ? (
+                "Create Account"
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

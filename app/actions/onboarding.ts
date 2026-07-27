@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin, splitName, isMissingColumnError } from "./supabaseAdmin";
 import type {
   Step1Payload,
   Step1Result,
@@ -74,28 +74,6 @@ import type {
 // invalidate.
 // =============================================================================
 
-// --- Supabase Service Role client (server-only, bypasses RLS) ---
-// NEXT_PUBLIC_SUPABASE_URL in .env.local has a `/rest/v1/` suffix baked in
-// (see the identical auto-fixer in utils/supabase.ts, which strips it before
-// constructing the anon client). createClient() expects the bare project URL
-// and appends /auth/v1, /rest/v1, /realtime/v1 itself — passing a URL that
-// already ends in /rest/v1 makes every admin auth call (e.g. auth.getUser(),
-// auth.admin.createUser()) resolve to .../rest/v1/auth/v1/... instead of
-// .../auth/v1/..., which 404s and surfaces as a generic, misleading
-// "Unauthorized: invalid session." Normalize it the same way so this client
-// is correct regardless of how the env var is formatted.
-function normalizeSupabaseUrl(raw: string): string {
-  let url = (raw || "").trim().replace(/['"]/g, "");
-  url = url.replace(/\/rest\/v1\/?$/, "");
-  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-  return url.replace(/\/+$/, "");
-}
-
-const supabaseAdmin = createClient(
-  normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL!),
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 // Maps the wizard's display-cased roles to the lowercase role ids used
 // throughout profiles.role / DEFAULT_ROLES in components/SettingsTab.tsx.
 const ROLE_ID_MAP: Record<TeamMemberRole, string> = {
@@ -111,15 +89,6 @@ const ROLE_DISPLAY_MAP: Record<string, TeamMemberRole> = {
   admin: "Admin",
   service: "Service & Retention",
 };
-
-function splitName(fullName: string): { first_name: string; last_name: string } {
-  const trimmed = (fullName || "").trim();
-  if (!trimmed) return { first_name: "", last_name: "" };
-  const parts = trimmed.split(/\s+/);
-  const first_name = parts.shift() || "";
-  const last_name = parts.join(" ");
-  return { first_name, last_name };
-}
 
 function toFiniteNumber(v: number | "" | null | undefined): number {
   if (v === "" || v == null) return 0;
@@ -160,18 +129,6 @@ function ytdMatrixToRow(matrix: YtdMatrixFields | undefined) {
 
 function numberOrEmpty(v: unknown): number | "" {
   return typeof v === "number" && Number.isFinite(v) ? v : "";
-}
-
-// A column missing from the DB can surface two different ways depending on
-// the code path: a raw Postgres error (42703 = "column does not exist") or a
-// PostgREST-level error (PGRST204 = "Could not find the '<col>' column ... in
-// the schema cache"). In practice PGRST204 is what actually shows up for
-// .update()/.insert() calls through supabase-js — 42703 alone was never
-// enough to catch a genuinely-missing additive-migration column, it would
-// fall through and get reported as a hard failure instead of degrading
-// gracefully. Treat both as "this column doesn't exist yet, skip it."
-function isMissingColumnError(error: { code?: string } | null | undefined): boolean {
-  return error?.code === "42703" || error?.code === "PGRST204";
 }
 
 // Inverse of ytdMatrixToRow — reads a profiles row's 8 starting_ytd_* columns
