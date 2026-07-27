@@ -7,6 +7,7 @@ import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { resolveCommissionRates } from "../../utils/commissionRates";
 import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
+import { verifyRowsExist } from "../actions/diagnostics";
 import { 
   BarChart3, Settings, Target, PhoneCall, 
   FileText, ShieldCheck, LogOut, CheckCircle2, 
@@ -1779,11 +1780,17 @@ export default function Home() {
       }
 
       // Every row gets its own client-generated UUID (never rely solely on a DB default being
-      // applied per-row in a batch) AND its own logged_at, nudged forward by 1ms per unit index.
-      // Neither field is allowed to collide across the batch - if a DB-side unique/PK constraint
-      // ever keyed off (user_id, logged_at) or the insert silently dropped "duplicate-looking"
-      // rows, this is what would cause a 6-unit submission to only register as 1.
-      const stampFor = (index: number) => new Date(new Date(currentTime).getTime() + index).toISOString();
+      // applied per-row in a batch) AND its own logged_at, staggered a full second apart per unit
+      // index (previously 1ms - bumped up in case a trigger/constraint truncates timestamp
+      // precision, e.g. to the second, and was treating sub-second-apart rows as identical
+      // events). Neither field is allowed to collide across the batch - if a DB-side unique/PK
+      // constraint ever keyed off (user_id, logged_at) or a trigger silently dropped
+      // "duplicate-looking" rows, this is what would cause a 6-unit submission to only register
+      // as 1. NOTE: confirmed below this is a plain .insert(), never .upsert() - an upsert
+      // matching on some composite business key (e.g. user_id + activity_type) would be a much
+      // more likely explanation for a silent collapse than the row's own unique `id` ever could
+      // be, since .insert() has no ON CONFLICT target to merge against at all.
+      const stampFor = (index: number) => new Date(new Date(currentTime).getTime() + index * 1000).toISOString();
 
       // One `activities` row per expanded unit - this is what the Cockpit's memberQuoteCounts /
       // Activity Pacing Engine sums, so the row count here must equal totalCount exactly.
@@ -1817,8 +1824,21 @@ export default function Home() {
         if (verifyErr) {
           console.error('[submitLogActivity] post-insert verification query itself failed (inconclusive):', verifyErr);
         } else if (!verifyRows || verifyRows.length !== activitiesPayload.length) {
-          console.error(`[submitLogActivity] SILENT ROW COLLAPSE DETECTED: inserted ${activitiesPayload.length} activity rows with ${new Set(activitiesPayload.map(a => a.id)).size} distinct client-generated ids, but only ${verifyRows?.length ?? 0} exist immediately after insert with no error reported. This is NOT an id collision (ids above are provably unique) - it points to a server-side trigger/rule/RLS-on-select collapsing or hiding rows on a different key. Expected ids:`, activitiesPayload.map(a => a.id), 'Found ids:', (verifyRows || []).map(r => r.id));
-          showToast(`Warning: submitted ${activitiesPayload.length} items but only ${verifyRows?.length ?? 0} are confirmed saved server-side. This is a database-side issue, not a form bug - details logged to console.`, 'error');
+          console.error(`[submitLogActivity] CLIENT-SIDE (RLS-scoped) re-select is short: requested ${activitiesPayload.length} activity rows with ${new Set(activitiesPayload.map(a => a.id)).size} distinct client-generated ids, only ${verifyRows?.length ?? 0} visible to this session immediately after insert with no error reported. This alone is still ambiguous - it could mean a server-side trigger genuinely dropped the rows, OR it could mean the rows exist fine but this table's SELECT RLS policy (which can differ from its INSERT policy) is hiding some of them from this specific query. Running a service-role (RLS-bypassing) verification now for ground truth...`);
+          // The client-side re-select above is itself subject to `activities`' SELECT RLS policy,
+          // so a short result there is NOT proof of a real server-side drop - it's equally
+          // consistent with "the rows exist but this session's SELECT policy can't see them all."
+          // Only a service-role query (bypasses RLS entirely) can tell those two apart.
+          const groundTruth = await verifyRowsExist(session?.access_token, 'activities', activitiesPayload.map(a => a.id));
+          if (!groundTruth.ok) {
+            console.error('[submitLogActivity] service-role ground-truth check itself failed (inconclusive):', groundTruth.error);
+            showToast(`Warning: submitted ${activitiesPayload.length} items but only ${verifyRows?.length ?? 0} are confirmed visible. Could not verify further - details logged to console.`, 'error');
+          } else if (groundTruth.foundIds.length !== activitiesPayload.length) {
+            console.error(`[submitLogActivity] CONFIRMED SERVER-SIDE ROW COLLAPSE: service-role query (bypasses RLS) shows only ${groundTruth.foundIds.length} of ${activitiesPayload.length} rows actually exist in the database. This rules out RLS visibility entirely - a trigger, rule, or constraint on 'activities' is genuinely dropping/merging rows on some key other than id. Expected ids:`, activitiesPayload.map(a => a.id), 'Actually persisted ids:', groundTruth.foundIds);
+            showToast(`Confirmed: only ${groundTruth.foundIds.length} of ${activitiesPayload.length} items were actually saved to the database (server-side issue, verified). Details logged to console.`, 'error');
+          } else {
+            console.warn(`[submitLogActivity] FALSE ALARM - it's an RLS visibility gap, not a real collapse: service-role query confirms all ${groundTruth.foundIds.length} rows genuinely exist. This session's own SELECT policy on 'activities' is just not showing all of them back. The data is safe; only the client-side re-select (and possibly other reads gated by the same RLS policy) needs attention.`);
+          }
         } else if (process.env.NODE_ENV !== 'production') {
           console.log('[submitLogActivity] post-insert verification confirmed all', verifyRows.length, 'activity rows exist.');
         }
@@ -1852,8 +1872,17 @@ export default function Home() {
           if (verifyPolErr) {
             console.error('[submitLogActivity] post-insert policies verification query itself failed (inconclusive):', verifyPolErr);
           } else if (!verifyPolRows || verifyPolRows.length !== policiesPayload.length) {
-            console.error(`[submitLogActivity] SILENT ROW COLLAPSE DETECTED (policies): inserted ${policiesPayload.length} rows with distinct ids, but only ${verifyPolRows?.length ?? 0} exist immediately after insert with no error reported. Points to a server-side trigger/rule, not a client id collision. Expected ids:`, policiesPayload.map(p => p.id), 'Found ids:', (verifyPolRows || []).map(r => r.id));
-            showToast(`Warning: submitted ${policiesPayload.length} pipeline items but only ${verifyPolRows?.length ?? 0} are confirmed saved server-side. This is a database-side issue - details logged to console.`, 'error');
+            console.error(`[submitLogActivity] CLIENT-SIDE (RLS-scoped) re-select is short for policies: requested ${policiesPayload.length}, only ${verifyPolRows?.length ?? 0} visible. Running service-role ground-truth check...`);
+            const groundTruthPol = await verifyRowsExist(session?.access_token, 'policies', policiesPayload.map(p => p.id));
+            if (!groundTruthPol.ok) {
+              console.error('[submitLogActivity] service-role ground-truth check (policies) itself failed (inconclusive):', groundTruthPol.error);
+              showToast(`Warning: submitted ${policiesPayload.length} pipeline items but only ${verifyPolRows?.length ?? 0} are confirmed visible. Could not verify further - details logged to console.`, 'error');
+            } else if (groundTruthPol.foundIds.length !== policiesPayload.length) {
+              console.error(`[submitLogActivity] CONFIRMED SERVER-SIDE ROW COLLAPSE (policies): service-role query shows only ${groundTruthPol.foundIds.length} of ${policiesPayload.length} rows actually exist. Not an RLS visibility gap - a trigger/rule/constraint on 'policies' is genuinely dropping or merging rows. Expected ids:`, policiesPayload.map(p => p.id), 'Actually persisted ids:', groundTruthPol.foundIds);
+              showToast(`Confirmed: only ${groundTruthPol.foundIds.length} of ${policiesPayload.length} pipeline items were actually saved (server-side issue, verified). Details logged to console.`, 'error');
+            } else {
+              console.warn(`[submitLogActivity] FALSE ALARM (policies) - RLS visibility gap, not a real collapse: service-role query confirms all ${groundTruthPol.foundIds.length} rows genuinely exist.`);
+            }
           }
         }
 
