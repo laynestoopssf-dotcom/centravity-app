@@ -356,7 +356,10 @@ export default function CockpitPage() {
 
     // Per-producer YTD logged quotes (activity_type 'quote'/'complex_res') — tier 2 of the
     // Activity Pacing Engine's close-rate fallback chain (Settings override → live YTD rate →
-    // agency global_close_rate).
+    // agency global_close_rate). This is a straight row count by design: the Quote logging form
+    // (app/dashboard/page.tsx submitLogActivity) now inserts one `activities` row per individual
+    // product line toggled in a bundled household quote (e.g. Auto + Fire = 2 rows, not 1), so
+    // summing rows here already yields the true multi-line quote volume without any extra math.
     const memberQuoteCounts = new Map<string, number>();
     activities.forEach((act: any) => {
       const logDate = new Date(act.logged_at);

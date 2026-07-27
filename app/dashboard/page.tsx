@@ -79,7 +79,7 @@ const GlobalStyles = () => (
 type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; monthly_target_life_apps: number; monthly_target_life_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; };
 type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates; global_close_rate?: number;};
 type Policy = { id: string; user_id: string; customer_name: string; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
-type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; };
+type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; quotedLines?: string[]; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
 
 const DEFAULT_PRODUCT_LINES = [
@@ -87,6 +87,13 @@ const DEFAULT_PRODUCT_LINES = [
   {name: 'Commercial', parent: 'Commercial'}, {name: 'Life', parent: 'Life'}, 
   {name: 'Health', parent: 'Health'}
 ];
+
+// The 4 "core" lines the Quote logging form lets a producer multi-select in one line item —
+// matches the same 4 lines the Cockpit's Activity Pacing Engine/VC Tier Sniper/Travel Qualifier
+// already track (Commercial has no starting_ytd_* baseline and isn't part of that pacing math),
+// so a bundled household quote (e.g. Auto + Fire together) can be logged as a single entry while
+// still counting as 2 distinct quoted lines - see QUOTE_LINE_TOGGLES usage in submitLogActivity.
+const QUOTE_LINE_TOGGLES = ['Auto', 'Fire', 'Life', 'Health'] as const;
 
 // Hoisted to module scope: pure constants with no dependency on props/state, shared by every
 // dynamic-average / dual-engine What-If calculation (agency-wide and per-producer alike).
@@ -1671,7 +1678,7 @@ export default function Home() {
     const defaultLine = agencySettings?.custom_product_lines?.[0]?.name || 'Auto';
     setLoggingType(type);
     setResolutionStatus('positive');
-    setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: defaultLine, count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]);
+    setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: defaultLine, count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [], quotedLines: ['Auto'] }]);
     setCustFirstName("");
     setCustLastInitial("");
     setIsExistingQuote(false);
@@ -1691,11 +1698,28 @@ export default function Home() {
 
   const addLineItem = () => {
     const defaultLine = agencySettings?.custom_product_lines?.[0]?.name || 'Auto';
-    setLineItems([...lineItems, { id: Date.now().toString(), parentCategory: 'Auto', productLine: defaultLine, count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]);
+    setLineItems([...lineItems, { id: Date.now().toString(), parentCategory: 'Auto', productLine: defaultLine, count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [], quotedLines: ['Auto'] }]);
   };
 
   const removeLineItem = (id: string) => setLineItems(lineItems.filter(item => item.id !== id));
   const updateLineItem = (id: string, field: string, value: any) => setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  // Toggles one of the 4 core lines on/off for a given line item's multi-select "Product Lines
+  // Quoted" chips - the array length drives the actual activity/policy row count in submitLogActivity.
+  const toggleQuotedLine = (id: string, line: string) => setLineItems(prev => prev.map(item => {
+    if (item.id !== id) return item;
+    const current = item.quotedLines || [];
+    const next = current.includes(line) ? current.filter(l => l !== line) : [...current, line];
+    return { ...item, quotedLines: next };
+  }));
+  // A bundled quote entry (e.g. Auto + Fire toggled together) still needs a single, real
+  // product_line string per policy row for downstream book-size/parent-line rollups - reuse the
+  // agency's own custom_product_lines mapping (same lookup addLineItem/the Category dropdown use)
+  // so a customized line name is preferred over the bare parent category when one exists.
+  const resolveProductLineForParent = (parent: string): string => {
+    const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
+    const match = (lines || []).find((l: any) => l.parent === parent);
+    return match ? match.name : parent;
+  };
 
   const submitLogActivity = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1722,8 +1746,21 @@ export default function Home() {
         return;
       }
 
+      if (loggingType === 'quote' && lineItems.some(item => !item.quotedLines || item.quotedLines.length === 0)) {
+        showToast("Please select at least one Product Line Quoted for every entry.", "error");
+        return;
+      }
+
+      // For 'quote' events specifically, each line item can represent a bundled, multi-line
+      // household quote (e.g. Auto + Fire toggled together) - the activity counter must reflect
+      // the actual number of product lines quoted, not just the number of submission rows/entries,
+      // so a household count of 1 with 2 lines toggled counts as 2 quotes (count * lines.length).
       let totalCount = 0;
-      lineItems.forEach(item => totalCount += item.count);
+      if (loggingType === 'quote') {
+        lineItems.forEach(item => { totalCount += item.count * Math.max(1, (item.quotedLines?.length || 0)); });
+      } else {
+        lineItems.forEach(item => totalCount += item.count);
+      }
 
       const activitiesToLog: any[] = [];
       for (let i = 0; i < totalCount; i++) {
@@ -1732,7 +1769,25 @@ export default function Home() {
       const { error: actBulkErr } = await supabase.from('activities').insert(activitiesToLog);
       if (actBulkErr) throw new Error(`Activity Bulk Error: ${actBulkErr.message}`);
 
-      if (loggingType === 'quote' || loggingType === 'cross_sell') {
+      if (loggingType === 'quote') {
+        const policiesToLog: any[] = [];
+        lineItems.forEach(item => {
+          const quotedLines = item.quotedLines && item.quotedLines.length > 0 ? item.quotedLines : [item.productLine];
+          // Premium is split evenly across both the household quantity AND the bundled lines, so a
+          // single "$150/mo" entry toggled for Auto + Fire doesn't double-count $150 into each line.
+          const perLinePremium = Number(item.premiumAmount) / item.count / quotedLines.length;
+          for (let i = 0; i < item.count; i++) {
+            quotedLines.forEach(parentLine => {
+              policiesToLog.push({ agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: resolveProductLineForParent(parentLine), premium_amount: perLinePremium, payment_cycle: item.paymentCycle, status: 'quoted', logged_at: currentTime, written_at: currentTime });
+            });
+          }
+        });
+        const { error: polBulkErr } = await supabase.from('policies').insert(policiesToLog);
+        if (polBulkErr) throw new Error(`Policy Bulk Error: ${polBulkErr.message}`);
+
+        showToast(`Successfully logged ${policiesToLog.length} quoted line${policiesToLog.length === 1 ? '' : 's'} to your Pipeline!`);
+
+      } else if (loggingType === 'cross_sell') {
         const policiesToLog: any[] = [];
         lineItems.forEach(item => {
           for (let i = 0; i < item.count; i++) {
@@ -1741,9 +1796,9 @@ export default function Home() {
         });
         const { error: polBulkErr } = await supabase.from('policies').insert(policiesToLog);
         if (polBulkErr) throw new Error(`Policy Bulk Error: ${polBulkErr.message}`);
-        
+
         showToast(`Successfully logged ${totalCount} Items to your Pipeline!`);
-        
+
       } else if (loggingType === 'bound') {
         for (const item of lineItems) {
           if (isExistingQuote && item.existingQuoteIds.length > 0) {
@@ -3498,49 +3553,76 @@ export default function Home() {
                       <div key={item.id} className="p-4 bg-gray-50 border border-gray-200 rounded-xl relative">
                         {lineItems.length > 1 && <button type="button" onClick={() => removeLineItem(item.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600 bg-white rounded-full p-1 shadow-sm"><X size={16} /></button>}
                         
-                        {/* DUAL CASCADING DROPDOWNS */}
-                        <div className="grid grid-cols-3 gap-4 mb-4">
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Category</label>
-                            <select 
-                              value={item.parentCategory} 
-                              onChange={e => {
-                                const newParent = e.target.value;
-                                const available = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === newParent);
-                                const newProd = available.length > 0 ? available[0].name : newParent;
-                                setLineItems(prev => prev.map(li => li.id === item.id ? { ...li, parentCategory: newParent, productLine: newProd } : li));
-                              }}
-                              className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-700"
-                            >
-                              <option value="Auto">Auto</option>
-                              <option value="Fire">Fire</option>
-                              <option value="Commercial">Commercial</option>
-                              <option value="Life">Life</option>
-                              <option value="Health">Health</option>
-                              <option value="Standalone">Standalone</option>
-                            </select>
+                        {loggingType === 'quote' ? (
+                          // MULTI-LINE TOGGLE CHIPS: lets one entry represent a bundled household
+                          // quote (e.g. Auto + Fire together) - each toggled chip counts as its own
+                          // quote/policy line in submitLogActivity instead of collapsing to just 1.
+                          <div className="mb-4">
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Product Lines Quoted (select all that apply)</label>
+                            <div className="grid grid-cols-4 gap-2 mb-4">
+                              {QUOTE_LINE_TOGGLES.map((line) => {
+                                const isSelected = (item.quotedLines || []).includes(line);
+                                return (
+                                  <button
+                                    key={line}
+                                    type="button"
+                                    onClick={() => toggleQuotedLine(item.id, line)}
+                                    className={`py-2.5 rounded-lg border-2 text-sm font-bold transition-colors ${isSelected ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}
+                                  >
+                                    {line}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Households Quoted</label>
+                              <input type="number" min="1" required value={item.count} onChange={e => updateLineItem(item.id, 'count', Math.max(1, parseInt(e.target.value) || 1))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Product</label>
-                            <select 
-                              value={item.productLine} 
-                              onChange={e => updateLineItem(item.id, 'productLine', e.target.value)} 
-                              className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
-                            >
-                              {(() => {
-                                const availableLines = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === item.parentCategory);
-                                if (availableLines.length === 0) return <option value={item.parentCategory}>{item.parentCategory}</option>;
-                                return availableLines.map((lineObj: any) => (
-                                  <option key={lineObj.name} value={lineObj.name}>{lineObj.name}</option>
-                                ));
-                              })()}
-                            </select>
+                        ) : (
+                          <div className="grid grid-cols-3 gap-4 mb-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Category</label>
+                              <select 
+                                value={item.parentCategory} 
+                                onChange={e => {
+                                  const newParent = e.target.value;
+                                  const available = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === newParent);
+                                  const newProd = available.length > 0 ? available[0].name : newParent;
+                                  setLineItems(prev => prev.map(li => li.id === item.id ? { ...li, parentCategory: newParent, productLine: newProd } : li));
+                                }}
+                                className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-700"
+                              >
+                                <option value="Auto">Auto</option>
+                                <option value="Fire">Fire</option>
+                                <option value="Commercial">Commercial</option>
+                                <option value="Life">Life</option>
+                                <option value="Health">Health</option>
+                                <option value="Standalone">Standalone</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Product</label>
+                              <select 
+                                value={item.productLine} 
+                                onChange={e => updateLineItem(item.id, 'productLine', e.target.value)} 
+                                className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
+                              >
+                                {(() => {
+                                  const availableLines = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === item.parentCategory);
+                                  if (availableLines.length === 0) return <option value={item.parentCategory}>{item.parentCategory}</option>;
+                                  return availableLines.map((lineObj: any) => (
+                                    <option key={lineObj.name} value={lineObj.name}>{lineObj.name}</option>
+                                  ));
+                                })()}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
+                              <input type="number" min="1" required value={item.count} onChange={e => updateLineItem(item.id, 'count', Math.max(1, parseInt(e.target.value) || 1))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
-                            <input type="number" min="1" required value={item.count} onChange={e => updateLineItem(item.id, 'count', Math.max(1, parseInt(e.target.value) || 1))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
-                          </div>
-                        </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-4">
                           <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Term Premium</label><div className="relative"><span className="absolute left-3 top-2.5 text-gray-500 font-medium">$</span><input type="number" required step="0.01" placeholder="0.00" value={item.premiumAmount} onChange={e => updateLineItem(item.id, 'premiumAmount', e.target.value)} className="w-full pl-7 p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm" /></div></div>
