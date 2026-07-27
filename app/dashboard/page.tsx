@@ -96,6 +96,34 @@ const makeRowId = (): string =>
     ? crypto.randomUUID()
     : `row-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
+// Postgres only reports "the batch violated a constraint" for a bulk multi-row insert - it won't
+// say *which* row. When a bulk insert fails, re-attempt one row at a time purely to pinpoint the
+// exact offending row/value and surface the real Postgres error (code/details/hint) for it, then
+// delete any rows that *did* succeed during this diagnostic pass so nothing partial survives a
+// rejected submission - keeping the overall operation all-or-nothing from the user's perspective.
+const diagnoseFailedBatch = async (table: 'activities' | 'policies', rows: Record<string, any>[]) => {
+  const succeededIds: string[] = [];
+  let firstFailure: { index: number; row: Record<string, any>; error: any } | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const { error } = await supabase.from(table).insert([rows[i]]);
+    if (error) {
+      if (!firstFailure) firstFailure = { index: i, row: rows[i], error };
+    } else {
+      succeededIds.push(rows[i].id);
+    }
+  }
+  if (succeededIds.length > 0) {
+    const { error: cleanupErr } = await supabase.from(table).delete().in('id', succeededIds);
+    if (cleanupErr) console.error(`[diagnoseFailedBatch] CRITICAL: could not clean up ${succeededIds.length} diagnostic rows in ${table} - manual cleanup needed:`, succeededIds, cleanupErr);
+  }
+  if (firstFailure) {
+    console.error(`[diagnoseFailedBatch] ${table}: row #${firstFailure.index} of ${rows.length} is what actually failed:`, firstFailure.row, firstFailure.error);
+  } else {
+    console.error(`[diagnoseFailedBatch] ${table}: every row succeeded individually (rolled back ${succeededIds.length}) - the failure only happens as part of the bulk multi-row statement, suggesting a batch-level/statement-level constraint rather than a per-row one.`);
+  }
+  return firstFailure;
+};
+
 // Hoisted to module scope: pure constants with no dependency on props/state, shared by every
 // dynamic-average / dual-engine What-If calculation (agency-wide and per-producer alike).
 const PARENT_CATEGORIES = ['Auto', 'Fire', 'Commercial', 'Life', 'Health'] as const;
@@ -207,9 +235,17 @@ export default function Home() {
   const [bulkData, setBulkData] = useState<any>({});
   const [isImporting, setIsImporting] = useState(false);
 
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    // A newer toast (e.g. an error thrown right after some other success ping) must not get
+    // clipped early by an older toast's pending auto-dismiss timer.
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage({ msg, type });
-    setTimeout(() => setToastMessage(null), 3000);
+    // Error toasts frequently carry the raw Postgres/Supabase error (code/details/hint) - give
+    // the user enough time to actually read and report it instead of it flashing away in 3s.
+    // The toast also renders its own manual dismiss (X) button regardless of this timer.
+    const duration = type === 'error' ? 12000 : 3000;
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), duration);
   };
 
 
@@ -1751,18 +1787,21 @@ export default function Home() {
 
       // One `activities` row per expanded unit - this is what the Cockpit's memberQuoteCounts /
       // Activity Pacing Engine sums, so the row count here must equal totalCount exactly.
+      // NOTE: deliberately NOT chaining .select() here - Supabase applies the table's SELECT RLS
+      // policy (which can differ from its INSERT policy) to whatever a post-insert .select()
+      // returns, so a restrictive SELECT policy can make a fully-successful multi-row insert
+      // *report back* fewer rows than were actually written. That's a false-positive "1 out of 6
+      // saved" signal we don't want to act on - the authoritative signal is `error`, not row count.
       const activitiesToLog = expandedUnits.map((_, idx) => ({ id: makeRowId(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: stampFor(idx) }));
-      const { error: actBulkErr, data: actInsertedRows } = await supabase.from('activities').insert(activitiesToLog).select('id');
+      const { error: actBulkErr } = await supabase.from('activities').insert(activitiesToLog);
       if (actBulkErr) {
-        console.error('[submitLogActivity] activities batch insert failed:', actBulkErr, 'payload size:', activitiesToLog.length);
-        throw new Error(`Activity Bulk Error: ${actBulkErr.message}${actBulkErr.details ? ` (${actBulkErr.details})` : ''}`);
+        console.error('[submitLogActivity] activities batch insert failed. Full Supabase error object below - check .code/.details/.hint for the exact Postgres constraint/RLS reason:', actBulkErr, 'payload:', activitiesToLog);
+        const diag = totalCount > 1 ? await diagnoseFailedBatch('activities', activitiesToLog) : null;
+        const diagErr = diag?.error;
+        throw new Error(`Activity Bulk Error [${(diagErr || actBulkErr).code || 'no code'}]: ${(diagErr || actBulkErr).message}${(diagErr || actBulkErr).details ? ` — ${(diagErr || actBulkErr).details}` : ''}${(diagErr || actBulkErr).hint ? ` (hint: ${(diagErr || actBulkErr).hint})` : ''}${diag ? ` [row ${diag.index + 1}/${activitiesToLog.length}]` : ''}`);
       }
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[submitLogActivity] activities rows requested:', activitiesToLog.length, 'rows confirmed by Supabase:', actInsertedRows?.length ?? 'unknown (no .select())');
-      }
-      if (actInsertedRows && actInsertedRows.length !== activitiesToLog.length) {
-        console.error('[submitLogActivity] MISMATCH: requested', activitiesToLog.length, 'activity rows but only', actInsertedRows.length, 'were confirmed inserted.', actInsertedRows);
-        showToast(`Warning: requested ${activitiesToLog.length} quotes but only ${actInsertedRows.length} were saved. Please verify your Ledger.`, "error");
+        console.log('[submitLogActivity] activities insert call returned no error for', activitiesToLog.length, 'rows.');
       }
 
       if (loggingType === 'quote' || loggingType === 'cross_sell') {
@@ -1771,8 +1810,19 @@ export default function Home() {
         const policiesToLog = expandedUnits.map((item, idx) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: stampFor(idx), written_at: stampFor(idx) }));
         const { error: polBulkErr } = await supabase.from('policies').insert(policiesToLog);
         if (polBulkErr) {
-          console.error('[submitLogActivity] policies batch insert failed:', polBulkErr, 'payload size:', policiesToLog.length);
-          throw new Error(`Policy Bulk Error: ${polBulkErr.message}${polBulkErr.details ? ` (${polBulkErr.details})` : ''}`);
+          console.error('[submitLogActivity] policies batch insert failed. Full Supabase error object below - check .code/.details/.hint for the exact Postgres constraint/RLS reason:', polBulkErr, 'payload:', policiesToLog);
+          const diag = totalCount > 1 ? await diagnoseFailedBatch('policies', policiesToLog) : null;
+          const diagErr = diag?.error;
+          // Compensating rollback: `activities` already committed in its own request above (it's
+          // a separate REST call, not a shared DB transaction with this one), so without this a
+          // failed policies insert would still silently credit the producer with N quotes in their
+          // pacing/streak counters despite zero matching Pipeline rows. Delete those rows by the
+          // exact ids we just generated so the whole submission fails as a single unit - no
+          // "optimistic" partial state survives a rejected payload.
+          const rollbackIds = activitiesToLog.map(a => a.id);
+          const { error: rollbackErr } = await supabase.from('activities').delete().in('id', rollbackIds);
+          if (rollbackErr) console.error('[submitLogActivity] CRITICAL: failed to roll back orphaned activities after policy insert failure - manual cleanup needed for ids:', rollbackIds, rollbackErr);
+          throw new Error(`Policy Bulk Error [${(diagErr || polBulkErr).code || 'no code'}]: ${(diagErr || polBulkErr).message}${(diagErr || polBulkErr).details ? ` — ${(diagErr || polBulkErr).details}` : ''}${(diagErr || polBulkErr).hint ? ` (hint: ${(diagErr || polBulkErr).hint})` : ''}${diag ? ` [row ${diag.index + 1}/${policiesToLog.length}]` : ''}`);
         }
 
         showToast(`Successfully logged ${totalCount} Items to your Pipeline!`);
@@ -3121,9 +3171,12 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <GlobalStyles />
         {toastMessage && (
-          <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
-            {toastMessage.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white max-w-md ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
+            {toastMessage.type === 'success' ? <CheckCircle2 size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
             <span className="font-medium">{toastMessage.msg}</span>
+            <button type="button" onClick={() => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); setToastMessage(null); }} className="ml-1 shrink-0 opacity-80 hover:opacity-100" aria-label="Dismiss">
+              <X size={16} />
+            </button>
           </div>
         )}
         
@@ -3269,9 +3322,12 @@ export default function Home() {
       )}
 
       {toastMessage && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
-          {toastMessage.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white max-w-md ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
+          {toastMessage.type === 'success' ? <CheckCircle2 size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
           <span className="font-medium">{toastMessage.msg}</span>
+          <button type="button" onClick={() => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); setToastMessage(null); }} className="ml-1 shrink-0 opacity-80 hover:opacity-100" aria-label="Dismiss">
+            <X size={16} />
+          </button>
         </div>
       )}
 
