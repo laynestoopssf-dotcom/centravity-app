@@ -1,51 +1,58 @@
 "use server";
 
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { supabaseAdmin } from "./supabaseAdmin";
 import type { CoachingInsightPayload, CoachingInsightResult } from "./coaching.types";
 
 // =============================================================================
 // Server Action: Generate Coaching Insight ("Smart Manager AI")
 // -----------------------------------------------------------------------------
-// This is a NET-NEW implementation, not a restored one — the button, its
-// isGeneratingAi/aiInsights state, and even the `openai` npm dependency were
-// already wired up in app/dashboard/page.tsx and components/AgencyOverviewTab.tsx,
-// but generateCoachingInsight itself was a literal empty stub
-// (`async (member: any) => {}`) with no Server Action, no API route, and no
-// OPENAI_API_KEY anywhere — `git log -S` on the stub's definition shows
-// exactly one commit ("Initial app split"), so there's no prior working
-// version to recover. This wires the whole path end to end for the first time.
+// This was originally built against OpenAI, then swapped to the Gemini API's
+// free tier on request. A full codebase + git-history audit (all commits,
+// both branches, .env.local) turned up zero prior trace of a Gemini
+// integration in this repo — no @google/generative-ai or @google/genai import
+// anywhere, no GEMINI_API_KEY reference anywhere — so there was nothing to
+// restore; this is a fresh implementation using @google/genai, the current
+// Google-recommended SDK (the older @google/generative-ai package is
+// deprecated/EOL). Everything else about this action — the auth boundary, the
+// prompt construction from the producer's live What-If numbers, and the
+// crash-proofing — is unchanged from the OpenAI version.
 //
 // SECURITY: same rule as every other Server Action in this app (see
 // onboarding.ts / joinAgency.ts) — the caller's identity is re-derived from
 // `accessToken` via supabaseAdmin.auth.getUser(), never trusted from the
 // client. This is the only thing standing between this button and letting
-// anyone with network access spend this agency's OpenAI budget, since the
-// prompt itself carries no other authorization check.
+// anyone with network access exhaust this agency's Gemini free-tier quota,
+// since the prompt itself carries no other authorization check.
 //
-// LAZY OPENAI CLIENT — same load-bearing reason as supabaseAdmin.ts's lazy
-// Supabase client: constructing `new OpenAI(...)` at module load time with a
-// missing key would throw before this action's own try/catch starts, which
-// crosses the Server Action boundary uncaught and produces Next's generic,
-// unhelpful "An error occurred in the Server Components render" message in
-// production instead of a real, catchable error.
+// LAZY GEMINI CLIENT — same load-bearing reason as supabaseAdmin.ts's lazy
+// Supabase client: constructing `new GoogleGenAI(...)` at module load time
+// with a missing key would throw before this action's own try/catch starts,
+// which crosses the Server Action boundary uncaught and produces Next's
+// generic, unhelpful "An error occurred in the Server Components render"
+// message in production instead of a real, catchable error.
 // =============================================================================
 
-let cachedOpenAI: OpenAI | null = null;
+// gemini-2.5-flash is the free-tier-eligible model this action targets — the
+// "flash" tier is what Google's free quota is built around, as opposed to
+// the heavier "pro" models.
+const GEMINI_MODEL = "gemini-2.5-flash";
 
-function getOpenAI(): OpenAI {
-  if (cachedOpenAI) return cachedOpenAI;
+let cachedGemini: GoogleGenAI | null = null;
 
-  const apiKey = process.env.OPENAI_API_KEY || "";
+function getGemini(): GoogleGenAI {
+  if (cachedGemini) return cachedGemini;
+
+  const apiKey = process.env.GEMINI_API_KEY || "";
   if (!apiKey) {
-    console.error("[coaching] missing OPENAI_API_KEY");
+    console.error("[coaching] missing GEMINI_API_KEY");
     throw new Error(
-      "Server is misconfigured: missing OpenAI credentials. Please contact support."
+      "Server is misconfigured: missing Gemini credentials. Please contact support."
     );
   }
 
-  cachedOpenAI = new OpenAI({ apiKey });
-  return cachedOpenAI;
+  cachedGemini = new GoogleGenAI({ apiKey });
+  return cachedGemini;
 }
 
 function buildPrompt(payload: CoachingInsightPayload): string {
@@ -103,18 +110,18 @@ export async function generateCoachingInsight(
       return { success: false, error: "Missing producer context — please try again." };
     }
 
-    const openai = getOpenAI();
+    const gemini = getGemini();
     const prompt = buildPrompt(payload);
 
-    const response = await openai.responses.create({
-      model: "gpt-4o-mini",
-      input: prompt,
+    const response = await gemini.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
     });
 
-    const insight = response.output_text?.trim();
+    const insight = response.text?.trim();
 
     if (!insight) {
-      console.error("[coaching] OpenAI returned no output_text", response);
+      console.error("[coaching] Gemini returned no text", response);
       return { success: false, error: "The AI coach didn't return a usable response. Please try again." };
     }
 
