@@ -33,10 +33,14 @@ import type { CoachingInsightPayload, CoachingInsightResult } from "./coaching.t
 // message in production instead of a real, catchable error.
 // =============================================================================
 
-// gemini-2.5-flash is the free-tier-eligible model this action targets — the
-// "flash" tier is what Google's free quota is built around, as opposed to
-// the heavier "pro" models.
-const GEMINI_MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash returned a 404 ("no longer available to new users") -
+// Google shut down the 2.x Flash line entirely. gemini-3.6-flash (GA as of
+// July 21, 2026) is the current stable successor in the same Flash tier -
+// the tier Google's free quota is built around, as opposed to the heavier
+// "pro" models. If this 404s again in the future, check
+// https://ai.google.dev/gemini-api/docs/changelog for the current
+// generally-available Flash model id before assuming it's a bug here.
+const GEMINI_MODEL = "gemini-3.6-flash";
 
 let cachedGemini: GoogleGenAI | null = null;
 
