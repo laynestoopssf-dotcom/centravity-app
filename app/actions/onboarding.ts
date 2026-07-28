@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseAdmin, splitName, isMissingColumnError } from "./supabaseAdmin";
+import { sendBetaWelcomeEmail } from "./email";
 import type {
   Step1Payload,
   Step1Result,
@@ -150,7 +151,10 @@ function rowToYtdMatrix(row: Record<string, unknown> | null | undefined): YtdMat
 
 async function authenticateCaller(
   accessToken: string | undefined
-): Promise<{ ok: true; ownerId: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; ownerId: string; email: string | null }
+  | { ok: false; error: string }
+> {
   if (!accessToken) return { ok: false, error: "Unauthorized: missing session." };
 
   const { data: authUser, error } = await supabaseAdmin.auth.getUser(accessToken);
@@ -160,7 +164,7 @@ async function authenticateCaller(
     return { ok: false, error: "Unauthorized: invalid session." };
   }
 
-  return { ok: true, ownerId: authUser.user.id };
+  return { ok: true, ownerId: authUser.user.id, email: authUser.user.email ?? null };
 }
 
 // Re-derives the caller's own agency/office from their profile row — never
@@ -233,6 +237,11 @@ export async function saveStep1Foundation(payload: Step1Payload): Promise<Step1R
 
     let agencyId = (existingProfile?.agency_id as string) || undefined;
     let officeId = (existingProfile?.office_id as string) || undefined;
+    // Tracks whether the `else` branch below actually inserts a brand-new
+    // agencies row (vs. this being a "Save Progress"/reload re-save of an
+    // agency that already exists) — the welcome email must fire exactly
+    // once, only on genuine agency creation, never on every Step 1 re-save.
+    let isNewAgency = false;
     const { first_name: ownerFirst, last_name: ownerLast } = splitName(payload.ownerName);
 
     const upsertOwner = (fields: Record<string, unknown>) =>
@@ -274,6 +283,7 @@ export async function saveStep1Foundation(payload: Step1Payload): Promise<Step1R
         return { success: false, ownerId, error: agencyError?.message || "Failed to create agency." };
       }
       agencyId = agency.id as string;
+      isNewAgency = true;
 
       // Checkpoint immediately: link the owner to the new agency before
       // touching offices. Without this, a retry after a mid-step failure (e.g.
@@ -334,6 +344,21 @@ export async function saveStep1Foundation(payload: Step1Payload): Promise<Step1R
     }
 
     await advanceOnboardingStep(ownerId, 2);
+
+    // Fire-and-forget: a Resend outage or missing RESEND_API_KEY must never
+    // fail onboarding itself — the agency/office/profile rows above are
+    // already durably saved by this point. Only ever sent once, guarded by
+    // isNewAgency, so re-saving Step 1 (Save Progress clicked again, or the
+    // wizard reloaded) never re-sends it.
+    if (isNewAgency && auth.email) {
+      sendBetaWelcomeEmail({
+        toEmail: auth.email,
+        ownerName: payload.ownerName,
+        agencyName: payload.agencyName.trim(),
+      }).catch((err) => {
+        console.error("[onboarding:step1] welcome email failed", err);
+      });
+    }
 
     return { success: true, agencyId, officeId, ownerId };
   } catch (err: any) {
