@@ -128,7 +128,22 @@ export default function Home() {
   // logging behaves exactly as before, but lets a rep correct the date if they forgot to log
   // yesterday's activity. Capped at "today" (see the modal's max attribute) since the
   // protect_ledger_integrity() DB trigger still rejects future-dated activity rows.
-  const todayDateStr = () => new Date().toISOString().slice(0, 10);
+  // NOTE: deliberately NOT `new Date().toISOString().slice(0, 10)` - toISOString()
+  // converts to UTC first, so for any US timezone (all behind UTC) during local
+  // evening/night hours (any time after UTC has already rolled to the next
+  // calendar day - as early as 4-5pm Pacific) this would return TOMORROW's date
+  // instead of today's. Combined with submitLogActivity's effectiveNow (which
+  // re-applies the LOCAL time-of-day on top of whichever Y/M/D this returns),
+  // that silently produced a genuinely future timestamp - enough to trip
+  // protect_ledger_integrity()'s "No Time Travel" trigger and have the entire
+  // insert rejected, with zero rows ever reaching activities/policies. Reading
+  // the date fields straight off the local Date object avoids the UTC detour
+  // entirely and always reflects the browser's actual local calendar day.
+  const todayDateStr = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
   const [logDate, setLogDate] = useState(todayDateStr());
 
   // Compact "Log Past Data" flow for Touches/Inbound Calls, which (unlike Quotes/Bound Apps)
