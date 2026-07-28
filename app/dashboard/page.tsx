@@ -124,6 +124,20 @@ export default function Home() {
   const [selectedOffice, setSelectedOffice] = useState('all');
   const [selectedProducer, setSelectedProducer] = useState('all');
   const [logOfficeId, setLogOfficeId] = useState("");
+  // Backdating support for the Log Quote/Bound modal - defaults to "today" so normal same-day
+  // logging behaves exactly as before, but lets a rep correct the date if they forgot to log
+  // yesterday's activity. Capped at "today" (see the modal's max attribute) since the
+  // protect_ledger_integrity() DB trigger still rejects future-dated activity rows.
+  const todayDateStr = () => new Date().toISOString().slice(0, 10);
+  const [logDate, setLogDate] = useState(todayDateStr());
+
+  // Compact "Log Past Data" flow for Touches/Inbound Calls, which (unlike Quotes/Bound Apps)
+  // are logged via a single click with no modal at all in the normal flow.
+  const [isBackdateModalOpen, setIsBackdateModalOpen] = useState(false);
+  const [backdateType, setBackdateType] = useState<'touchpoint' | 'inbound_call'>('touchpoint');
+  const [backdateDate, setBackdateDate] = useState(todayDateStr());
+  const [backdateCount, setBackdateCount] = useState<number | string>(1);
+  const [isSubmittingBackdate, setIsSubmittingBackdate] = useState(false);
 
   const [selectedWeekStart, setSelectedWeekStart] = useState<string>(() => {
     const today = new Date();
@@ -1072,6 +1086,36 @@ export default function Home() {
     }
   };
 
+  // Ledger "Edit" support - lets an owner/manager correct a mis-logged numerical value
+  // (premium, sentiment, date/time) after the fact instead of having to delete and re-log it.
+  const updateLedgerActivity = async (id: string, updates: Record<string, any>) => {
+    try {
+      const { error } = await supabase.from('activities').update(updates).eq('id', id);
+      if (error) throw error;
+
+      showToast("Activity updated.", "success");
+      fetchLedgerData();
+      if (profile) fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+    } catch (err: any) {
+      console.error("Update Activity Error:", err);
+      showToast("Failed to update activity: " + (err.message || "check database permissions."), "error");
+    }
+  };
+
+  const updateLedgerPolicy = async (id: string, updates: Record<string, any>) => {
+    try {
+      const { error } = await supabase.from('policies').update(updates).eq('id', id);
+      if (error) throw error;
+
+      showToast("Policy updated.", "success");
+      fetchLedgerData();
+      if (profile) fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+    } catch (err: any) {
+      console.error("Update Policy Error:", err);
+      showToast("Failed to update policy: " + (err.message || "check database permissions."), "error");
+    }
+  };
+
   const submitHistoricalData = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkProducerId || !bulkMonth) return showToast("Producer and Month are required.", "error");
@@ -1709,6 +1753,7 @@ export default function Home() {
     setCustLastInitial("");
     setIsExistingQuote(false);
     setLogOfficeId(profile?.office_id || "");
+    setLogDate(todayDateStr());
     setIsLoggingModalOpen(true);
   };
 
@@ -1743,8 +1788,25 @@ export default function Home() {
     const finalFormattedName = `${finalFirstName.trim()} ${custLastInitial.toUpperCase()}.`;
 
     try {
-      const currentTime = new Date().toISOString(); 
+      // Builds the effective timestamp from the (possibly backdated) `logDate` combined with the
+      // actual current time-of-day, so same-day submissions are byte-for-byte identical to before
+      // and a backdated submission still sorts sensibly within its chosen day.
+      const now = new Date();
+      const [logYear, logMonth, logDay] = logDate.split('-').map(Number);
+      const effectiveNow = (logYear && logMonth && logDay)
+        ? new Date(logYear, logMonth - 1, logDay, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
+        : now;
+      const currentTime = effectiveNow.toISOString();
       const targetOffice = logOfficeId || profile.office_id;
+      // Re-derives "now, but on logDate" fresh per call (rather than reusing the single
+      // `currentTime` snapshot above) so sequential rows within one submission still land at
+      // distinct real wall-clock instants on the chosen day, matching the un-backdated behavior.
+      const nowWithLogDate = () => {
+        const n = new Date();
+        return (logYear && logMonth && logDay)
+          ? new Date(logYear, logMonth - 1, logDay, n.getHours(), n.getMinutes(), n.getSeconds(), n.getMilliseconds()).toISOString()
+          : n.toISOString();
+      };
 
       if (loggingType === 'complex_res') {
         const { error: actErr } = await supabase.from('activities').insert([{ id: makeRowId(), activity_type: 'complex_res', agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }]);
@@ -1785,7 +1847,7 @@ export default function Home() {
       // never is one. The real wall-clock gap between sequential awaited network round-trips also
       // naturally staggers `logged_at` far more than any client-computed offset could, which
       // doubles as a bypass for a possible timestamp-based dedup trigger.
-      const activitiesPayload = expandedUnits.map(() => ({ id: crypto.randomUUID(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: new Date().toISOString() }));
+      const activitiesPayload = expandedUnits.map(() => ({ id: crypto.randomUUID(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: nowWithLogDate() }));
       const insertedActivityIds: string[] = [];
       for (const activity of activitiesPayload) {
         const { error: actErr } = await supabase.from('activities').insert(activity);
@@ -1810,7 +1872,7 @@ export default function Home() {
         // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
         // entry books $100/unit instead of multiplying the household's premium by 3. Same
         // sequential-insert bypass as activities above.
-        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: new Date().toISOString(), written_at: new Date().toISOString() }));
+        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
         const insertedPolicyIds: string[] = [];
         for (const policy of policiesPayload) {
           const { error: polErr } = await supabase.from('policies').insert(policy);
@@ -1911,6 +1973,53 @@ export default function Home() {
     setStats(prev => ({ ...prev, todayInbound: prev.todayInbound + 1, monthInbound: prev.monthInbound + 1 }));
     showToast("+1 Inbound Call!");
     if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+  };
+
+  // "Log Past Data" - covers Touches/Inbound Calls, which (unlike Quotes/Bound Apps) are logged
+  // via a single click with no modal in the normal flow, so they have no other way to backdate.
+  const openBackdateModal = () => {
+    setBackdateType('touchpoint');
+    setBackdateDate(todayDateStr());
+    setBackdateCount(1);
+    setIsBackdateModalOpen(true);
+  };
+
+  const submitBackdatedActivity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile || isSubmittingBackdate) return;
+    const count = Math.max(1, Math.trunc(Number(backdateCount)) || 1);
+    const [y, m, d] = backdateDate.split('-').map(Number);
+    if (!y || !m || !d) { showToast("Please choose a valid date.", "error"); return; }
+
+    setIsSubmittingBackdate(true);
+    try {
+      const now = new Date();
+      // Stagger each row a second apart (rather than all sharing one identical timestamp) purely
+      // for readable ordering in the Data Ledger - the ledger integrity trigger no longer
+      // penalizes near-simultaneous rows (see scripts/fix_ledger_integrity_trigger.sql).
+      const rows = Array.from({ length: count }, (_, i) => ({
+        id: crypto.randomUUID(),
+        activity_type: backdateType,
+        agency_id: profile.agency_id,
+        office_id: profile.office_id,
+        user_id: profile.id,
+        logged_at: new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds() + i).toISOString(),
+      }));
+
+      for (const row of rows) {
+        const { error } = await supabase.from('activities').insert(row);
+        if (error) { console.error('[submitBackdatedActivity] insert failed:', error); throw error; }
+      }
+
+      showToast(`Logged ${count} ${backdateType === 'touchpoint' ? 'Touchpoint' : 'Inbound Call'}${count > 1 ? 's' : ''} for ${new Date(`${backdateDate}T00:00:00`).toLocaleDateString()}!`);
+      setIsBackdateModalOpen(false);
+      fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+      if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+    } catch (error: any) {
+      showToast("Failed to log past activity: " + (error.message || "please try again."), "error");
+    } finally {
+      setIsSubmittingBackdate(false);
+    }
   };
   
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -3486,7 +3595,7 @@ export default function Home() {
           reqTouches={personalWhatIf.reqTouches} 
           reqQuotes={personalWhatIf.reqQuotes} 
           reqApps={personalWhatIf.reqApps} 
-          logTouchpoint={logTouchpoint} logInboundCall={logInboundCall} openLogModal={openLogModal} 
+          logTouchpoint={logTouchpoint} logInboundCall={logInboundCall} openLogModal={openLogModal} openBackdateModal={openBackdateModal} 
           fetchDashboardData={(pId: any, aId: any) => fetchDashboardData(pId, aId, agencySettings)} 
           fetchPipeline={fetchPipeline} updatePolicyStatus={updatePolicyStatus} 
           selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} 
@@ -3502,7 +3611,7 @@ export default function Home() {
 
         {activeTab === 'commission' && <CommissionTab profile={profile} stats={stats} commissionData={commissionData} manualBonuses={manualBonuses} addManualBonus={addManualBonus} deleteManualBonus={deleteManualBonus} commissionMonth={commissionMonth} setCommissionMonth={setCommissionMonth} team={team} selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} teamCommissions={teamCommissions} monthPolicies={monthPolicies} agencySettings={agencySettings} />}
         
-        {activeTab === 'ledger' && <LedgerTab profile={profile} team={team} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} />}
+        {activeTab === 'ledger' && <LedgerTab profile={profile} team={team} agencySettings={agencySettings} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} updateLedgerActivity={updateLedgerActivity} updateLedgerPolicy={updateLedgerPolicy} />}
 
         {activeTab === 'reports' && canViewReports && <ReportsTab team={team} profile={profile} agencySettings={agencySettings} />}
         
@@ -3551,6 +3660,19 @@ export default function Home() {
             </h2>
 
             <form onSubmit={submitLogActivity} className="space-y-4">
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl mb-4">
+                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider flex items-center gap-1.5"><CalendarDays size={13}/> Date Logged</label>
+                <input
+                  type="date"
+                  required
+                  max={todayDateStr()}
+                  value={logDate}
+                  onChange={e => setLogDate(e.target.value)}
+                  className="w-full p-2 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
+                />
+                {logDate !== todayDateStr() && <p className="text-[11px] font-semibold text-amber-600 mt-1.5">Backdating this entry to {new Date(`${logDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}.</p>}
+              </div>
+
               {profile?.is_floater && offices.length > 1 && (
                 <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl mb-4">
                   <label className="block text-xs font-bold text-indigo-900 mb-1 uppercase tracking-wider">Logging Destination</label>
@@ -3714,6 +3836,42 @@ export default function Home() {
               <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => setIsLoggingModalOpen(false)} disabled={isSubmittingActivity} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
                 <button type="submit" disabled={isSubmittingActivity} className={`flex-1 py-3 px-4 text-white font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${loggingType === 'bound' ? 'bg-emerald-600 hover:bg-emerald-700' : loggingType === 'complex_res' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>{isSubmittingActivity ? 'Saving...' : `Save ${loggingType.replace('_', ' ')}`}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isBackdateModalOpen && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in zoom-in-95 duration-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2"><CalendarDays className="text-blue-600" size={22}/> Log Past Data</h2>
+            <p className="text-sm text-gray-500 mb-6">Forgot to log a call yesterday? Backfill it here.</p>
+
+            <form onSubmit={submitBackdatedActivity} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Activity Type</label>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setBackdateType('touchpoint')} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${backdateType === 'touchpoint' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Outbound Touch</button>
+                  <button type="button" onClick={() => setBackdateType('inbound_call')} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${backdateType === 'inbound_call' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Inbound Call</button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Date</label>
+                <input type="date" required max={todayDateStr()} value={backdateDate} onChange={e => setBackdateDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
+                <input type="number" min="1" required value={backdateCount} onChange={e => setBackdateCount(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
+              </div>
+
+              <p className="text-xs text-gray-400">Note: Quotes and Bound Apps can be backdated directly from the Log Quote / Log Bound form using its Date field.</p>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsBackdateModalOpen(false)} disabled={isSubmittingBackdate} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={isSubmittingBackdate} className="flex-1 py-3 px-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50">{isSubmittingBackdate ? 'Saving...' : 'Save Entry'}</button>
               </div>
             </form>
           </div>

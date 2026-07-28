@@ -1196,7 +1196,7 @@ export default function SettingsTab({
               <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
                 <div>
                   <h3 className="font-black text-xl">Plan Editor</h3>
-                  <input type="text" value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} className="bg-transparent border-b border-slate-700 text-slate-300 font-bold outline-none mt-1 focus:border-blue-400 w-64 px-1 pb-1" />
+                  <input type="text" value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} className="bg-transparent border-b border-slate-700 text-white font-bold outline-none mt-1 focus:border-blue-400 w-64 px-1 pb-1" />
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setEditingPlan(null)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-sm">Cancel</button>

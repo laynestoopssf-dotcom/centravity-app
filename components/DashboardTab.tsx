@@ -6,7 +6,7 @@ import { resolveParentLine } from '../utils/productLines';
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
 export default function DashboardTab({ 
-  profile, team, stats, chartData, pipeline, commissionData, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
+  profile, team, stats, chartData, pipeline, commissionData, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
   offices, selectedOffice, setSelectedOffice
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -228,7 +228,19 @@ export default function DashboardTab({
   const tfText = timeframe.toUpperCase();
 
   // DYNAMIC BONUS WIDGET CONFIGURATION
-  const activeOfficeObj = activeOfficeVal !== 'all' && offices ? offices.find((o: any) => o.id === activeOfficeVal) : null;
+  // Team Bonus fields (team_bonus_active/target/metric/reward) are
+  // configured exclusively per-office ("Branch Live Bonus Widget" in
+  // Settings -> Office Locations, see components/SettingsTab.tsx) - nothing
+  // in the app ever writes them onto `agencies`. selectedOffice defaults to
+  // 'all' for every user (see app/dashboard/page.tsx), so without this
+  // fallback the widget was silently invisible to everyone until they
+  // manually picked their own branch from the office dropdown, even with it
+  // correctly toggled on. Falling back to the caller's own office (rather
+  // than the office filter alone) means a producer's default "all" view
+  // still shows their branch's widget, exactly as configured.
+  const activeOfficeObj = activeOfficeVal !== 'all' && offices
+    ? offices.find((o: any) => o.id === activeOfficeVal)
+    : (offices ? offices.find((o: any) => o.id === profile?.office_id) : null) || null;
   const bonusConfig = activeOfficeObj || agencySettings || {};
   const scoreboardName = activeOfficeObj ? `${activeOfficeObj.name} Scoreboard` : (agencySettings?.scoreboard_name || 'Team Scoreboard');
   const bonusMetric = bonusConfig.team_bonus_metric || 'total_apps';
@@ -345,6 +357,14 @@ export default function DashboardTab({
           )}
         </div>
       </header>
+
+      {openBackdateModal && (
+        <div className="flex justify-end -mb-2">
+          <button onClick={openBackdateModal} className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-blue-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-50">
+            <Calendar size={14}/> Log Past Data
+          </button>
+        </div>
+      )}
 
       {/* TILE METRICS SECTION */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
