@@ -10,7 +10,14 @@ const getPacingColor = (pacing: number) => {
 type WhatIfMode = 'ytd' | 'mtd';
 
 const WhatIfModeToggle = ({ mode, setMode }: { mode: WhatIfMode; setMode: (m: WhatIfMode) => void }) => (
-  <div className="relative flex items-center bg-gray-100 rounded-full p-1 text-xs font-bold" onClick={e => e.stopPropagation()}>
+  // self-start: this renders inside a `flex flex-col` card header (see the
+  // "1-on-1 Coaching: What-If" card), whose children default to
+  // align-items: stretch — without this, the pill stretches to the full
+  // card width while its two buttons stay left-aligned with no
+  // justify-content set, leaving the actual bug: a large blank gap on the
+  // right instead of an evenly-spaced two-option toggle. self-start opts
+  // this one flex item out of that stretch so it sizes to its own content.
+  <div className="relative self-start flex items-center bg-gray-100 rounded-full p-1 text-xs font-bold" onClick={e => e.stopPropagation()}>
     <div
       className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-white shadow-sm transition-transform duration-300 ease-out"
       style={{ transform: mode === 'ytd' ? 'translateX(0%)' : 'translateX(calc(100% + 8px))' }}
@@ -383,7 +390,7 @@ export default function AgencyOverviewTab({ agencyOverviewData, expandedProducer
                             <div className="flex items-center justify-between mb-3">
                               <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Sparkles size={16} className="text-indigo-600"/> Smart Manager AI</h4>
                               <button 
-                                onClick={(e) => { e.stopPropagation(); generateCoachingInsight(member); }}
+                                onClick={(e) => { e.stopPropagation(); generateCoachingInsight(member, activeWhatIfMode); }}
                                 disabled={isGeneratingAi[member.id]}
                                 className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
                               >

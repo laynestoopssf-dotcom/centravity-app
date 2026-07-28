@@ -7,6 +7,8 @@ import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { resolveCommissionRates } from "../../utils/commissionRates";
 import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
+import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
+import type { CoachingInsightPayload } from "../actions/coaching.types";
 import { 
   BarChart3, Settings, Target, PhoneCall, 
   FileText, ShieldCheck, LogOut, CheckCircle2, 
@@ -2010,7 +2012,66 @@ export default function Home() {
     }
   };
 
-  const generateCoachingInsight = async (member: any) => {};
+  // NOTE: this was previously a literal no-op stub (`async (member: any) => {}`)
+  // with no Server Action, no API route, and no OPENAI_API_KEY anywhere in the
+  // codebase — `git log -S` on the stub confirms zero prior working version to
+  // restore. This is a net-new implementation (see app/actions/coaching.ts).
+  // `mode` is the per-producer YTD/Last-30-Days toggle from AgencyOverviewTab's
+  // local state — everything else the prompt needs (goalCommission, member's
+  // MTD stats) is already in scope here, so we reuse it rather than
+  // recomputing a second, potentially-drifted copy of the same numbers.
+  const generateCoachingInsight = async (member: any, mode: 'ytd' | 'mtd' = 'mtd') => {
+    if (!member?.id || isGeneratingAi[member.id]) return;
+
+    setIsGeneratingAi(prev => ({ ...prev, [member.id]: true }));
+
+    try {
+      const { data: { session: liveSession } } = await supabase.auth.getSession();
+      const accessToken = liveSession?.access_token;
+      if (!accessToken) {
+        showToast("Your session expired — please refresh and try again.", "error");
+        return;
+      }
+
+      const activeWhatIf = member.whatIf?.[mode];
+      const requiredTouches = activeWhatIf?.reqTouches ?? member.reqTouches ?? 0;
+      const requiredQuotes = activeWhatIf?.reqQuotes ?? member.reqQuotes ?? 0;
+      const requiredApps = activeWhatIf?.reqApps ?? member.reqApps ?? 0;
+
+      const payload: CoachingInsightPayload = {
+        accessToken,
+        producerName: `${member.first_name || ""} ${member.last_name || ""}`.trim() || "This producer",
+        role: member.role || "producer",
+        mode,
+        goalCommission: whatIfCommission || 0,
+        currentTouches: member.monthTouches || 0,
+        currentQuotes: member.monthQuotes || 0,
+        currentApps: member.monthBound || 0,
+        currentPremium: member.monthPremium || 0,
+        closeRate: member.closeRate || 0,
+        quoteRate: activeWhatIf?.quoteRate ?? null,
+        commissionPerApp: activeWhatIf?.commissionPerApp ?? null,
+        requiredTouches,
+        requiredQuotes,
+        requiredApps,
+        linesBreakdown: member.linesBreakdown,
+      };
+
+      const result = await generateCoachingInsightAction(payload);
+
+      if (!result.success || !result.insight) {
+        showToast(result.error || "Failed to generate coaching insight.", "error");
+        return;
+      }
+
+      setAiInsights(prev => ({ ...prev, [member.id]: result.insight! }));
+    } catch (err: any) {
+      console.error("[generateCoachingInsight] failed", err);
+      showToast(err?.message || "Failed to generate coaching insight.", "error");
+    } finally {
+      setIsGeneratingAi(prev => ({ ...prev, [member.id]: false }));
+    }
+  };
 
   // --- DYNAMIC RBAC LOGIC FOR UI & DATA RENDERING ---
   const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
