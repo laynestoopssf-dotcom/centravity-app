@@ -1,7 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse } from 'lucide-react';
+import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse, CreditCard } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { DEFAULT_COMMISSION_RATES, resolveCommissionRates, type LifeSubType, type HealthSubType } from '../utils/commissionRates';
+import { createCheckoutSession } from '../app/actions/billing';
+
+// Mirrors Stripe's own Subscription.status enum (see
+// app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
+// this column verbatim from the Subscription object) so this never drifts
+// into a second, locally-invented status vocabulary.
+const SUBSCRIPTION_STATUS_BADGES: Record<string, { label: string; className: string }> = {
+  active: { label: 'Active', className: 'bg-emerald-100 text-emerald-700' },
+  trialing: { label: 'Trialing', className: 'bg-blue-100 text-blue-700' },
+  past_due: { label: 'Past Due', className: 'bg-amber-100 text-amber-700' },
+  incomplete: { label: 'Incomplete', className: 'bg-amber-100 text-amber-700' },
+  incomplete_expired: { label: 'Incomplete (Expired)', className: 'bg-gray-200 text-gray-600' },
+  unpaid: { label: 'Unpaid', className: 'bg-red-100 text-red-700' },
+  paused: { label: 'Paused', className: 'bg-gray-200 text-gray-600' },
+  canceled: { label: 'Canceled', className: 'bg-gray-200 text-gray-600' },
+};
+
+function SubscriptionStatusBadge({ status }: { status: string | null | undefined }) {
+  const entry = (status && SUBSCRIPTION_STATUS_BADGES[status]) || {
+    label: 'No Active Subscription',
+    className: 'bg-gray-100 text-gray-500',
+  };
+  return (
+    <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${entry.className}`}>
+      {entry.label}
+    </span>
+  );
+}
 
 const LIFE_SUBTYPE_LABELS: Record<LifeSubType, string> = {
   term: 'Term',
@@ -61,7 +89,50 @@ export default function SettingsTab({
   const [newProductLine, setNewProductLine] = useState(""); 
   const [newProductParent, setNewProductParent] = useState("Auto"); 
   const [editingPlan, setEditingPlan] = useState<any>(null);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates' | 'conversion_metrics'>('agency');
+  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates' | 'conversion_metrics' | 'billing'>('agency');
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+
+  // Owner-only mirror of app/actions/stripeAdmin.ts's resolveBillingContext
+  // check — this is a UI convenience (hides a button a manager could never
+  // successfully use), not the actual security boundary, which is enforced
+  // server-side regardless of what this renders.
+  const canManageBilling = profile?.role === 'owner';
+
+  const handleSubscribe = async () => {
+    if (isStartingCheckout) return;
+    setIsStartingCheckout(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        showToast('Your session expired — please refresh and try again.', 'error');
+        return;
+      }
+
+      const result = await createCheckoutSession({
+        accessToken,
+        // Built from window.location.origin (not left to the server's
+        // NEXT_PUBLIC_APP_URL fallback) so this is correct on preview
+        // deployments too, not just the canonical production domain.
+        successUrl: `${window.location.origin}/dashboard?checkout=success`,
+        cancelUrl: `${window.location.origin}/dashboard?checkout=cancelled`,
+      });
+
+      if (!result.success || !result.url) {
+        showToast(result.error || 'Failed to start checkout. Please try again.', 'error');
+        return;
+      }
+
+      // Full navigation to Stripe's own domain — not a Next.js route, so
+      // window.location.href (not router.push) is correct here.
+      window.location.href = result.url;
+    } catch (err: any) {
+      console.error('[billing] handleSubscribe failed', err);
+      showToast(err?.message || 'Failed to start checkout. Please try again.', 'error');
+    } finally {
+      setIsStartingCheckout(false);
+    }
+  };
   const [importMode, setImportMode] = useState<'matrix' | 'csv'>('matrix');
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
@@ -329,6 +400,9 @@ export default function SettingsTab({
         <button onClick={() => setActiveSettingsSection('promotions')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'promotions' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Trophy size={16}/> Corporate Promotions</button>
         <button onClick={() => setActiveSettingsSection('locations')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'locations' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><MapPin size={16}/> Office Locations</button>
         <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DownloadCloud size={16}/> Import Historical Data</button>
+        {canManageBilling && (
+          <button onClick={() => setActiveSettingsSection('billing')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'billing' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><CreditCard size={16}/> Billing</button>
+        )}
       </div>
 
       {/* --- SECTION: AGENCY GLOBALS --- */}
@@ -1632,6 +1706,68 @@ export default function SettingsTab({
                    </button>
                 </form>
              )}
+          </div>
+        </div>
+      )}
+
+      {/* --- SECTION: BILLING & SUBSCRIPTION --- */}
+      {activeSettingsSection === 'billing' && canManageBilling && (
+        <div className="space-y-6 animate-in fade-in duration-200 max-w-3xl">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><CreditCard size={20} /></div>
+              <div>
+                <h3 className="font-bold text-gray-900">Subscription</h3>
+                <p className="text-xs text-gray-500">Manage your agency&apos;s Centravity subscription and billing.</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Current Status</p>
+                  <SubscriptionStatusBadge status={agencySettings?.subscription_status} />
+                </div>
+
+                {(() => {
+                  const status = agencySettings?.subscription_status;
+                  const isActiveOrTrialing = status === 'active' || status === 'trialing';
+                  const label = isStartingCheckout
+                    ? 'Redirecting to Checkout...'
+                    : isActiveOrTrialing
+                    ? 'Subscription Active'
+                    : status === 'past_due' || status === 'unpaid' || status === 'incomplete'
+                    ? 'Update Payment'
+                    : 'Subscribe Now';
+
+                  return (
+                    <button
+                      onClick={handleSubscribe}
+                      disabled={isStartingCheckout || isActiveOrTrialing}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
+                    >
+                      {isStartingCheckout ? <RefreshCw size={18} className="animate-spin" /> : <CreditCard size={18} />}
+                      {label}
+                    </button>
+                  );
+                })()}
+              </div>
+
+              {agencySettings?.plan_id && (
+                <p className="text-xs text-gray-400">
+                  Plan: <span className="font-mono text-gray-500">{agencySettings.plan_id}</span>
+                </p>
+              )}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                <AlertCircle size={18} className="text-blue-600 mt-0.5 shrink-0" />
+                <p className="text-sm text-blue-900">
+                  Clicking Subscribe redirects you to a secure Stripe Checkout page. Your subscription status
+                  above updates automatically once payment completes — no need to refresh manually, though it
+                  may take a few seconds for Stripe&apos;s webhook to sync back.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}
