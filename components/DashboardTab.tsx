@@ -242,7 +242,16 @@ export default function DashboardTab({
     ? offices.find((o: any) => o.id === activeOfficeVal)
     : (offices ? offices.find((o: any) => o.id === profile?.office_id) : null) || null;
   const bonusConfig = activeOfficeObj || agencySettings || {};
-  const scoreboardName = activeOfficeObj ? `${activeOfficeObj.name} Scoreboard` : (agencySettings?.scoreboard_name || 'Team Scoreboard');
+  // Scoreboard title must only switch to "{Office} Scoreboard" when the user has
+  // EXPLICITLY picked a specific office from the dropdown above (activeOfficeVal !== 'all').
+  // It must NOT reuse `activeOfficeObj`, which falls back to the caller's own office even
+  // when "all" is selected (that fallback exists solely for the per-office bonus widget) -
+  // doing so silently overrode the custom agencySettings.scoreboard_name for anyone with an
+  // office_id, which is effectively everyone.
+  const explicitOfficeObj = activeOfficeVal !== 'all' && offices
+    ? offices.find((o: any) => o.id === activeOfficeVal)
+    : null;
+  const scoreboardName = explicitOfficeObj ? `${explicitOfficeObj.name} Scoreboard` : (agencySettings?.scoreboard_name || 'Team Scoreboard');
   const bonusMetric = bonusConfig.team_bonus_metric || 'total_apps';
 
   const getBonusProgress = () => {

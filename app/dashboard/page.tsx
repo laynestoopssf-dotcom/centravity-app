@@ -1747,52 +1747,73 @@ export default function Home() {
   };
 
   const handleSaveTeamTargets = async () => {
-    try {
-      if (agencySettings) {
-         const { error: agencyErr } = await supabase.from('agencies').update({ 
-           production_days_per_week: agencySettings.production_days_per_week,
-           travel_lvl1_apps: agencySettings.travel_lvl1_apps,
-           travel_lvl1_life_cred: agencySettings.travel_lvl1_life_cred,
-           travel_lvl1_total_cred: agencySettings.travel_lvl1_total_cred,
-           travel_lvl2_apps: agencySettings.travel_lvl2_apps,
-           travel_lvl2_life_cred: agencySettings.travel_lvl2_life_cred,
-           travel_lvl2_total_cred: agencySettings.travel_lvl2_total_cred,
-           travel_lvl3_apps: agencySettings.travel_lvl3_apps,
-           travel_lvl3_life_cred: agencySettings.travel_lvl3_life_cred,
-           travel_lvl3_total_cred: agencySettings.travel_lvl3_total_cred,
-           travel_exotic_apps: agencySettings.travel_exotic_apps,
-           travel_exotic_life_cred: agencySettings.travel_exotic_life_cred,
-           travel_exotic_total_cred: agencySettings.travel_exotic_total_cred,
-           travel_exotic_plus_apps: agencySettings.travel_exotic_plus_apps,
-           travel_exotic_plus_life_cred: agencySettings.travel_exotic_plus_life_cred,
-           travel_exotic_plus_total_cred: agencySettings.travel_exotic_plus_total_cred,
-           team_bonus_active: agencySettings.team_bonus_active,
-           team_bonus_target: agencySettings.team_bonus_target,
-           team_bonus_metric: agencySettings.team_bonus_metric,
-           team_bonus_reward: agencySettings.team_bonus_reward,
-           scoreboard_name: (agencySettings as any).scoreboard_name,
-           custom_product_lines: agencySettings.custom_product_lines,
-           custom_roles: agencySettings.custom_roles,
-           vc_min_fs_comm: agencySettings.vc_min_fs_comm,
-           vc_max_fs_comm: agencySettings.vc_max_fs_comm,
-           timezone: agencySettings.timezone,
-           stealth_mode_active: agencySettings.stealth_mode_active,
-           pipeline_auto_archive_days: agencySettings.pipeline_auto_archive_days,
-           daily_report_time: agencySettings.daily_report_time,
-           celebration_threshold: agencySettings.celebration_threshold,
-           default_leaderboard_metric: agencySettings.default_leaderboard_metric,
-           // Corporate Targets (OBA carrier-agnostic compliance) - gates whether the VC and
-           // Travel widgets render anywhere in the app. See
-           // scripts/add_corporate_targets_toggles.sql for the column migration.
-           target_vc_active: agencySettings.target_vc_active,
-           target_travel_active: agencySettings.target_travel_active
-         }).eq('id', agencySettings.id);
+    // The agency-level save (production days, travel tiers, Corporate Targets toggles, etc.)
+    // and the per-member profile saves (each team member's individual daily/weekly/monthly/
+    // annual targets) are independent operations against independent tables. They used to run
+    // sequentially inside one try block where a single `throw` on the agency update — e.g. a
+    // schema-cache miss on a column whose migration script hadn't been run yet, see
+    // scripts/add_corporate_targets_toggles.sql — would abort the whole function before the
+    // `for` loop below ever ran, silently discarding every individual team member's edits with
+    // no trace beyond a toast that's easy to miss. Now each half is isolated in its own
+    // try/catch and BOTH always run, so a failure on one side can never swallow the other, and
+    // the resulting toast tells you exactly which half (if any) failed.
+    let agencyError: string | null = null;
+    let memberErrors: string[] = [];
 
-         if (agencyErr) throw new Error("Agency Settings Error: " + agencyErr.message);
+    if (agencySettings) {
+      try {
+        const { error: agencyErr } = await supabase.from('agencies').update({
+          production_days_per_week: agencySettings.production_days_per_week,
+          travel_lvl1_apps: agencySettings.travel_lvl1_apps,
+          travel_lvl1_life_cred: agencySettings.travel_lvl1_life_cred,
+          travel_lvl1_total_cred: agencySettings.travel_lvl1_total_cred,
+          travel_lvl2_apps: agencySettings.travel_lvl2_apps,
+          travel_lvl2_life_cred: agencySettings.travel_lvl2_life_cred,
+          travel_lvl2_total_cred: agencySettings.travel_lvl2_total_cred,
+          travel_lvl3_apps: agencySettings.travel_lvl3_apps,
+          travel_lvl3_life_cred: agencySettings.travel_lvl3_life_cred,
+          travel_lvl3_total_cred: agencySettings.travel_lvl3_total_cred,
+          travel_exotic_apps: agencySettings.travel_exotic_apps,
+          travel_exotic_life_cred: agencySettings.travel_exotic_life_cred,
+          travel_exotic_total_cred: agencySettings.travel_exotic_total_cred,
+          travel_exotic_plus_apps: agencySettings.travel_exotic_plus_apps,
+          travel_exotic_plus_life_cred: agencySettings.travel_exotic_plus_life_cred,
+          travel_exotic_plus_total_cred: agencySettings.travel_exotic_plus_total_cred,
+          team_bonus_active: agencySettings.team_bonus_active,
+          team_bonus_target: agencySettings.team_bonus_target,
+          team_bonus_metric: agencySettings.team_bonus_metric,
+          team_bonus_reward: agencySettings.team_bonus_reward,
+          scoreboard_name: (agencySettings as any).scoreboard_name,
+          custom_product_lines: agencySettings.custom_product_lines,
+          custom_roles: agencySettings.custom_roles,
+          vc_min_fs_comm: agencySettings.vc_min_fs_comm,
+          vc_max_fs_comm: agencySettings.vc_max_fs_comm,
+          timezone: agencySettings.timezone,
+          stealth_mode_active: agencySettings.stealth_mode_active,
+          pipeline_auto_archive_days: agencySettings.pipeline_auto_archive_days,
+          daily_report_time: agencySettings.daily_report_time,
+          celebration_threshold: agencySettings.celebration_threshold,
+          default_leaderboard_metric: agencySettings.default_leaderboard_metric,
+          // Corporate Targets (OBA carrier-agnostic compliance) - gates whether the VC and
+          // Travel widgets render anywhere in the app. Requires
+          // scripts/add_corporate_targets_toggles.sql to have been run against this database —
+          // if that migration hasn't been applied yet, Supabase will reject this whole update
+          // with a "column not found in schema cache" error (see the try/catch isolation note
+          // above for why that no longer takes team member saves down with it).
+          target_vc_active: agencySettings.target_vc_active,
+          target_travel_active: agencySettings.target_travel_active
+        }).eq('id', agencySettings.id);
+
+        if (agencyErr) throw new Error(agencyErr.message);
+      } catch (error: any) {
+        console.error('[Save Team Targets] agency update failed', error);
+        agencyError = error.message;
       }
+    }
 
-      for (const member of team) {
-        const m: any = member;
+    await Promise.all(team.map(async (member: any) => {
+      const m: any = member;
+      try {
         const { error: profileErr } = await (supabase.from('profiles') as any).update({
             role: m.role,
             office_id: m.office_id,
@@ -1815,13 +1836,22 @@ export default function Home() {
             annual_target_life_premium: m.annual_target_life_premium,
             monthly_base_salary: m.monthly_base_salary
         }).eq('id', m.id);
-        
-        if (profileErr) throw new Error("Profile Settings Error: " + profileErr.message);
+
+        if (profileErr) throw new Error(profileErr.message);
+      } catch (error: any) {
+        console.error(`[Save Team Targets] profile update failed for ${m.first_name} ${m.last_name} (${m.id})`, error);
+        memberErrors.push(`${m.first_name} ${m.last_name}: ${error.message}`);
       }
+    }));
+
+    if (!agencyError && memberErrors.length === 0) {
       showToast("Agency Targets & Permissions updated successfully!");
-    } catch (error: any) { 
-      console.error(error); 
-      showToast("Save Failed: " + error.message, "error"); 
+    } else if (agencyError && memberErrors.length === 0) {
+      showToast(`Team member targets saved, but Agency Settings failed: ${agencyError}`, "error");
+    } else if (!agencyError && memberErrors.length > 0) {
+      showToast(`Agency Settings saved, but ${memberErrors.length} team member(s) failed: ${memberErrors.join('; ')}`, "error");
+    } else {
+      showToast(`Save Failed — Agency Settings: ${agencyError}. Team members: ${memberErrors.join('; ')}`, "error");
     }
   };
 
