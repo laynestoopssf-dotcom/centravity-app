@@ -7,6 +7,7 @@ import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { resolveCommissionRates } from "../../utils/commissionRates";
 import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
+import { enrichCustomTargets, type CustomTargetRow } from "../../utils/customTargets";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import { 
@@ -79,7 +80,7 @@ const GlobalStyles = () => (
 );
 
 type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; };
-type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates; global_close_rate?: number; stripe_customer_id?: string | null; stripe_subscription_id?: string | null; subscription_status?: string | null; plan_id?: string | null;};
+type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates; global_close_rate?: number; stripe_customer_id?: string | null; stripe_subscription_id?: string | null; subscription_status?: string | null; plan_id?: string | null; target_vc_active?: boolean; target_travel_active?: boolean;};
 type Policy = { id: string; user_id: string; customer_name: string; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
 type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
@@ -215,6 +216,15 @@ export default function Home() {
   const [agencyActivities, setAgencyActivities] = useState<any[]>([]);
   const [agencyPolicies, setAgencyPolicies] = useState<any[]>([]);
   const [expandedProducerId, setExpandedProducerId] = useState<string | null>(null);
+
+  // Custom Corporate Targets (Settings -> Corporate Targets -> Custom Target Builder).
+  // customTargets = raw builder rows. The activities/policies below are a lean,
+  // PII-free (no customer_name/user_id) agency-wide YTD fetch used only to compute
+  // progress - loaded for every role (not gated to owner/manager) since Scoreboard-routed
+  // targets must work for producers too.
+  const [customTargets, setCustomTargets] = useState<CustomTargetRow[]>([]);
+  const [customTargetActivities, setCustomTargetActivities] = useState<any[]>([]);
+  const [customTargetPolicies, setCustomTargetPolicies] = useState<any[]>([]);
 
   const [isLoggingModalOpen, setIsLoggingModalOpen] = useState(false);
   // Guards against an accidental double-click firing submitLogActivity twice in a row (two
@@ -444,6 +454,10 @@ export default function Home() {
     // left team/comp-plan bindings empty and hid member targets.
     fetchTeam(data.agency_id);
     fetchArchivedTeam(data.agency_id);
+    // Custom Targets load for every role (not gated to owner/manager) — a
+    // Scoreboard-routed target must be visible to producers too.
+    fetchCustomTargets(data.agency_id);
+    fetchCustomTargetProgressData(data.agency_id);
 
     if (data.role === 'owner' || data.role === 'manager') {
       fetchAgencyOverview(data.agency_id);
@@ -975,6 +989,76 @@ export default function Home() {
 
     setAgencyActivities(activities || []);
     setAgencyPolicies(policies || []);
+  };
+
+  const fetchCustomTargets = async (agencyId: string) => {
+    const { data, error } = await supabase
+      .from('agency_custom_targets')
+      .select('*')
+      .eq('agency_id', agencyId)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
+    if (error) { console.error('[Custom Targets] fetch failed', error); return; }
+    setCustomTargets((data as CustomTargetRow[]) || []);
+  };
+
+  // Deliberately selects only the columns needed for aggregation (no customer_name,
+  // no user_id) so Scoreboard-routed custom targets can be computed for every role,
+  // including producers, without widening their access to individually-attributed data.
+  const fetchCustomTargetProgressData = async (agencyId: string) => {
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    const [{ data: acts, error: actErr }, { data: pols, error: polErr }] = await Promise.all([
+      supabase.from('activities').select('activity_type, logged_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
+      supabase.from('policies').select('product_line, status, premium_amount, logged_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
+    ]);
+    if (actErr) console.error('[Custom Targets] activities fetch failed', actErr);
+    if (polErr) console.error('[Custom Targets] policies fetch failed', polErr);
+    setCustomTargetActivities(acts || []);
+    setCustomTargetPolicies(pols || []);
+  };
+
+  const handleSaveCustomTarget = async (target: Partial<CustomTargetRow> & { id?: string }) => {
+    try {
+      if (!profile) return;
+      const payload = {
+        agency_id: profile.agency_id,
+        office_id: target.office_id || null,
+        name: target.name,
+        metric_type: target.metric_type,
+        period: target.period,
+        start_date: target.period === 'custom' ? (target.start_date || null) : null,
+        end_date: target.period === 'custom' ? (target.end_date || null) : null,
+        target_value: target.target_value,
+        display_location: target.display_location,
+        tiers: target.tiers || [],
+        feeds_into_target_id: target.feeds_into_target_id || null,
+        active: target.active ?? true,
+      };
+      if (target.id) {
+        const { error } = await supabase.from('agency_custom_targets').update(payload).eq('id', target.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('agency_custom_targets').insert(payload);
+        if (error) throw error;
+      }
+      await fetchCustomTargets(profile.agency_id);
+      showToast("Custom target saved!", "success");
+    } catch (err: any) {
+      console.error(err);
+      showToast("Failed to save custom target: " + err.message, "error");
+    }
+  };
+
+  const handleDeleteCustomTarget = async (targetId: string) => {
+    try {
+      const { error } = await supabase.from('agency_custom_targets').delete().eq('id', targetId);
+      if (error) throw error;
+      setCustomTargets(prev => prev.filter(t => t.id !== targetId));
+      showToast("Custom target deleted.", "success");
+    } catch (err: any) {
+      console.error(err);
+      showToast("Failed to delete custom target: " + err.message, "error");
+    }
   };
 
   const fetchPipeline = async (userId: string, agencyId: string) => {
@@ -1696,7 +1780,12 @@ export default function Home() {
            pipeline_auto_archive_days: agencySettings.pipeline_auto_archive_days,
            daily_report_time: agencySettings.daily_report_time,
            celebration_threshold: agencySettings.celebration_threshold,
-           default_leaderboard_metric: agencySettings.default_leaderboard_metric
+           default_leaderboard_metric: agencySettings.default_leaderboard_metric,
+           // Corporate Targets (OBA carrier-agnostic compliance) - gates whether the VC and
+           // Travel widgets render anywhere in the app. See
+           // scripts/add_corporate_targets_toggles.sql for the column migration.
+           target_vc_active: agencySettings.target_vc_active,
+           target_travel_active: agencySettings.target_travel_active
          }).eq('id', agencySettings.id);
 
          if (agencyErr) throw new Error("Agency Settings Error: " + agencyErr.message);
@@ -3327,6 +3416,23 @@ export default function Home() {
     return { global: globalRev, locations: locationsRev };
   }, [filteredPolicies, agencyPolicies, offices, team, agencySettings, ytdOverviewData, globalOfficeFilter, canViewRevenueVc]);
 
+  // Custom Corporate Targets — enrich the raw builder rows with live progress, then split
+  // by display_location so the Scoreboard only ever sees the team-visible set and the
+  // Revenue tab only ever sees the owner-only set (routing lives in the DB column itself).
+  const enrichedCustomTargets = useMemo(() => {
+    const linesDict = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
+    return enrichCustomTargets(customTargets, customTargetActivities, customTargetPolicies, linesDict, offices);
+  }, [customTargets, customTargetActivities, customTargetPolicies, agencySettings, offices]);
+
+  const scoreboardCustomTargets = useMemo(
+    () => enrichedCustomTargets.filter(t => t.display_location === 'scoreboard'),
+    [enrichedCustomTargets]
+  );
+  const revenueCustomTargets = useMemo(
+    () => enrichedCustomTargets.filter(t => t.display_location === 'revenue'),
+    [enrichedCustomTargets]
+  );
+
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Centravity HQ...</div>;
 
   // Signed in, but fetchProfile hit a real Supabase error (network/RLS/etc) — NOT a
@@ -3616,6 +3722,7 @@ export default function Home() {
           selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} 
           agencySettings={agencySettings} agencyStats={agencyStats}
           offices={offices} selectedOffice={selectedOffice} setSelectedOffice={setSelectedOffice} 
+          customTargets={scoreboardCustomTargets}
         />}
         
         {activeTab === 'performance' && <MyPerformanceTab 
@@ -3640,8 +3747,8 @@ export default function Home() {
         {activeTab === 'agency' && canViewAgencyMtd && agencyOverviewData && <AgencyOverviewTab agencyOverviewData={agencyOverviewData} expandedProducerId={expandedProducerId} setExpandedProducerId={setExpandedProducerId} whatIfCommission={whatIfCommission} setWhatIfCommission={setWhatIfCommission} generateCoachingInsight={generateCoachingInsight} isGeneratingAi={isGeneratingAi} aiInsights={aiInsights} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} agencySettings={agencySettings} dateFilterMode={dateFilterMode} setDateFilterMode={setDateFilterMode} />}
         {activeTab === 'life' && canViewLifeModule && lifeOverviewData && <LifeTab lifeOverviewData={lifeOverviewData} team={team} updatePolicyStatus={updatePolicyStatus} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} />}
         
-        {activeTab === 'ytd' && canViewYtdProjections && ytdOverviewData && <YtdTab ytdOverviewData={ytdOverviewData} />}
-        {activeTab === 'revenue' && canViewRevenueVc && ytdOverviewData && revenueOverviewData && <RevenueTab revenueOverviewData={revenueOverviewData} ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} primaryOffice={offices[0] || null} />}
+        {activeTab === 'ytd' && canViewYtdProjections && ytdOverviewData && <YtdTab ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} />}
+        {activeTab === 'revenue' && canViewRevenueVc && ytdOverviewData && revenueOverviewData && <RevenueTab revenueOverviewData={revenueOverviewData} ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} primaryOffice={offices[0] || null} customTargets={revenueCustomTargets} />}
         
         {activeTab === 'settings' && canManageSettings && (
           <SettingsTab 
@@ -3652,6 +3759,7 @@ export default function Home() {
             handleUpdateRole={handleUpdateRole} showToast={showToast} 
             handleSaveOfficeGoals={handleSaveOfficeGoals}
             archivedTeam={archivedTeam} handleArchiveTeamMember={handleArchiveTeamMember} handleReactivateTeamMember={handleReactivateTeamMember}
+            customTargets={customTargets} handleSaveCustomTarget={handleSaveCustomTarget} handleDeleteCustomTarget={handleDeleteCustomTarget}
             
             bulkProducerId={bulkProducerId} setBulkProducerId={setBulkProducerId}
             bulkMonth={bulkMonth} setBulkMonth={setBulkMonth}

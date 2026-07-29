@@ -7,7 +7,7 @@ const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as con
 
 export default function DashboardTab({ 
   profile, team, stats, chartData, pipeline, commissionData, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
-  offices, selectedOffice, setSelectedOffice
+  offices, selectedOffice, setSelectedOffice, customTargets
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
   const [editPremium, setEditPremium] = useState<string>("");
@@ -621,6 +621,53 @@ export default function DashboardTab({
            )}
         </div>
       </div>
+
+      {/* CUSTOM CORPORATE TARGETS (Settings -> Corporate Targets -> Custom Target Builder) -
+          only the subset routed to display_location = 'scoreboard' ever reaches this component;
+          owner-only targets live on the Revenue tab instead. */}
+      {customTargets && customTargets.length > 0 && (
+        <div className="mt-6">
+          <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-3 flex items-center gap-2"><Target size={14}/> Corporate Targets</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {customTargets.map((t: any) => (
+              <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h4 className="font-bold text-gray-900 text-sm">{t.name}</h4>
+                    <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mt-0.5">{t.metricLabel} • {t.periodLabel} • {t.officeName}</p>
+                  </div>
+                  {t.pct >= 100 && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-2 py-1 rounded-full shrink-0">Hit!</span>}
+                </div>
+                <div className="flex justify-between items-end mb-2">
+                  <span className="text-2xl font-black text-gray-900">{t.isCurrency ? `$${Math.round(t.current).toLocaleString()}` : Math.round(t.current).toLocaleString()}</span>
+                  <span className="text-xs font-bold text-gray-400">/ {t.isCurrency ? `$${Number(t.target_value).toLocaleString()}` : Number(t.target_value).toLocaleString()}</span>
+                </div>
+                <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-1000 ${t.pct >= 100 ? 'bg-green-500' : 'bg-indigo-500'}`} style={{ width: `${t.pct}%` }} />
+                </div>
+                {t.earnedCredits > 0 && (
+                  <p className="text-[10px] font-bold text-cyan-600 mt-2">Base {t.isCurrency ? `$${Math.round(t.raw).toLocaleString()}` : Math.round(t.raw).toLocaleString()} + {t.isCurrency ? `$${Math.round(t.earnedCredits).toLocaleString()}` : Math.round(t.earnedCredits).toLocaleString()} bonus credits from linked promos</p>
+                )}
+                {Array.isArray(t.tiers) && t.tiers.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2.5 border-t border-gray-50">
+                    {t.tiers.map((tier: any) => {
+                      const hit = (t.tiersAchieved || []).some((a: any) => a.id === tier.id);
+                      return (
+                        <span key={tier.id} className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full ${hit ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                          {hit ? '✓ ' : ''}{tier.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {t.feedsIntoName && (
+                  <p className="text-[10px] font-bold text-purple-500 mt-2 flex items-center gap-1">→ Feeds into &quot;{t.feedsIntoName}&quot;</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* DAILY PRODUCTION ROSTER - full-width, sits below the Activity/Conversion/What-If/Live Goal
           grid section above. Visible to owners/managers (or an equivalent custom "office manager"

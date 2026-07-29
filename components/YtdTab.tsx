@@ -1,7 +1,11 @@
 import React from "react";
 import { Mountain, Plane, Luggage, Trophy, AlertCircle, TrendingUp, Target, Briefcase } from "lucide-react";
 
-export default function YtdTab({ ytdOverviewData }: any) {
+export default function YtdTab({ ytdOverviewData, agencySettings }: any) {
+  // Corporate Targets toggle (Settings -> Corporate Targets, agencies.target_travel_active) -
+  // defaults off for carrier-agnostic compliance; an owner opts in explicitly.
+  const travelActive = !!agencySettings?.target_travel_active;
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300 pb-12">
       <header>
@@ -9,8 +13,15 @@ export default function YtdTab({ ytdOverviewData }: any) {
         <p className="text-gray-500 mt-1">Day {ytdOverviewData.global.daysPassed} of {ytdOverviewData.global.daysInYear}. Tracking Year-to-Date net run rates against corporate benchmarks.</p>
       </header>
 
+      {!travelActive && (
+        <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-6 text-center">
+          <p className="text-sm font-semibold text-gray-400">Travel Target Tracking is currently disabled for this agency.</p>
+          <p className="text-xs text-gray-400 mt-1">An owner can turn it on under Settings → Corporate Targets.</p>
+        </div>
+      )}
+
       {/* MAP OVER LOCATIONS FOR TRAVEL QUALIFIER */}
-      {ytdOverviewData.locations.map((locData: any, idx: number) => (
+      {travelActive && ytdOverviewData.locations.map((locData: any, idx: number) => (
         <div key={`travel-${idx}`} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 overflow-hidden relative mb-8">
           <div className="absolute top-0 right-0 bg-blue-50 w-64 h-full skew-x-12 translate-x-10 z-0"></div>
           <div className="relative z-10 flex flex-col lg:flex-row gap-10">
@@ -71,11 +82,13 @@ export default function YtdTab({ ytdOverviewData }: any) {
               <div><span className="block text-4xl font-black text-white">${ytdOverviewData.global.totals.ytdLifePremium.toLocaleString()}</span><span className="text-sm text-gray-400">Total Premium</span></div>
             </div>
           </div>
+          {travelActive && (
           <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-600">
             <div className="flex justify-between items-center mb-2"><span className="text-gray-300 font-bold text-sm flex items-center gap-2"><Target size={16}/> Annual Trip Qualifier</span><span className="text-white font-black text-lg">{ytdOverviewData.global.targets.lifeApps} Apps</span></div>
             <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden mb-2"><div className={`h-full rounded-full transition-all duration-1000 ${ytdOverviewData.global.netYtdLifeApps >= ytdOverviewData.global.targets.lifeApps ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${Math.min(100, (ytdOverviewData.global.netYtdLifeApps / (ytdOverviewData.global.targets.lifeApps || 1)) * 100)}%` }} /></div>
             <p className="text-xs text-gray-400 text-right">Net Run Rate: <strong>{ytdOverviewData.global.runRateLifeApps} Apps / yr</strong></p>
           </div>
+          )}
         </div>
       </div>
 

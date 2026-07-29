@@ -502,6 +502,9 @@ export default function RevealPage() {
             </div>
           </div>
 
+          {/* Corporate Targets toggle (Settings -> Corporate Targets, agencies.target_vc_active) -
+              default off for carrier-agnostic compliance. */}
+          {agencySettings?.target_vc_active && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center text-center">
             <h3 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider">Current VC Rate</h3>
             <div className="text-5xl font-black text-gray-900 mb-2">{health.vcRate}%</div>
@@ -525,6 +528,7 @@ export default function RevealPage() {
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* YTD PRODUCTION GRID */}
@@ -591,6 +595,7 @@ export default function RevealPage() {
         </div>
 
         {/* VC PACING NOTE */}
+        {agencySettings?.target_vc_active && (
         <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-lg p-8 text-white">
           <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
             <RefreshCw size={22} className="text-blue-400" /> Your VC Engine Is Armed
@@ -601,6 +606,7 @@ export default function RevealPage() {
             dashboard to watch it move in real time as your team logs production.
           </p>
         </div>
+        )}
 
         <div className="flex justify-center pt-2">
           <button

@@ -848,7 +848,17 @@ export default function CockpitPage() {
           {/* LEFT COLUMN: VC Tier Sniper stacked above the Travel & Incentive Qualifier, so this
               column's total height balances against the taller Cash Flow Architect on the right. */}
           <div className="flex flex-col gap-6">
+          {/* Corporate Targets toggles (Settings -> Corporate Targets, agencies.target_vc_active /
+              target_travel_active) - default off for carrier-agnostic compliance. */}
+          {!agencySettings?.target_vc_active && !agencySettings?.target_travel_active && (
+            <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-10 text-center">
+              <p className="text-sm font-semibold text-slate-500">VC and Travel Target Tracking are currently disabled for this agency.</p>
+              <p className="text-xs text-slate-600 mt-1">An owner can turn them on under Settings → Corporate Targets.</p>
+            </div>
+          )}
+
           {/* ============================= CARD 1: VC TIER SNIPER ============================= */}
+          {agencySettings?.target_vc_active && (
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl border border-cyan-900/50 shadow-[0_0_40px_-15px_rgba(34,211,238,0.3)] p-7">
             <div className="flex items-center gap-3 mb-5">
               <div className="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl">
@@ -949,8 +959,10 @@ export default function CockpitPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* ============================= CARD 1B: TRAVEL & INCENTIVE QUALIFIER ============================= */}
+          {agencySettings?.target_travel_active && (
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl border border-amber-900/50 shadow-[0_0_40px_-15px_rgba(245,158,11,0.3)] p-7">
             <div className="flex items-center justify-between gap-3 mb-5">
               <div className="flex items-center gap-3">
@@ -1033,6 +1045,7 @@ export default function CockpitPage() {
               </>
             )}
           </div>
+          )}
           </div>
 
           {/* ============================= CARD 2: CASH FLOW ARCHITECT ============================= */}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse, CreditCard } from 'lucide-react';
+import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse, CreditCard, ToggleLeft } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { DEFAULT_COMMISSION_RATES, resolveCommissionRates, type LifeSubType, type HealthSubType } from '../utils/commissionRates';
 import { createCheckoutSession } from '../app/actions/billing';
+import { CUSTOM_TARGET_METRICS, CUSTOM_TARGET_PERIODS, getMetricDef, type CustomTargetRow } from '../utils/customTargets';
 
 // Mirrors Stripe's own Subscription.status enum (see
 // app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
@@ -64,6 +65,20 @@ const DEFAULT_ROLES = [
   { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_ytd_projections: false, view_revenue_vc: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } }
 ];
 
+// `date` inputs need a plain local "YYYY-MM-DD" string. Reading that back out of a stored
+// ISO timestamp via `.toISOString().slice(0, 10)` extracts the UTC calendar date instead of
+// the local one - for any timezone behind UTC (e.g. all US zones), a local end-of-day
+// timestamp (23:59:59) rolls into the *next* UTC day, so the input would silently redisplay
+// one day later than what was typed. Mirrors the todayDateStr() local-component fix already
+// applied to activity logging for the same reason - see app/dashboard/page.tsx.
+const toDateInputValue = (iso: string | null | undefined): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 const DEFAULT_LINES = [
   { name: 'Auto', parent: 'Auto' },
   { name: 'Fire', parent: 'Fire' },
@@ -78,6 +93,7 @@ export default function SettingsTab({
   handleSaveCompPlan, handleDeleteCompPlan, 
   agencySettings, setAgencySettings, handleSaveTeamTargets, handleUpdateRole, showToast,
   handleSaveOfficeGoals, 
+  customTargets, handleSaveCustomTarget, handleDeleteCustomTarget,
   
   bulkProducerId, setBulkProducerId, bulkMonth, setBulkMonth,
   bulkTouches, setBulkTouches, bulkData, setBulkData,
@@ -89,7 +105,9 @@ export default function SettingsTab({
   const [newProductLine, setNewProductLine] = useState(""); 
   const [newProductParent, setNewProductParent] = useState("Auto"); 
   const [editingPlan, setEditingPlan] = useState<any>(null);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates' | 'conversion_metrics' | 'billing'>('agency');
+  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates' | 'conversion_metrics' | 'billing' | 'corporate_targets'>('agency');
+  const [editingCustomTarget, setEditingCustomTarget] = useState<Partial<CustomTargetRow> | null>(null);
+  const [customTargetPendingDelete, setCustomTargetPendingDelete] = useState<CustomTargetRow | null>(null);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
 
   // Owner-only mirror of app/actions/stripeAdmin.ts's resolveBillingContext
@@ -398,6 +416,7 @@ export default function SettingsTab({
         <button onClick={() => setActiveSettingsSection('commission_rates')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'commission_rates' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Percent size={16}/> Life/Health Commission Rates</button>
         <button onClick={() => setActiveSettingsSection('conversion_metrics')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'conversion_metrics' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Target size={16}/> Conversion Metrics</button>
         <button onClick={() => setActiveSettingsSection('promotions')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'promotions' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Trophy size={16}/> Corporate Promotions</button>
+        <button onClick={() => setActiveSettingsSection('corporate_targets')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'corporate_targets' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><ToggleLeft size={16}/> Corporate Targets</button>
         <button onClick={() => setActiveSettingsSection('locations')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'locations' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><MapPin size={16}/> Office Locations</button>
         <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DownloadCloud size={16}/> Import Historical Data</button>
         {canManageBilling && (
@@ -743,6 +762,373 @@ export default function SettingsTab({
                    </div>
                 </div>
              </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- SECTION: CORPORATE TARGETS (OBA carrier-agnostic compliance toggles) --- */}
+      {activeSettingsSection === 'corporate_targets' && agencySettings && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+              <div className="p-2 bg-slate-100 text-slate-600 rounded-lg"><ToggleLeft size={20}/></div>
+              <div>
+                <h3 className="font-bold text-gray-900">Corporate Targets</h3>
+                <p className="text-xs text-gray-500">Carrier-agnostic by default - turn on only the specific target features your agency wants to use.</p>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between p-4 bg-cyan-50/50 border border-cyan-100 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-bold text-cyan-900">Enable VC Target Tracking</h4>
+                  <p className="text-xs text-cyan-700 mt-0.5 max-w-xl">Shows the Variable Comp widgets: the Revenue &amp; VC tab&apos;s VC Rate/Pacing Scorecard, the Cockpit&apos;s VC Tier Sniper, and the onboarding Reveal page&apos;s VC cards.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={agencySettings.target_vc_active || false}
+                    onChange={e => setAgencySettings({ ...agencySettings, target_vc_active: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-amber-50/50 border border-amber-100 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-bold text-amber-900">Enable Travel Target Tracking</h4>
+                  <p className="text-xs text-amber-700 mt-0.5 max-w-xl">Shows the Travel/Incentive widgets: the YTD Projections tab&apos;s Travel Qualifier and Annual Trip Qualifier cards, and the Cockpit&apos;s Travel &amp; Incentive Qualifier.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={agencySettings.target_travel_active || false}
+                    onChange={e => setAgencySettings({ ...agencySettings, target_travel_active: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
+
+              <p className="text-[11px] text-gray-400 pt-2">Both default to off. The underlying targets/benchmarks you&apos;ve set under Corporate Promotions and Office Locations are preserved either way - these switches only control whether their widgets render.</p>
+            </div>
+          </div>
+
+          {/* --- CUSTOM TARGET BUILDER --- */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Target size={20}/></div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Custom Target Builder</h3>
+                  <p className="text-xs text-gray-500">Define your own goals on top of real tracked metrics, and route each one to the team-visible Scoreboard or the owner-only Revenue tab.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingCustomTarget({ name: '', metric_type: 'touchpoints', period: 'monthly', start_date: null, end_date: null, target_value: 0, office_id: null, display_location: 'scoreboard', tiers: [], feeds_into_target_id: null, active: true })}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 flex items-center gap-2 text-sm shrink-0"
+              >
+                <Plus size={16}/> Add Custom Target
+              </button>
+            </div>
+            <div className="p-6 space-y-3">
+              {(!customTargets || customTargets.length === 0) && (
+                <p className="text-sm text-gray-400">No custom targets yet. Click &quot;Add Custom Target&quot; to build your first one.</p>
+              )}
+              {(customTargets || []).map((t: CustomTargetRow) => {
+                const metricDef = getMetricDef(t.metric_type);
+                const periodLabel = t.period === 'custom'
+                  ? `${t.start_date ? new Date(t.start_date).toLocaleDateString() : '?'} - ${t.end_date ? new Date(t.end_date).toLocaleDateString() : '?'}`
+                  : CUSTOM_TARGET_PERIODS.find(p => p.value === t.period)?.label || t.period;
+                const officeName = t.office_id ? (offices.find((o: any) => o.id === t.office_id)?.name || 'Unknown Office') : 'All Locations';
+                const tierCount = Array.isArray(t.tiers) ? t.tiers.length : 0;
+                const feedsIntoName = t.feeds_into_target_id ? (customTargets || []).find((x: CustomTargetRow) => x.id === t.feeds_into_target_id)?.name : null;
+                return (
+                  <div key={t.id} className={`flex items-center justify-between p-4 border rounded-xl transition-colors ${t.active === false ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 hover:bg-gray-50'}`}>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h4 className="font-bold text-gray-900">{t.name}</h4>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${t.display_location === 'scoreboard' ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'}`}>
+                          {t.display_location === 'scoreboard' ? 'Scoreboard (Team)' : 'Revenue Tab (Owner)'}
+                        </span>
+                        {tierCount > 0 && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{tierCount} Tier{tierCount === 1 ? '' : 's'}</span>}
+                        {feedsIntoName && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700">→ Feeds {feedsIntoName}</span>}
+                        {t.active === false && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Inactive</span>}
+                      </div>
+                      <p className="text-xs text-gray-500">{metricDef?.label || t.metric_type} • Target: {Number(t.target_value).toLocaleString()} • {periodLabel} • {officeName}</p>
+                    </div>
+                    <div className="flex gap-3 shrink-0">
+                      <button onClick={() => setEditingCustomTarget(t)} className="text-blue-600 hover:text-blue-800 font-bold text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Edit</button>
+                      <button onClick={() => setCustomTargetPendingDelete(t)} className="text-red-400 hover:text-red-600 p-2 bg-red-50 rounded-lg"><Trash2 size={16}/></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: Custom Target Builder (Add/Edit) --- */}
+      {editingCustomTarget && (() => {
+        const availablePeriods = CUSTOM_TARGET_PERIODS.filter(p => getMetricDef(editingCustomTarget.metric_type || '')?.periods.includes(p.value));
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-xl"><Target size={22}/></div>
+                <h3 className="text-lg font-bold text-gray-900">{editingCustomTarget.id ? 'Edit Custom Target' : 'New Custom Target'}</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Target Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Q3 Commercial Push"
+                    value={editingCustomTarget.name || ''}
+                    onChange={e => setEditingCustomTarget({ ...editingCustomTarget, name: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Metric</label>
+                  <select
+                    value={editingCustomTarget.metric_type || 'touchpoints'}
+                    onChange={e => {
+                      const def = getMetricDef(e.target.value);
+                      const nextPeriod = def?.periods.includes(editingCustomTarget.period as any) ? editingCustomTarget.period : (def?.periods[0] || 'monthly');
+                      setEditingCustomTarget({ ...editingCustomTarget, metric_type: e.target.value, period: nextPeriod });
+                    }}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                  >
+                    {CUSTOM_TARGET_METRICS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Timeframe</label>
+                    <select
+                      value={editingCustomTarget.period || 'monthly'}
+                      onChange={e => setEditingCustomTarget({ ...editingCustomTarget, period: e.target.value as any })}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                    >
+                      {availablePeriods.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Target Value</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editingCustomTarget.target_value ?? 0}
+                      onChange={e => setEditingCustomTarget({ ...editingCustomTarget, target_value: Number(e.target.value) })}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                {editingCustomTarget.period === 'custom' && (
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+                    <div>
+                      <label className="block text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        value={toDateInputValue(editingCustomTarget.start_date)}
+                        onChange={e => setEditingCustomTarget({ ...editingCustomTarget, start_date: e.target.value ? new Date(`${e.target.value}T00:00:00`).toISOString() : null })}
+                        className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1">End Date</label>
+                      <input
+                        type="date"
+                        value={toDateInputValue(editingCustomTarget.end_date)}
+                        onChange={e => setEditingCustomTarget({ ...editingCustomTarget, end_date: e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null })}
+                        className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Location Scope</label>
+                  <select
+                    value={editingCustomTarget.office_id || ''}
+                    onChange={e => setEditingCustomTarget({ ...editingCustomTarget, office_id: e.target.value || null })}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                  >
+                    <option value="">All Locations (Combined)</option>
+                    {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+
+                {/* --- TIER BUILDER --- */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">Milestone Tiers (Optional)</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tiers = Array.isArray(editingCustomTarget.tiers) ? editingCustomTarget.tiers : [];
+                        setEditingCustomTarget({ ...editingCustomTarget, tiers: [...tiers, { id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Date.now(), name: `Tier ${tiers.length + 1}`, threshold_metric: 0, reward_credit_value: 0 }] });
+                      }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
+                    >
+                      <Plus size={14}/> Add Tier
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mb-2">Each tier fires once this target&apos;s own metric hits its threshold. The reward credit value only does something if this target &quot;feeds into&quot; another one below.</p>
+                  {(!editingCustomTarget.tiers || editingCustomTarget.tiers.length === 0) ? (
+                    <p className="text-xs text-gray-400 italic p-3 bg-gray-50 rounded-lg border border-dashed border-gray-200">No tiers - this is a simple single-threshold target.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {editingCustomTarget.tiers.map((tier: any, idx: number) => (
+                        <div key={tier.id ?? idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+                          <input
+                            type="text"
+                            placeholder="Tier name"
+                            value={tier.name || ''}
+                            onChange={e => {
+                              const tiers = [...(editingCustomTarget.tiers || [])];
+                              tiers[idx] = { ...tiers[idx], name: e.target.value };
+                              setEditingCustomTarget({ ...editingCustomTarget, tiers });
+                            }}
+                            className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <input
+                              type="number"
+                              placeholder="Threshold"
+                              value={tier.threshold_metric ?? 0}
+                              onChange={e => {
+                                const tiers = [...(editingCustomTarget.tiers || [])];
+                                tiers[idx] = { ...tiers[idx], threshold_metric: Number(e.target.value) };
+                                setEditingCustomTarget({ ...editingCustomTarget, tiers });
+                              }}
+                              className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <p className="text-[9px] text-gray-400 mt-0.5">Threshold to hit</p>
+                          </div>
+                          <div>
+                            <input
+                              type="number"
+                              placeholder="Reward credits"
+                              value={tier.reward_credit_value ?? 0}
+                              onChange={e => {
+                                const tiers = [...(editingCustomTarget.tiers || [])];
+                                tiers[idx] = { ...tiers[idx], reward_credit_value: Number(e.target.value) };
+                                setEditingCustomTarget({ ...editingCustomTarget, tiers });
+                              }}
+                              className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <p className="text-[9px] text-gray-400 mt-0.5">Bonus credit value</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const tiers = (editingCustomTarget.tiers || []).filter((_: any, i: number) => i !== idx);
+                              setEditingCustomTarget({ ...editingCustomTarget, tiers });
+                            }}
+                            className="text-red-400 hover:text-red-600 p-2 bg-red-50 rounded-lg shrink-0"
+                          >
+                            <Trash2 size={14}/>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* --- FEEDS INTO (CASCADING LINK) --- */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Feeds Into (Optional)</label>
+                  <select
+                    value={editingCustomTarget.feeds_into_target_id || ''}
+                    onChange={e => setEditingCustomTarget({ ...editingCustomTarget, feeds_into_target_id: e.target.value || null })}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                  >
+                    <option value="">Standalone (doesn&apos;t feed anywhere)</option>
+                    {(customTargets || [])
+                      .filter((t: CustomTargetRow) => t.id && t.id !== editingCustomTarget.id && t.feeds_into_target_id !== editingCustomTarget.id)
+                      .map((t: CustomTargetRow) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  <p className="text-[11px] text-gray-400 mt-1">When this mini-promo&apos;s tiers above are achieved, their reward credits are added on top of the selected master target&apos;s progress.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Display Location</label>
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${editingCustomTarget.display_location === 'scoreboard' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <input type="radio" name="display_location" checked={editingCustomTarget.display_location === 'scoreboard'} onChange={() => setEditingCustomTarget({ ...editingCustomTarget, display_location: 'scoreboard' })} className="w-4 h-4 text-emerald-600" />
+                      <div>
+                        <p className="font-bold text-sm text-gray-900">Scoreboard (Team Visible)</p>
+                        <p className="text-xs text-gray-500">Shown to the whole team on the Dashboard Scoreboard tab.</p>
+                      </div>
+                    </label>
+                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${editingCustomTarget.display_location === 'revenue' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <input type="radio" name="display_location" checked={editingCustomTarget.display_location === 'revenue'} onChange={() => setEditingCustomTarget({ ...editingCustomTarget, display_location: 'revenue' })} className="w-4 h-4 text-purple-600" />
+                      <div>
+                        <p className="font-bold text-sm text-gray-900">Revenue Tab (Owner Only)</p>
+                        <p className="text-xs text-gray-500">Only visible on the Revenue &amp; VC tab, gated by the same permission as the rest of that tab.</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <input
+                    type="checkbox"
+                    id="custom-target-active"
+                    checked={editingCustomTarget.active ?? true}
+                    onChange={e => setEditingCustomTarget({ ...editingCustomTarget, active: e.target.checked })}
+                    className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
+                  />
+                  <label htmlFor="custom-target-active" className="text-sm font-bold text-gray-700 cursor-pointer">Active (uncheck to hide without deleting)</label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                <button onClick={() => setEditingCustomTarget(null)} className="text-sm font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Cancel</button>
+                <button
+                  onClick={async () => {
+                    if (!editingCustomTarget.name?.trim()) { showToast("Give the target a name first.", "error"); return; }
+                    await handleSaveCustomTarget(editingCustomTarget);
+                    setEditingCustomTarget(null);
+                  }}
+                  className="text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 rounded-lg transition-colors"
+                >
+                  Save Target
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- MODAL: Confirm Delete Custom Target --- */}
+      {customTargetPendingDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2.5 bg-red-100 text-red-600 rounded-xl"><AlertCircle size={22}/></div>
+              <h3 className="text-lg font-bold text-gray-900">Delete Custom Target?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete <span className="font-bold text-gray-900">{customTargetPendingDelete.name}</span>? This can&apos;t be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setCustomTargetPendingDelete(null)} className="text-sm font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Cancel</button>
+              <button
+                type="button"
+                onClick={() => { handleDeleteCustomTarget(customTargetPendingDelete.id); setCustomTargetPendingDelete(null); }}
+                className="text-sm font-bold text-white bg-red-600 hover:bg-red-700 px-5 py-2.5 rounded-lg transition-colors"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
