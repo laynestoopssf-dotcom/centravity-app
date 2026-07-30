@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import OnboardingWizard from "../../components/OnboardingWizard";
+import { verifyWaitlistInvite } from "../actions/waitlist";
 
 // =============================================================================
 // Protected route: /onboarding
@@ -32,8 +34,20 @@ import OnboardingWizard from "../../components/OnboardingWizard";
 // shipped for "/" — inconsistent, and a live instance of the same race.
 // =============================================================================
 
-export default function OnboardingPage() {
+// The "/signup" invite catcher (app/signup/page.tsx) forwards its verified
+// `?token=` here after account creation so the wizard can pre-fill the owner
+// name + agency name it already collected on the waitlist, instead of making
+// someone retype what they already told an admin. Purely a convenience: if
+// the token is missing/expired/already burned by the time this runs, this
+// just fails silently and the wizard renders with its normal blank fields —
+// verifyWaitlistInvite() is the same read used by "/signup" itself, so it's
+// still status:'approved'-gated and never exposes the waitlist table itself.
+function OnboardingGate() {
+  const searchParams = useSearchParams();
+  const token = (searchParams.get("token") || "").trim();
+
   const [status, setStatus] = useState<"checking" | "ready">("checking");
+  const [prefill, setPrefill] = useState<{ ownerName: string; agencyName: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -94,6 +108,24 @@ export default function OnboardingPage() {
     };
   }, []);
 
+  // Independent of the session guard above — this only ever fills in blank
+  // form fields, so it's safe to resolve on its own timeline and doesn't need
+  // to block the "checking" -> "ready" transition.
+  useEffect(() => {
+    let mounted = true;
+    if (!token) return;
+
+    verifyWaitlistInvite(token).then((result) => {
+      if (!mounted || !result.valid) return;
+      const ownerName = [result.firstName, result.lastName].filter(Boolean).join(" ").trim();
+      setPrefill({ ownerName, agencyName: result.agencyName || "" });
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
+
   if (status === "checking") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -105,5 +137,30 @@ export default function OnboardingPage() {
   // Land on the one-time "Reveal" page first (Agency Health overview) instead of jumping
   // straight to the full dashboard — see app/dashboard/reveal/page.tsx. Its own CTA button
   // is what actually sends the user on to "/dashboard" from there.
-  return <OnboardingWizard onSuccess={() => { window.location.href = "/dashboard/reveal"; }} />;
+  return (
+    <OnboardingWizard
+      initialOwnerName={prefill?.ownerName}
+      initialAgencyName={prefill?.agencyName}
+      inviteToken={token || undefined}
+      onSuccess={() => {
+        window.location.href = "/dashboard/reveal";
+      }}
+    />
+  );
+}
+
+export default function OnboardingPage() {
+  // useSearchParams() requires a Suspense boundary in the App Router — see the
+  // identical note in app/signup/page.tsx.
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-50">
+          <Loader2 className="h-8 w-8 animate-spin text-purple-600" aria-label="Loading" />
+        </div>
+      }
+    >
+      <OnboardingGate />
+    </Suspense>
+  );
 }

@@ -145,6 +145,12 @@ export interface Step5Payload {
   baseCompLife?: number | "";
   baseCompHealth?: number | "";
   agencyVcTotal?: number | "";
+  // The waitlist invite token this owner signed up with (app/signup/page.tsx
+  // -> ?token= -> app/onboarding/page.tsx), if any. Used purely to burn the
+  // invite (clear public.waitlist.invite_token) once the agency is actually
+  // created — see saveStep5Goals. Absent for owners who signed up the normal
+  // way (no waitlist row at all), which is a harmless no-op there.
+  inviteToken?: string;
 }
 
 export interface Step5Result {

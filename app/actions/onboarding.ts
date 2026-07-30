@@ -211,6 +211,45 @@ async function advanceOnboardingStep(ownerId: string, nextStep: number): Promise
   }
 }
 
+// Clears public.waitlist.invite_token once an owner who signed up via the
+// "/signup" invite catcher (app/signup/page.tsx -> app/actions/waitlist.ts)
+// finishes the wizard — see saveStep5Goals below, the one place the whole
+// flow actually completes. This is the "burn" half of the invite: without
+// it, the same email link could be reused indefinitely to spin up unlimited
+// accounts, since verifyWaitlistInvite() only checks status:'approved' plus
+// a token match, not one-time use.
+//
+// Deliberately does NOT flip `status` to anything (e.g. a hypothetical
+// 'completed') — public.waitlist.status is a Postgres enum
+// (public.waitlist_status: pending/approved/rejected) and adding a new value
+// requires a DB-side migration this app can't run for itself. Clearing
+// invite_token to NULL is sufficient on its own: verifyWaitlistInvite()'s
+// `.eq("invite_token", token)` lookup can never match a NULL column again,
+// so the link is just as dead either way.
+//
+// Matches on the token when we have one (the common case — carried from
+// "/signup" through the URL and wizard props), falling back to the caller's
+// own authenticated email so a reload/direct-navigation to "/onboarding"
+// that dropped the `?token=` along the way still gets burned correctly.
+// Best-effort only: any failure here is logged, never surfaced to the owner
+// or allowed to fail their already-successful onboarding completion.
+async function burnWaitlistInvite(token: string | undefined, email: string | null): Promise<void> {
+  const trimmedToken = (token || "").trim();
+  if (!trimmedToken && !email) return;
+
+  try {
+    let query = supabaseAdmin.from("waitlist").update({ invite_token: null }).not("invite_token", "is", null);
+    query = trimmedToken ? query.eq("invite_token", trimmedToken) : query.eq("email", email as string);
+
+    const { error } = await query;
+    if (error) {
+      console.error("[onboarding:step5] failed to burn waitlist invite", error);
+    }
+  } catch (err) {
+    console.error("[onboarding:step5] unexpected error burning waitlist invite", err);
+  }
+}
+
 // =============================================================================
 // Step 1 — Agency Setup
 // =============================================================================
@@ -726,6 +765,10 @@ export async function saveStep5Goals(payload: Step5Payload): Promise<Step5Result
     if (completeError && !isMissingColumnError(completeError)) {
       console.error("[onboarding:step5] failed to flip onboarding_completed", completeError);
     }
+
+    // Best-effort — see burnWaitlistInvite's own comment for why this never
+    // blocks or fails the response below.
+    await burnWaitlistInvite(payload.inviteToken, auth.email);
 
     return { success: true };
   } catch (err: any) {

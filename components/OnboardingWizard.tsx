@@ -173,6 +173,18 @@ interface OnboardingWizardProps {
   // `onComplete`, you're responsible for your own post-success flow).
   // app/onboarding/page.tsx uses this to route the now-onboarded user to /dashboard.
   onSuccess?: () => void;
+  // Waitlist-invite prefill (app/onboarding/page.tsx resolves these from
+  // `?token=` via verifyWaitlistInvite before this ever mounts). Only ever
+  // used to fill in Step 1 fields that hydration comes back with blank — see
+  // the hydration effect below — so a returning user resuming a
+  // partially-completed wizard never has real progress clobbered by stale
+  // waitlist data.
+  initialOwnerName?: string;
+  initialAgencyName?: string;
+  // Carried through to saveStep5Goals so the final step can clear this
+  // invite's `invite_token` once the agency is actually created — see the
+  // "burn the invite" note at that call site.
+  inviteToken?: string;
 }
 
 const ROLE_OPTIONS: TeamMemberRole[] = ["Manager", "Producer", "Admin", "Service & Retention"];
@@ -247,7 +259,13 @@ const STEPS = [
 // Cycled every 1s on the post-Step-5 launch screen (see isLaunching below).
 const LAUNCH_MESSAGES = ["Projecting Cash Flow...", "Calculating VC Tiers...", "Building Scoreboard..."];
 
-export default function OnboardingWizard({ onComplete, onSuccess }: OnboardingWizardProps) {
+export default function OnboardingWizard({
+  onComplete,
+  onSuccess,
+  initialOwnerName,
+  initialAgencyName,
+  inviteToken,
+}: OnboardingWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isHydrating, setIsHydrating] = useState(true);
   const [hydrationNotice, setHydrationNotice] = useState<string | null>(null);
@@ -318,12 +336,18 @@ export default function OnboardingWizard({ onComplete, onSuccess }: OnboardingWi
 
         if (result.success && result.state) {
           const s = result.state;
+          // Waitlist-invite prefill (app/onboarding/page.tsx resolves these
+          // from `?token=`) only ever fills in what hydration came back with
+          // blank — a brand-new caller with nothing saved yet — so a
+          // returning user resuming mid-wizard never has real Step 1
+          // progress overwritten by stale waitlist data just because they
+          // reused the same invite link/tab.
           setFormData({
             agencyId: s.agencyId,
             officeId: s.officeId,
-            agencyName: s.agencyName,
+            agencyName: s.agencyName || initialAgencyName || s.agencyName,
             primaryOfficeLocation: s.primaryOfficeLocation,
-            ownerName: s.ownerName,
+            ownerName: s.ownerName || initialOwnerName || s.ownerName,
             ownerYtdAutoApps: s.ownerYtd.ytdAutoApps ?? "",
             ownerYtdAutoPremium: s.ownerYtd.ytdAutoPremium ?? "",
             ownerYtdFireApps: s.ownerYtd.ytdFireApps ?? "",
@@ -390,6 +414,10 @@ export default function OnboardingWizard({ onComplete, onSuccess }: OnboardingWi
     return () => {
       mounted = false;
     };
+    // Mount-only by design (resume-on-load), same as before initialOwnerName/
+    // initialAgencyName existed — they're only ever read from the props this
+    // component was first rendered with, never expected to change mid-session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -608,6 +636,7 @@ export default function OnboardingWizard({ onComplete, onSuccess }: OnboardingWi
       baseCompLife: formData.baseCompLife,
       baseCompHealth: formData.baseCompHealth,
       agencyVcTotal: formData.agencyVcTotal,
+      inviteToken,
     });
 
     if (!res.success) {
