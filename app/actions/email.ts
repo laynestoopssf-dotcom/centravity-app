@@ -104,3 +104,72 @@ export async function sendBetaWelcomeEmail({
     return { success: false, error: message };
   }
 }
+
+// Called from createTeamInvite / resendTeamInviteEmail (app/actions/teamInvites.ts).
+// Unlike sendBetaWelcomeEmail (fire-and-forget, never blocks onboarding), the
+// caller here DOES await this and surfaces failures — the invite row is
+// useless to the recipient if the email never lands, so the owner needs to
+// know immediately (the UI's "Resend Email" button exists specifically to
+// recover from a failure reported here).
+export async function sendTeamInviteEmail({
+  toEmail,
+  inviterName,
+  agencyName,
+  role,
+  inviteToken,
+}: {
+  toEmail: string;
+  inviterName: string;
+  agencyName: string;
+  role: string;
+  inviteToken: string;
+}): Promise<SendEmailResult> {
+  try {
+    if (!toEmail) {
+      return { success: false, error: "Missing recipient email." };
+    }
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
+    if (!appUrl) {
+      return { success: false, error: "Email service is misconfigured: missing NEXT_PUBLIC_APP_URL." };
+    }
+    const acceptUrl = `${appUrl}/accept-invite?token=${encodeURIComponent(inviteToken)}`;
+
+    const resend = getResend();
+    const safeInviterName = (inviterName || "").trim() || "Your team lead";
+    const safeAgencyName = agencyName?.trim() || "their agency";
+    const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+
+    const { error } = await resend.emails.send({
+      from: getFromAddress(),
+      to: toEmail,
+      subject: `You're invited to join ${safeAgencyName} on Centravity`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; color: #1e293b;">
+          <h1 style="font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px;">You're invited to join ${safeAgencyName}.</h1>
+          <p style="font-size: 15px; line-height: 1.6; color: #475569;">
+            ${safeInviterName} has invited you to join <strong>${safeAgencyName}</strong> on Centravity as a <strong>${roleLabel}</strong>. Set your password to activate your account and get access to your dashboard, scoreboard, and commission tracking.
+          </p>
+          <a href="${acceptUrl}" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #2563eb; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; border-radius: 10px;">
+            Accept Invite &amp; Set Password
+          </a>
+          <p style="font-size: 13px; line-height: 1.6; color: #94a3b8; margin-top: 24px;">
+            If you weren't expecting this invite, you can safely ignore this email.
+          </p>
+        </div>
+      `,
+      text: `${safeInviterName} has invited you to join ${safeAgencyName} on Centravity as a ${roleLabel}.\n\nAccept your invite and set your password here:\n${acceptUrl}\n\nIf you weren't expecting this invite, you can safely ignore this email.`,
+    });
+
+    if (error) {
+      console.error("[email] sendTeamInviteEmail failed", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("[email] sendTeamInviteEmail threw", err);
+    const message = err instanceof Error ? err.message : "Unexpected error sending invite email.";
+    return { success: false, error: message };
+  }
+}

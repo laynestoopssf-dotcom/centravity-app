@@ -184,6 +184,7 @@ export default function Home() {
   const [pipeline, setPipeline] = useState<Policy[]>([]);
   const [team, setTeam] = useState<Profile[]>([]);
   const [archivedTeam, setArchivedTeam] = useState<Profile[]>([]);
+  const [teamInvites, setTeamInvites] = useState<any[]>([]);
   const [monthPolicies, setMonthPolicies] = useState<any[]>([]);
   const [whatIfCommission, setWhatIfCommission] = useState<number>(1000);
 
@@ -423,6 +424,11 @@ export default function Home() {
     fetchOffices(data.agency_id);
     fetchCompPlans(data.agency_id);
     fetchAgencySettings(data.agency_id);
+    // Pending Invites is an owner/admin-only surface (RLS in
+    // scripts/add_agency_invites_table.sql already scopes it that way too) —
+    // skip the fetch entirely for everyone else rather than relying on RLS
+    // to just quietly return zero rows.
+    if (isOwnerLevelRole(data.role)) fetchTeamInvites(data.agency_id);
     // Always load roster for Settings goals UI — custom roles with manage_settings
     // are not always literally role === 'owner'|'manager', so gating on those strings
     // left team/comp-plan bindings empty and hid member targets.
@@ -919,6 +925,42 @@ export default function Home() {
   const fetchArchivedTeam = async (agencyId: string) => {
     const { data } = await supabase.from('profiles').select('*').eq('agency_id', agencyId).eq('is_archived', true);
     if (data) setArchivedTeam(data);
+  };
+
+  // Feeds Settings > Team Management's "Pending Invites" list. Uses the plain
+  // client + RLS (scripts/add_agency_invites_table.sql scopes agency_invites
+  // reads to owners/admins of the same agency_id) rather than a Server
+  // Action, matching every other simple list-fetch on this page (fetchTeam,
+  // fetchOffices, etc.) — the invite-sending/accepting side effects are the
+  // only parts that actually need service-role access (see
+  // app/actions/teamInvites.ts).
+  const fetchTeamInvites = async (agencyId: string) => {
+    const { data, error } = await supabase
+      .from('agency_invites')
+      .select('*')
+      .eq('agency_id', agencyId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      // Most likely cause: scripts/add_agency_invites_table.sql hasn't been
+      // run against this Supabase project yet — degrade to an empty list
+      // rather than surfacing a toast for a feature the agency simply
+      // doesn't have provisioned yet.
+      console.error('[Settings] fetchTeamInvites failed', error);
+      return;
+    }
+    setTeamInvites(data || []);
+  };
+
+  const handleRevokeInvite = async (inviteId: string) => {
+    try {
+      const { error } = await supabase.from('agency_invites').update({ status: 'revoked' }).eq('id', inviteId);
+      if (error) throw error;
+      setTeamInvites(prev => prev.map(inv => (inv.id === inviteId ? { ...inv, status: 'revoked' } : inv)));
+      showToast('Invite revoked.', 'success');
+    } catch (err: any) {
+      console.error('[Settings] revoke invite failed', err);
+      showToast('Failed to revoke invite: ' + err.message, 'error');
+    }
   };
 
   const handleArchiveTeamMember = async (memberId: string) => {
@@ -3735,6 +3777,7 @@ export default function Home() {
             handleUpdateRole={handleUpdateRole} showToast={showToast} 
             handleSaveOfficeGoals={handleSaveOfficeGoals}
             archivedTeam={archivedTeam} handleArchiveTeamMember={handleArchiveTeamMember} handleReactivateTeamMember={handleReactivateTeamMember}
+            teamInvites={teamInvites} fetchTeamInvites={fetchTeamInvites} handleRevokeInvite={handleRevokeInvite}
             customTargets={customTargets} handleSaveCustomTarget={handleSaveCustomTarget} handleDeleteCustomTarget={handleDeleteCustomTarget}
             
             bulkProducerId={bulkProducerId} setBulkProducerId={setBulkProducerId}

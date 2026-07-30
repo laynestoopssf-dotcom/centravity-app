@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse, CreditCard, ToggleLeft } from 'lucide-react';
+import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse, CreditCard, ToggleLeft, UserPlus, Mail, Send, Ban, Loader2 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { DEFAULT_COMMISSION_RATES, resolveCommissionRates, type LifeSubType, type HealthSubType } from '../utils/commissionRates';
 import { createCheckoutSession } from '../app/actions/billing';
+import { createTeamInvite, resendTeamInviteEmail } from '../app/actions/teamInvites';
+import type { TeamInviteRole } from '../app/actions/teamInvites.types';
 import { CUSTOM_TARGET_METRICS, CUSTOM_TARGET_PERIODS, getMetricDef, type CustomTargetRow } from '../utils/customTargets';
 
 // Mirrors Stripe's own Subscription.status enum (see
@@ -108,6 +110,7 @@ export default function SettingsTab({
   bulkTouches, setBulkTouches, bulkData, setBulkData,
   isImporting, submitHistoricalData, bulkOfficeId, setBulkOfficeId, handleCsvUpload,
   archivedTeam, handleArchiveTeamMember, handleReactivateTeamMember,
+  teamInvites, fetchTeamInvites, handleRevokeInvite,
   // Lets a caller deep-link straight into a section (e.g. the dashboard
   // shell's "Team" sidebar item jumping straight to Team Management instead
   // of the default Agency section) — only read once, as this component's
@@ -178,6 +181,16 @@ export default function SettingsTab({
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [showArchivedTeam, setShowArchivedTeam] = useState(false);
   const [memberPendingArchive, setMemberPendingArchive] = useState<any>(null);
+
+  // Invite Team Member modal (Settings -> Team -> "Invite Team Member") — see
+  // app/actions/teamInvites.ts for the create/send flow this drives.
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteForm, setInviteForm] = useState<{ firstName: string; lastName: string; email: string; role: TeamInviteRole; officeId: string }>({
+    firstName: '', lastName: '', email: '', role: 'producer', officeId: '',
+  });
+  const [inviteFormError, setInviteFormError] = useState('');
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
 
   const ROLE_LABELS: Record<string, string> = { owner: 'Owner', admin: 'Admin', manager: 'Manager', producer: 'Producer', service: 'Service & Retention' };
   const ROLE_BADGE_CLASSES: Record<string, string> = {
@@ -396,6 +409,88 @@ export default function SettingsTab({
   const togglePermission = (permId: string) => {
     if (!editingRole) return;
     setEditingRole({ ...editingRole, permissions: { ...editingRole.permissions, [permId]: !editingRole.permissions[permId] } });
+  };
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteFormError('');
+
+    const email = inviteForm.email.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      setInviteFormError('Please enter a valid email address.');
+      return;
+    }
+    // Client-side pre-check against the active roster (server-side re-checks
+    // against auth.users too, via find_profile_by_email — see
+    // app/actions/teamInvites.ts) so a producer's own email doesn't even
+    // make a round trip before failing.
+    const pendingInvite = (teamInvites || []).find((inv: any) => inv.status === 'pending' && inv.email?.toLowerCase() === email);
+    if (pendingInvite) {
+      setInviteFormError('An invite is already pending for this email address.');
+      return;
+    }
+
+    setIsSendingInvite(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setInviteFormError('Your session expired — please refresh and try again.');
+        return;
+      }
+
+      const result = await createTeamInvite({
+        accessToken,
+        email,
+        firstName: inviteForm.firstName.trim(),
+        lastName: inviteForm.lastName.trim(),
+        role: inviteForm.role,
+        officeId: inviteForm.officeId || null,
+      });
+
+      if (!result.success) {
+        setInviteFormError(result.error || 'Failed to send invite.');
+        return;
+      }
+
+      if (result.emailSent === false) {
+        showToast('Invite created, but the email failed to send — use "Resend Email" once RESEND_API_KEY is configured.', 'error');
+      } else {
+        showToast(`Invite sent to ${email}!`, 'success');
+      }
+
+      setShowInviteModal(false);
+      setInviteForm({ firstName: '', lastName: '', email: '', role: 'producer', officeId: '' });
+      if (profile?.agency_id) fetchTeamInvites?.(profile.agency_id);
+    } catch (err: any) {
+      setInviteFormError(err?.message || 'Unexpected error sending invite.');
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
+  const handleResendInvite = async (inviteId: string) => {
+    setResendingInviteId(inviteId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        showToast('Your session expired — please refresh and try again.', 'error');
+        return;
+      }
+      const result = await resendTeamInviteEmail({ accessToken, inviteId });
+      if (!result.success) {
+        showToast(result.error || 'Failed to resend invite.', 'error');
+        return;
+      }
+      showToast('Invite email resent!', 'success');
+    } catch (err: any) {
+      showToast('Failed to resend invite: ' + err.message, 'error');
+    } finally {
+      setResendingInviteId(null);
+    }
   };
 
   const downloadCsvTemplate = () => {
@@ -1346,6 +1441,19 @@ export default function SettingsTab({
       {/* --- SECTION: TEAM MANAGEMENT --- */}
       {activeSettingsSection === 'team' && (
         <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+             <div>
+               <h3 className="font-bold text-gray-900 text-lg">Invite Team Members</h3>
+               <p className="text-sm text-gray-500">Send a personal email invite with their role (and location) already set up.</p>
+             </div>
+             <button
+               onClick={() => { setInviteFormError(''); setShowInviteModal(true); }}
+               className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold transition-colors shrink-0"
+             >
+               <UserPlus size={18} /> Invite Team Member
+             </button>
+          </div>
+
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 flex justify-between items-center">
              <div>
                <h3 className="font-bold text-gray-900 text-lg">Agency Invite Code</h3>
@@ -1358,6 +1466,50 @@ export default function SettingsTab({
                </button>
              </div>
           </div>
+
+          {(teamInvites || []).some((inv: any) => inv.status === 'pending') && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-6">
+              <div className="p-5 border-b border-gray-100 flex items-center gap-2">
+                <Mail size={16} className="text-gray-400" />
+                <h3 className="font-bold text-gray-900 text-sm">Pending Invites ({(teamInvites || []).filter((inv: any) => inv.status === 'pending').length})</h3>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {(teamInvites || []).filter((inv: any) => inv.status === 'pending').map((invite: any) => {
+                  const inviteOffice = offices.find((o: any) => o.id === invite.office_id);
+                  const inviteName = [invite.first_name, invite.last_name].filter(Boolean).join(' ');
+                  return (
+                    <div key={invite.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-bold text-gray-800 text-sm truncate">{inviteName || invite.email}</p>
+                          <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${ROLE_BADGE_CLASSES[invite.role] || 'bg-gray-100 text-gray-700'}`}>{ROLE_LABELS[invite.role] || invite.role}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                          {invite.email}{inviteOffice ? ` · ${inviteOffice.name}` : ''} · Invited {new Date(invite.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleResendInvite(invite.id)}
+                          disabled={resendingInviteId === invite.id}
+                          className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          {resendingInviteId === invite.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                          Resend Email
+                        </button>
+                        <button
+                          onClick={() => { if (window.confirm(`Revoke the invite for ${invite.email}?`)) handleRevokeInvite?.(invite.id); }}
+                          className="flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <Ban size={14} /> Revoke
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {team.map((member: any) => {
@@ -1432,6 +1584,92 @@ export default function SettingsTab({
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: Invite Team Member --- */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150" onClick={() => setShowInviteModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-xl font-bold text-gray-900">Invite Team Member</h3>
+              <button type="button" onClick={() => setShowInviteModal(false)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"><X size={20} /></button>
+            </div>
+
+            <form onSubmit={handleSendInvite} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">First Name</label>
+                  <input
+                    type="text" value={inviteForm.firstName}
+                    onChange={e => setInviteForm({ ...inviteForm, firstName: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Last Name</label>
+                  <input
+                    type="text" value={inviteForm.lastName}
+                    onChange={e => setInviteForm({ ...inviteForm, lastName: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Email Address</label>
+                <input
+                  type="email" required value={inviteForm.email}
+                  onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  placeholder="name@example.com"
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
+                <select
+                  value={inviteForm.role}
+                  onChange={e => setInviteForm({ ...inviteForm, role: e.target.value as TeamInviteRole })}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                >
+                  <option value="producer">Producer</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                  <option value="service">Service &amp; Retention</option>
+                </select>
+              </div>
+
+              {offices && offices.length > 1 && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Office Location</label>
+                  <select
+                    value={inviteForm.officeId}
+                    onChange={e => setInviteForm({ ...inviteForm, officeId: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                  >
+                    <option value="">No preference</option>
+                    {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {inviteFormError && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm font-semibold rounded-xl p-3">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" /> {inviteFormError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSendingInvite}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-5 py-3 rounded-xl font-bold transition-colors"
+              >
+                {isSendingInvite ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                {isSendingInvite ? 'Sending Invite…' : 'Send Invite'}
+              </button>
+            </form>
           </div>
         </div>
       )}
