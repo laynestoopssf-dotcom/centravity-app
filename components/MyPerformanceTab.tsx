@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Target, Calendar, Award, Mountain, Activity, TrendingUp, Compass, PhoneCall } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { isManagerLevelRole } from '../utils/roles';
 
 export default function MyPerformanceTab({ 
   profile, stats, chartData, agencySettings, team, selectedProducer, setSelectedProducer,
@@ -21,7 +22,7 @@ export default function MyPerformanceTab({
 
   const safePercent = (num: number, den: number) => den > 0 ? ((num / den) * 100).toFixed(1) : "0.0";
 
-  const isAgencyView = selectedProducer === 'all' && (profile.role === 'owner' || profile.role === 'manager');
+  const isAgencyView = selectedProducer === 'all' && isManagerLevelRole(profile.role);
 
   // DYNAMIC AGGREGATION: Respects the selected physical branch
   const activeProfile = React.useMemo(() => {
@@ -130,12 +131,12 @@ export default function MyPerformanceTab({
         <div>
           <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
             <Award className="text-indigo-500" size={32} /> 
-            {profile?.role === 'owner' || profile?.role === 'manager' ? 'Team Performance' : 'My Performance'}
+            {isManagerLevelRole(profile?.role) ? 'Team Performance' : 'My Performance'}
           </h2>
           <p className="text-gray-500 mt-1">Detailed breakdown of conversion and activity.</p>
         </div>
 
-        {(profile?.role === 'owner' || profile?.role === 'manager') && (
+        {isManagerLevelRole(profile?.role) && (
           <div className="flex gap-2">
             {offices && offices.length > 0 && (
               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">

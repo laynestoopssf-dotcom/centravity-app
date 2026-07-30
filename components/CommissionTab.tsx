@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, TrendingUp, Users, ArrowRightCircle, Sparkles, Target, ClipboardList, X, Gift } from 'lucide-react';
 import { resolveParentLine } from '../utils/productLines';
+import { isManagerLevelRole } from '../utils/roles';
 
 export default function CommissionTab({ 
   profile, stats, commissionData, manualBonuses, 
@@ -55,7 +56,7 @@ export default function CommissionTab({
   const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
   const canViewTeamComm = userRoleConfig 
     ? userRoleConfig.permissions?.view_team_comm 
-    : (profile?.role === 'owner' || profile?.role === 'manager'); // Fallback just in case
+    : isManagerLevelRole(profile?.role); // Fallback just in case
 
   const baseSalary = Number(activeProfile?.monthly_base_salary || 0);
   const earnedCash = commissionData.issuedComm + commissionData.bonusTotal;

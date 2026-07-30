@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Filter, ShieldCheck, Trash2, FileText, PhoneCall, RefreshCw, RefreshCcw, Pencil, X } from "lucide-react";
+import { isManagerLevelRole } from "../utils/roles";
 
 // Converts an ISO timestamp into the "YYYY-MM-DDTHH:mm" shape <input type="datetime-local">
 // expects, in the browser's local timezone (so the value the user sees/edits matches what
@@ -92,7 +93,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           <div className="flex items-center gap-2"><Filter size={20} className="text-gray-500" /><h3 className="font-bold text-gray-800">Filters:</h3></div>
           <div className="flex flex-wrap gap-4 items-center">
             
-            {(profile?.role === 'owner' || profile?.role === 'manager') && (
+            {isManagerLevelRole(profile?.role) && (
               <select value={ledgerProducerFilter} onChange={e => setLedgerProducerFilter(e.target.value)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold min-w-[160px]">
                 <option value="all">Entire Agency</option>
                 <option value={profile.id}>Myself</option>

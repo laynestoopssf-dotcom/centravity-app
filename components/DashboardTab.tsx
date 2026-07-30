@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { resolveParentLine } from '../utils/productLines';
+import { isManagerLevelRole } from '../utils/roles';
 
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
@@ -190,7 +191,7 @@ export default function DashboardTab({
   // is available to management roles rather than only whichever individual is looking at their own
   // personal dashboard.
   const rosterRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
-  const canViewProductionRoster = rosterRoleConfig?.permissions?.view_agency_dash ?? (profile?.role === 'owner' || profile?.role === 'manager');
+  const canViewProductionRoster = rosterRoleConfig?.permissions?.view_agency_dash ?? isManagerLevelRole(profile?.role);
 
   const getTargets = () => {
     if (timeframe === 'daily') return { t: activeProfile.daily_target_touchpoints || 20, q: activeProfile.daily_target_quotes || 3, a: activeProfile.daily_target_bound || 1, p: (activeProfile.monthly_target_premium || 15000) / 20, cr: activeProfile.daily_target_quotes || 5, cs: activeProfile.daily_target_bound || 1 };
@@ -317,7 +318,7 @@ export default function DashboardTab({
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-12">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">{profile?.role === 'owner' || profile?.role === 'manager' ? scoreboardName : 'My Scoreboard'}</h2>
+          <h2 className="text-3xl font-bold text-gray-900">{isManagerLevelRole(profile?.role) ? scoreboardName : 'My Scoreboard'}</h2>
           <p className="text-gray-500 mt-1">{isService ? 'Track retention and cross-sells.' : 'Track pacing and pipeline.'}</p>
         </div>
 
@@ -328,7 +329,7 @@ export default function DashboardTab({
             <button onClick={() => setTimeframe('monthly')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'monthly' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Monthly</button>
           </div>
 
-          {(profile?.role === 'owner' || profile?.role === 'manager') && (
+          {isManagerLevelRole(profile?.role) && (
             <div className="flex gap-2">
               {/* NEW OFFICE FILTER UI */}
               {offices && offices.length > 0 && (

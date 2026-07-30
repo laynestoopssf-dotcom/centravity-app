@@ -1,23 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { resolveCommissionRates } from "../../utils/commissionRates";
 import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
 import { enrichCustomTargets, type CustomTargetRow } from "../../utils/customTargets";
+import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import { 
-  BarChart3, Settings, Target, PhoneCall, 
-  FileText, ShieldCheck, LogOut, CheckCircle2, 
+  Target, PhoneCall, 
+  FileText, ShieldCheck, CheckCircle2, 
   AlertCircle, Users, Copy, TrendingUp, TrendingDown, 
-  X, Briefcase, ChevronDown, ChevronUp, Calculator, HeartPulse,
-  ClipboardList, ArrowRightCircle, CalendarDays, Trophy, Mountain,
-  Plane, Luggage, DollarSign, RefreshCw, Sparkles, BookOpen, Trash2, Filter,
-  MessageSquare, Wallet, DownloadCloud, Award, ThumbsUp, ThumbsDown, FileBarChart, Crosshair
+  X, ChevronDown, ChevronUp, Calculator,
+  ClipboardList, ArrowRightCircle, CalendarDays, Trophy,
+  Plane, Luggage, RefreshCw, Sparkles, Trash2, Filter,
+  DownloadCloud, ThumbsUp, ThumbsDown
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, 
@@ -36,35 +35,7 @@ import LedgerTab from '../../components/LedgerTab';
 import ReportsTab from '../../components/ReportsTab';
 import SettingsTab from '../../components/SettingsTab';
 import FeedbackTab from '../../components/FeedbackTab';
-
-const CentravityBrand = ({ onNavigateHome }: { onNavigateHome?: () => void }) => (
-  <Link
-    href="/dashboard"
-    onClick={onNavigateHome}
-    className="flex items-center gap-3"
-    aria-label="CENTRAVITY home"
-  >
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-5 w-5 text-purple-600"
-        aria-hidden
-      >
-        <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-        <path d="M7 16V9" />
-        <path d="M12 16V5" />
-        <path d="M17 16v-3" />
-      </svg>
-    </div>
-    <span className="text-xl font-black tracking-[0.2em] text-slate-900">CENTRAVITY</span>
-  </Link>
-);
+import { useDashboardTab } from '../../components/dashboard/DashboardShellContext';
 
 const GlobalStyles = () => (
   <style dangerouslySetInnerHTML={{__html: `
@@ -108,14 +79,17 @@ const makeLineAgg = (): LineAgg => ({ Auto: { premium: 0, apps: 0 }, Fire: { pre
 
 
 export default function Home() {
-  const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [agencySettings, setAgencySettings] = useState<Agency | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'performance' | 'commission' | 'weekly' | 'agency' | 'life' | 'ytd' | 'revenue' | 'ledger' | 'reports' | 'settings' | 'feedback'>('dashboard');
+  // Owned by app/dashboard/layout.tsx now (the persistent sidebar that reads/
+  // sets this lives there) — see components/dashboard/DashboardShellContext.tsx
+  // for why this moved out of a local useState. This page only ever reads
+  // it now; every setActiveTab() call moved to DashboardSidebar.
+  const { activeTab } = useDashboardTab();
   
   const [offices, setOffices] = useState<any[]>([]);
   const [compPlans, setCompPlans] = useState<CompPlan[]>([]);
@@ -459,7 +433,7 @@ export default function Home() {
     fetchCustomTargets(data.agency_id);
     fetchCustomTargetProgressData(data.agency_id);
 
-    if (data.role === 'owner' || data.role === 'manager') {
+    if (isManagerLevelRole(data.role)) {
       fetchAgencyOverview(data.agency_id);
     }
 
@@ -1133,7 +1107,7 @@ export default function Home() {
       }
 
       const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
-      const canViewAll = userRoleConfig?.permissions?.view_agency_dash ?? (profile.role === 'owner' || profile.role === 'manager');
+      const canViewAll = userRoleConfig?.permissions?.view_agency_dash ?? isManagerLevelRole(profile.role);
 
       const officeMemberIds = getActiveOfficeMemberIds();
       if (officeMemberIds && canViewAll) {
@@ -1363,7 +1337,7 @@ export default function Home() {
       
       if (profile) {
         fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
-        if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+        if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
       }
     } catch (err: any) {
       console.error(err);
@@ -1676,7 +1650,7 @@ export default function Home() {
       await fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
       await fetchPipeline(selectedProducer, profile.agency_id);
       await fetchLedgerData();
-      if (profile.role === 'owner' || profile.role === 'manager') await fetchAgencyOverview(profile.agency_id);
+      if (isManagerLevelRole(profile.role)) await fetchAgencyOverview(profile.agency_id);
 
     } catch (err: any) {
       console.error(err);
@@ -1887,7 +1861,7 @@ export default function Home() {
       
       fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
       fetchPipeline(selectedProducer, profile.agency_id);
-      if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+      if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
     } catch (error: any) { console.error(error); showToast("Error updating policy: " + error.message, "error"); }
   };
 
@@ -2068,7 +2042,7 @@ export default function Home() {
       setIsLoggingModalOpen(false);
       fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
       fetchPipeline(selectedProducer, profile.agency_id);
-      if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+      if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
     } catch (error: any) { 
       console.error(error); 
       showToast(error.message || "Error saving data", "error"); 
@@ -2098,7 +2072,7 @@ export default function Home() {
       return newChart;
     });
     showToast("+1 Touchpoint!");
-    if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+    if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
 
   // Inbound calls are logged as their own activity_type so Outbound touches (the "Touches" KPI/target/
@@ -2119,7 +2093,7 @@ export default function Home() {
 
     setStats(prev => ({ ...prev, todayInbound: prev.todayInbound + 1, monthInbound: prev.monthInbound + 1 }));
     showToast("+1 Inbound Call!");
-    if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+    if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
 
   // "Log Past Data" - covers Touches/Inbound Calls, which (unlike Quotes/Bound Apps) are logged
@@ -2161,7 +2135,7 @@ export default function Home() {
       showToast(`Logged ${count} ${backdateType === 'touchpoint' ? 'Touchpoint' : 'Inbound Call'}${count > 1 ? 's' : ''} for ${new Date(`${backdateDate}T00:00:00`).toLocaleDateString()}!`);
       setIsBackdateModalOpen(false);
       fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
-      if (profile.role === 'owner' || profile.role === 'manager') fetchAgencyOverview(profile.agency_id);
+      if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
     } catch (error: any) {
       showToast("Failed to log past activity: " + (error.message || "please try again."), "error");
     } finally {
@@ -2332,16 +2306,16 @@ export default function Home() {
   // --- DYNAMIC RBAC LOGIC FOR UI & DATA RENDERING ---
   const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
   
-  const canViewAgencyDash = userRoleConfig?.permissions?.view_agency_dash ?? (profile?.role === 'owner' || profile?.role === 'manager');
-  const canViewTeamComm = userRoleConfig?.permissions?.view_team_comm ?? (profile?.role === 'owner' || profile?.role === 'manager');
-  const canManageSettings = userRoleConfig?.permissions?.manage_settings ?? (profile?.role === 'owner');
+  const canViewAgencyDash = userRoleConfig?.permissions?.view_agency_dash ?? isManagerLevelRole(profile?.role);
+  const canViewTeamComm = userRoleConfig?.permissions?.view_team_comm ?? isManagerLevelRole(profile?.role);
+  const canManageSettings = userRoleConfig?.permissions?.manage_settings ?? isOwnerLevelRole(profile?.role);
 
   const canViewWeeklyRank = userRoleConfig?.permissions?.view_weekly_rank ?? canViewAgencyDash;
   const canViewAgencyMtd = userRoleConfig?.permissions?.view_agency_mtd ?? canViewAgencyDash;
   const canViewLifeModule = userRoleConfig?.permissions?.view_life_module ?? canViewAgencyDash;
   const canViewYtdProjections = userRoleConfig?.permissions?.view_ytd_projections ?? canManageSettings;
   const canViewRevenueVc = userRoleConfig?.permissions?.view_revenue_vc ?? canManageSettings;
-  const canViewReports = userRoleConfig?.permissions?.view_reports ?? (profile?.role === 'owner' || profile?.role === 'manager');
+  const canViewReports = userRoleConfig?.permissions?.view_reports ?? isManagerLevelRole(profile?.role);
 
   // --- USE MEMO DATA ENGINES ---
   const filteredActivities = useMemo(() => {
@@ -3629,7 +3603,12 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    // No longer the page's own top-level wrapper — app/dashboard/layout.tsx's
+    // shell (sidebar + top header) now owns that; this is just the content
+    // pane nested inside it, so `min-h-full` (not `min-h-screen`) and no
+    // flex-row (the sidebar that used to sit beside `<main>` here moved out
+    // to the shell too).
+    <div className="min-h-full bg-gray-50">
       <GlobalStyles />
       
       {/* GLOBAL BIND CELEBRATION */}
@@ -3671,14 +3650,15 @@ export default function Home() {
         </div>
       )}
 
-      <nav className="w-full md:w-72 bg-white border-r border-gray-200 px-4 py-6 flex flex-col md:sticky md:top-0 md:h-screen overflow-y-auto hide-scroll">
-        <header className="mb-8 -mx-4 border-b border-gray-200 bg-white px-4 pb-5">
-          <CentravityBrand onNavigateHome={() => setActiveTab("dashboard")} />
-        </header>
-
-        {/* DYNAMIC RBAC LOCATION SELECTOR */}
+      <main className="flex-1 p-6 md:p-10">
+        {/* DYNAMIC RBAC LOCATION SELECTOR — used to live at the top of the
+            sidebar, but that's now app/dashboard/layout.tsx's persistent
+            shell, which doesn't have access to (or need to duplicate) the
+            `offices` list this page already fetches. Living here instead
+            keeps it exactly as functional, just relocated to the top of the
+            content it actually filters. */}
         {(canViewAgencyDash || canViewTeamComm) && offices.length > 0 && (
-          <div className="mb-6 px-4">
+          <div className="mb-6 max-w-xs">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Global Location View</label>
             <select 
               value={globalOfficeFilter} 
@@ -3686,7 +3666,7 @@ export default function Home() {
                 setGlobalOfficeFilter(e.target.value);
                 setSelectedOffice(e.target.value); 
               }}
-              className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
+              className="w-full p-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
             >
               <option value="all">🌍 All Locations</option>
               {offices.map((o: any) => <option key={o.id} value={o.id}>📍 {o.name}</option>)}
@@ -3694,61 +3674,6 @@ export default function Home() {
           </div>
         )}
 
-        <div className="space-y-1 flex-1">
-          <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}><BarChart3 size={20} /> {canViewAgencyDash ? 'Team Scoreboard' : 'My Scoreboard'}</button>
-          
-          <button onClick={() => setActiveTab('performance')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'performance' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}><Award size={20} /> {canViewAgencyDash ? 'Team Performance' : 'My Performance'}</button>
-          
-          <button onClick={() => setActiveTab('commission')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'commission' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-50'}`}><Wallet size={20} /> {canViewTeamComm ? 'Team Commission' : 'My Commission'}</button>
-          
-          <button onClick={() => setActiveTab('ledger')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'ledger' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}><BookOpen size={20} /> Data Ledger</button>
-          
-          {canViewReports && (
-            <button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'reports' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}><FileBarChart size={20} /> Reports</button>
-          )}
-          
-          {canViewWeeklyRank && (
-            <button onClick={() => setActiveTab('weekly')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'weekly' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}><CalendarDays size={20} /> Weekly Rank</button>
-          )}
-          {canViewAgencyMtd && (
-            <button onClick={() => setActiveTab('agency')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'agency' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}><Briefcase size={20} /> Agency MTD</button>
-          )}
-          {canViewLifeModule && (
-            <button onClick={() => setActiveTab('life')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'life' ? 'bg-red-50 text-red-700' : 'text-gray-600 hover:bg-gray-50'}`}><HeartPulse size={20} /> Life Module</button>
-          )}
-          
-          {canViewYtdProjections && (
-            <button onClick={() => setActiveTab('ytd')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'ytd' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}><Mountain size={20} /> YTD Projections</button>
-          )}
-          {canViewRevenueVc && (
-            <button onClick={() => setActiveTab('revenue')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'revenue' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-50'}`}><DollarSign size={20} /> Revenue & VC</button>
-          )}
-          {canViewRevenueVc && (
-            <button onClick={() => router.push('/dashboard/cockpit')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors text-gray-600 hover:bg-gray-50">
-              <Crosshair size={20} /> Executive Cockpit
-            </button>
-          )}
-          {canManageSettings && (
-            <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'settings' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}><Settings size={20} /> Agency Settings</button>
-          )}
-        </div>
-
-        <div className="mt-auto border-t border-gray-100 pt-6 px-2">
-          <button onClick={() => setActiveTab('feedback')} className={`w-full flex items-center gap-3 px-2 py-2 mb-4 rounded-xl font-medium transition-colors ${activeTab === 'feedback' ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:text-gray-800'}`}>
-            <MessageSquare size={18} /> Community Board
-          </button>
-
-          <div className="mb-4">
-            <p className="text-sm font-semibold text-gray-900">{profile?.first_name} {profile?.last_name}</p>
-            <p className="text-xs text-gray-500 capitalize">{profile?.role}</p>
-          </div>
-          <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-2 text-sm text-red-600 hover:text-red-700 font-medium">
-            <LogOut size={16} /> Sign Out
-          </button>
-        </div>
-      </nav>
-
-      <main className="flex-1 p-6 md:p-10">
         {activeTab === 'dashboard' && <DashboardTab 
           profile={profile} team={team} stats={stats} chartData={chartData} pipeline={pipeline} commissionData={commissionData} 
           dailyQuoteRate={stats.todayTouches > 0 ? ((stats.todayQuotes / stats.todayTouches) * 100).toFixed(1) : "0.0"} 
@@ -3793,8 +3718,16 @@ export default function Home() {
         {activeTab === 'ytd' && canViewYtdProjections && ytdOverviewData && <YtdTab ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} />}
         {activeTab === 'revenue' && canViewRevenueVc && ytdOverviewData && revenueOverviewData && <RevenueTab revenueOverviewData={revenueOverviewData} ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} primaryOffice={offices[0] || null} customTargets={revenueCustomTargets} />}
         
-        {activeTab === 'settings' && canManageSettings && (
+        {/* 'team' is the shell sidebar's dedicated "Team" link — same
+            SettingsTab, just deep-linked straight to its Team Management
+            section. `key` forces a remount when switching between 'settings'
+            and 'team' so SettingsTab's own initialSection-seeded useState
+            actually re-seeds instead of preserving whatever section was last
+            open (see SettingsTab's own comment on the initialSection prop). */}
+        {(activeTab === 'settings' || activeTab === 'team') && canManageSettings && (
           <SettingsTab 
+            key={activeTab}
+            initialSection={activeTab === 'team' ? 'team' : 'agency'}
             profile={profile} team={team} setTeam={setTeam} offices={offices} compPlans={compPlans} 
             handleAddLocation={handleAddLocation} handleUpdateLocation={handleUpdateLocation} handleDeleteLocation={handleDeleteLocation} 
             handleSaveCompPlan={handleSaveCompPlan} handleDeleteCompPlan={handleDeleteCompPlan} 

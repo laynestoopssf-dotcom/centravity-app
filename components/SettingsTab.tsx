@@ -60,6 +60,15 @@ const AVAILABLE_PERMISSIONS = [
 
 const DEFAULT_ROLES = [
   { id: 'owner', name: 'Owner', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_ytd_projections: true, view_revenue_vc: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
+  // Mirrors 'owner' by default — see isOwnerLevelRole() in utils/roles.ts, the
+  // single source of truth every permission check falls back to when (as
+  // here) no custom_roles entry overrides it. Kept isSystem so its name can't
+  // be edited/deleted, exactly like 'owner', but its permissions below can
+  // still be dialed down by an agency owner from the Roles & Permissions
+  // screen just like 'manager' can. Billing is the one deliberate exception —
+  // it's never granted here or anywhere else regardless of these toggles
+  // (see the EXCEPTION note in utils/roles.ts).
+  { id: 'admin', name: 'Admin', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_ytd_projections: true, view_revenue_vc: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
   { id: 'manager', name: 'Manager', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_ytd_projections: true, view_revenue_vc: false, view_reports: true, edit_historical: true, delete_records: false, manage_settings: false } },
   { id: 'producer', name: 'Producer', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_ytd_projections: false, view_revenue_vc: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } },
   { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_ytd_projections: false, view_revenue_vc: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } }
@@ -98,14 +107,22 @@ export default function SettingsTab({
   bulkProducerId, setBulkProducerId, bulkMonth, setBulkMonth,
   bulkTouches, setBulkTouches, bulkData, setBulkData,
   isImporting, submitHistoricalData, bulkOfficeId, setBulkOfficeId, handleCsvUpload,
-  archivedTeam, handleArchiveTeamMember, handleReactivateTeamMember
+  archivedTeam, handleArchiveTeamMember, handleReactivateTeamMember,
+  // Lets a caller deep-link straight into a section (e.g. the dashboard
+  // shell's "Team" sidebar item jumping straight to Team Management instead
+  // of the default Agency section) — only read once, as this component's
+  // own useState initial value, so normal in-page section switching still
+  // behaves exactly as before. Callers that want a fresh deep-link to
+  // actually take effect on a component that's already mounted must change
+  // `key` alongside it (see app/dashboard/page.tsx).
+  initialSection,
 }: any) {
   
   const [newLocationName, setNewLocationName] = useState("");
   const [newProductLine, setNewProductLine] = useState(""); 
   const [newProductParent, setNewProductParent] = useState("Auto"); 
   const [editingPlan, setEditingPlan] = useState<any>(null);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates' | 'conversion_metrics' | 'billing' | 'corporate_targets'>('agency');
+  const [activeSettingsSection, setActiveSettingsSection] = useState<'agency' | 'team' | 'locations' | 'compplans' | 'historical' | 'promotions' | 'roles' | 'commission_rates' | 'conversion_metrics' | 'billing' | 'corporate_targets'>(initialSection || 'agency');
   const [editingCustomTarget, setEditingCustomTarget] = useState<Partial<CustomTargetRow> | null>(null);
   const [customTargetPendingDelete, setCustomTargetPendingDelete] = useState<CustomTargetRow | null>(null);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
@@ -162,9 +179,10 @@ export default function SettingsTab({
   const [showArchivedTeam, setShowArchivedTeam] = useState(false);
   const [memberPendingArchive, setMemberPendingArchive] = useState<any>(null);
 
-  const ROLE_LABELS: Record<string, string> = { owner: 'Owner', manager: 'Manager', producer: 'Producer', service: 'Service & Retention' };
+  const ROLE_LABELS: Record<string, string> = { owner: 'Owner', admin: 'Admin', manager: 'Manager', producer: 'Producer', service: 'Service & Retention' };
   const ROLE_BADGE_CLASSES: Record<string, string> = {
     owner: 'bg-purple-100 text-purple-700',
+    admin: 'bg-fuchsia-100 text-fuchsia-700',
     manager: 'bg-indigo-100 text-indigo-700',
     producer: 'bg-blue-100 text-blue-700',
     service: 'bg-emerald-100 text-emerald-700',
@@ -172,7 +190,23 @@ export default function SettingsTab({
 
   // Role Builder State
   const [editingRole, setEditingRole] = useState<any>(null);
-  const roles = agencySettings?.custom_roles || DEFAULT_ROLES;
+  // agencySettings.custom_roles is a per-agency snapshot written by
+  // saveRolesToDatabase below — once an agency has saved ANY role edit, this
+  // column is no longer null, so the `|| DEFAULT_ROLES` fallback stops
+  // applying to it entirely (not just to the roles that were actually
+  // customized). That means a brand-new built-in role added to DEFAULT_ROLES
+  // later (like 'admin' here) would silently vanish from this screen for
+  // every agency that had already saved custom_roles before that role
+  // existed. Backfilling it client-side — appending any DEFAULT_ROLES entry
+  // whose id isn't already present in the saved array — keeps this screen
+  // (and the "System Role" dropdown below, which reads the same `roles`)
+  // showing every built-in role for every agency, old or new, while still
+  // leaving an agency's own saved customizations (including a previously
+  // saved 'admin' override) untouched and authoritative.
+  const savedRoles: any[] | undefined = agencySettings?.custom_roles;
+  const roles = savedRoles && savedRoles.length > 0
+    ? [...savedRoles, ...DEFAULT_ROLES.filter((d) => !savedRoles.some((r) => r.id === d.id))]
+    : DEFAULT_ROLES;
 
   // Commission Rate Engine (Life/Health carrier tables — decoupled from P&C VC).
   // Local draft state so the financial controller can edit freely and only commit

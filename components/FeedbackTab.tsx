@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MessageSquare, Bug, Sparkles, ArrowUp, Plus, X, Lightbulb, Clock, CheckCircle2, Archive } from "lucide-react";
 import { supabase } from "../utils/supabase";
+import { isOwnerLevelRole } from "../utils/roles";
 
 export default function FeedbackTab({ profile, showToast }: any) {
   const [feedbackList, setFeedbackList] = useState<any[]>([]);
@@ -204,7 +205,7 @@ export default function FeedbackTab({ profile, showToast }: any) {
                   </div>
                   
                   {/* ADMIN STATUS CONTROLS */}
-                  {profile?.role === 'owner' ? (
+                  {isOwnerLevelRole(profile?.role) ? (
                     <select 
                       value={item.status} 
                       onChange={(e) => updateStatus(item.id, e.target.value)}
