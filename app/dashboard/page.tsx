@@ -3675,7 +3675,7 @@ export default function Home() {
         )}
 
         {activeTab === 'dashboard' && <DashboardTab 
-          profile={profile} team={team} stats={stats} chartData={chartData} pipeline={pipeline} commissionData={commissionData} 
+          profile={profile} team={team} stats={stats} chartData={chartData} pipeline={pipeline} commissionData={commissionData} teamCommissions={teamCommissions} 
           dailyQuoteRate={stats.todayTouches > 0 ? ((stats.todayQuotes / stats.todayTouches) * 100).toFixed(1) : "0.0"} 
           dailyCloseRate={stats.todayQuotes > 0 ? ((stats.todayBound / stats.todayQuotes) * 100).toFixed(1) : "0.0"} 
           monthQuoteRate={stats.monthTouches > 0 ? ((stats.monthQuotes / stats.monthTouches) * 100).toFixed(1) : "0.0"} 

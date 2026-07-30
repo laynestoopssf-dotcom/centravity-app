@@ -3,11 +3,12 @@ import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
+import DashboardMetrics from './dashboard/DashboardMetrics';
 
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
 export default function DashboardTab({ 
-  profile, team, stats, chartData, pipeline, commissionData, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
+  profile, team, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
   offices, selectedOffice, setSelectedOffice, customTargets
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -37,6 +38,33 @@ export default function DashboardTab({
   const [localOffice, setLocalOffice] = useState<string>('all');
   const activeOfficeVal = selectedOffice !== undefined ? selectedOffice : localOffice;
   const updateOffice = setSelectedOffice || setLocalOffice;
+
+  // Owner/Admin summary cards (DashboardMetrics) — no dedicated "monthly premium
+  // goal" column exists anywhere in the schema, so this mirrors the exact same
+  // annual/12 derivation MyPerformanceTab already uses for its agency-view
+  // pacing target, respecting the same office filter as the rest of this tab.
+  const monthlyPremiumGoal = useMemo(() => {
+    if (!offices || offices.length === 0) return 0;
+    if (activeOfficeVal !== 'all') {
+      const office = offices.find((o: any) => o.id === activeOfficeVal);
+      return Math.round((Number(office?.annual_target_premium) || 0) / 12);
+    }
+    const total = offices.reduce((sum: number, o: any) => sum + (Number(o.annual_target_premium) || 0), 0);
+    return Math.round(total / 12);
+  }, [offices, activeOfficeVal]);
+
+  // teamCommissions (app/dashboard/page.tsx) is only ever populated for the
+  // "All" team view — a per-member map of the same comp-plan math
+  // CommissionTab already renders per person. Summed here for the top-level
+  // card; falls back to this one profile's own commissionData.total when a
+  // single producer is selected (or teamCommissions hasn't resolved yet) so
+  // the card never silently shows $0 for someone with real numbers.
+  const estimatedTeamCommission = useMemo(() => {
+    if (teamCommissions) {
+      return Object.values(teamCommissions).reduce((sum: number, m: any) => sum + (Number(m?.total) || 0), 0);
+    }
+    return Number(commissionData?.total) || 0;
+  }, [teamCommissions, commissionData]);
 
   // Daily Production Roster: groups today's bound/issued policies (from the existing `pipeline`
   // array, which is already scoped to the selected producer/office) by team member, so managers
@@ -367,6 +395,14 @@ export default function DashboardTab({
           )}
         </div>
       </header>
+
+      {isManagerLevelRole(profile?.role) && (
+        <DashboardMetrics
+          monthlyPremium={agencyStats?.monthPotentialPremium || 0}
+          monthlyPremiumGoal={monthlyPremiumGoal}
+          estimatedCommission={estimatedTeamCommission}
+        />
+      )}
 
       {openBackdateModal && (
         <div className="flex justify-end -mb-2">
