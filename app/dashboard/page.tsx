@@ -551,7 +551,9 @@ export default function Home() {
     // NOTE: `id` must be selected here - monthPolicies feeds CommissionTab's itemized statement
     // table, which keys each <tr> off pol.id. Omitting it left every row keyed as undefined,
     // triggering React's "missing unique key" warning for the whole list.
-    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, customer_name').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
+    // `written_at` is also required here - see the `boundDate` note below in the policies.forEach
+    // loop for why MTD/QTD/YTD Bound Apps must key off it instead of `logged_at`.
+    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, customer_name').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) polQuery = polQuery.in('user_id', officeMemberIds);
     const { data: policies, error: policiesError } = await polQuery;
     if (policiesError) {
@@ -559,7 +561,7 @@ export default function Home() {
       showToast('Failed to load policy data — revenue numbers below may be incomplete.', 'error');
     }
 
-    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(p.logged_at), targetDate)) || []);
+    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(p.written_at || p.logged_at), targetDate)) || []);
 
     let bonusQuery = supabase.from('manual_bonuses').select('*').eq('agency_id', agencyId).gte('logged_at', firstDayOfMonth.toISOString());
     const { data: fetchedBonuses, error: bonusesError } = await bonusQuery;
@@ -654,12 +656,21 @@ export default function Home() {
     });
 
     policies?.forEach(pol => {
-      const logDate = new Date(pol.logged_at);
+      // `boundDate` - NOT `logged_at` - drives every date-window membership check below (MTD/QTD/
+      // YTD/week/today Bound Apps and their premium totals). `logged_at` gets re-stamped to "now"
+      // by updatePolicyStatus on every status transition (e.g. bound -> issued, possibly weeks or
+      // months after the policy was actually bound), so filtering on it made those calcs silently
+      // pull in policies whose real bind date was outside the period, purely because they'd been
+      // touched/updated recently. `written_at` is stamped once at creation and never touched again
+      // by any later status update (see updatePolicyStatus), so it reliably reflects when the app
+      // was actually bound. Falls back to logged_at only for legacy rows written before written_at
+      // existed.
+      const boundDate = new Date(pol.written_at || pol.logged_at);
       const parentLine = getParentLine(pol.product_line);
       
       if (pol.product_line === 'Complex Resolution') {
          if (userId !== 'all' && pol.user_id !== userId) return;
-         if (isSameWeek(logDate)) {
+         if (isSameWeek(boundDate)) {
              if (pol.status === 'positive') tempStats.weekPosRes++;
              if (pol.status === 'negative') tempStats.weekNegRes++;
          }
@@ -669,7 +680,7 @@ export default function Home() {
       let premium = Number(pol.premium_amount) || 0;
       const isBoundOrIssued = pol.status === 'bound' || pol.status === 'issued';
 
-      if (isSameMonth(logDate, targetDate)) {
+      if (isSameMonth(boundDate, targetDate)) {
          if (isBoundOrIssued) { 
              tempAgencyStats.monthTotalApps++;
              tempAgencyStats.monthPotentialPremium += premium;
@@ -678,13 +689,13 @@ export default function Home() {
 
       if (userId !== 'all' && pol.user_id !== userId) return;
 
-      if (logDate >= startOfQuarter) {
+      if (boundDate >= startOfQuarter) {
          // Quotes are counted exclusively from the activities table above (act.activity_type === 'quote')
          // to avoid double-counting the same quote once as an activity and again as a policy row.
          if (isBoundOrIssued) tempStats.qtdBound++;
       }
       
-      if (logDate >= startOfYear) {
+      if (boundDate >= startOfYear) {
          if (isBoundOrIssued) {
              tempStats.ytdBound++;
              if (parentLine === 'Auto') tempStats.ytdAutoApps++;
@@ -695,7 +706,7 @@ export default function Home() {
          }
       }
 
-      if (isSameMonth(logDate, targetDate)) {
+      if (isSameMonth(boundDate, targetDate)) {
           if (isBoundOrIssued) { 
               tempStats.monthBound++; 
               tempStats.monthPotentialPremium += premium; 
@@ -723,16 +734,16 @@ export default function Home() {
               }
           }
       }
-      if (isSameWeek(logDate)) {
+      if (isSameWeek(boundDate)) {
           if (isBoundOrIssued) { tempStats.weekBound++; tempStats.weekPotentialPremium += premium; }
           if (pol.status === 'issued') { tempStats.weekPremium += premium; }
       }
-      if (isSameDate(logDate, actualToday)) {
+      if (isSameDate(boundDate, actualToday)) {
           if (isBoundOrIssued) { tempStats.todayBound++; tempStats.todayPotentialPremium += premium; }
           if (pol.status === 'issued') { tempStats.todayPremium += premium; }
       }
       if (isBoundOrIssued) {
-        const chartDay = newChartData.find(cd => isSameDate(cd.dateObj, logDate));
+        const chartDay = newChartData.find(cd => isSameDate(cd.dateObj, boundDate));
         if (chartDay) chartDay.Bound++;
       }
     });
@@ -1009,7 +1020,9 @@ export default function Home() {
     const startOfYear = new Date(new Date().getFullYear(), 0, 1);
     const [{ data: acts, error: actErr }, { data: pols, error: polErr }] = await Promise.all([
       supabase.from('activities').select('activity_type, logged_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
-      supabase.from('policies').select('product_line, status, premium_amount, logged_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
+      // written_at is required alongside logged_at - see the boundDate note in computeRawMetricValue
+      // (utils/customTargets.ts) for why Custom Target progress must key off it for policies.
+      supabase.from('policies').select('product_line, status, premium_amount, logged_at, written_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
     ]);
     if (actErr) console.error('[Custom Targets] activities fetch failed', actErr);
     if (polErr) console.error('[Custom Targets] policies fetch failed', polErr);

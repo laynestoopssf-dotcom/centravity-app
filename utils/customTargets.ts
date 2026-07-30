@@ -132,7 +132,12 @@ export function computeRawMetricValue(
 
   const matches = (policies || []).filter((p) => {
     if (target.office_id && p.office_id !== target.office_id) return false;
-    const t = new Date(p.logged_at).getTime();
+    // written_at (the actual bind date, stamped once at creation) - not logged_at, which gets
+    // re-stamped to "now" on every later status change (e.g. bound -> issued) - is what decides
+    // whether a policy falls inside this window. Otherwise a policy bound in a prior period but
+    // merely touched/updated during this one would count toward it. See the identical fix/note on
+    // the personal Scoreboard's own MTD calc in app/dashboard/page.tsx (fetchDashboardData).
+    const t = new Date(p.written_at || p.logged_at).getTime();
     if (t < startMs || t > endMs) return false;
     if (def.parentLine && resolveParentLine(p.product_line, linesDict) !== def.parentLine) return false;
     return true;
