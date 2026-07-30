@@ -9,8 +9,9 @@ import { enrichCustomTargets, type CustomTargetRow } from "../../utils/customTar
 import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
 import type { CoachingInsightPayload } from "../actions/coaching.types";
+import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
 import { 
-  Target, PhoneCall, 
+  Target, 
   FileText, ShieldCheck, CheckCircle2, 
   AlertCircle, Users, Copy, TrendingUp, TrendingDown, 
   X, ChevronDown, ChevronUp, Calculator,
@@ -3670,16 +3671,17 @@ export default function Home() {
         </div>
       )}
 
-      {/* FLOATING MOBILE QUICK-TOUCH BUTTON */}
+      {/* COMPACT-VIEW QUICK ACTIONS DOCK — see components/dashboard/QuickActionsBar.tsx
+          for why lg:hidden (not md:hidden) and why service reps get different
+          labels/activity types wired to the last two buttons. */}
       {profile && (
-        <div className="md:hidden fixed bottom-6 right-6 z-40">
-          <button 
-            onClick={logTouchpoint} 
-            className="bg-blue-600 text-white rounded-full p-4 shadow-[0_8px_30px_rgb(0,0,0,0.3)] hover:bg-blue-700 active:scale-90 transition-all flex items-center justify-center border-[3px] border-white/20"
-          >
-            <PhoneCall size={28} />
-          </button>
-        </div>
+        <QuickActionsBar
+          isService={profile.role === 'service'}
+          onLogInboundCall={logInboundCall}
+          onLogOutboundTouch={logTouchpoint}
+          onOpenQuoteModal={() => openLogModal(profile.role === 'service' ? 'complex_res' : 'quote')}
+          onOpenBoundModal={() => openLogModal(profile.role === 'service' ? 'cross_sell' : 'bound')}
+        />
       )}
 
       {toastMessage && (
