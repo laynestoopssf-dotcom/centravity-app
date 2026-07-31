@@ -32,10 +32,20 @@ serve(async (req) => {
       .gte('logged_at', twentyFourHoursAgo);
     if (actError) throw actError;
 
+    // Scoped to bound/issued only (the only statuses this function ever reads below), so every
+    // matching row is guaranteed a `bound_at` (set once, the moment status first became bound;
+    // back-filled for legacy rows by the add_policies_bound_at migration) - letting us filter and
+    // bucket "today" by the real bind date instead of `logged_at`, which never moves for a policy
+    // quoted earlier and only bound within the last 24h (the "convert existing quote -> bound"
+    // path doesn't touch `logged_at`), so that bind would be silently missed by this hourly check.
+    // Floor widened from 24h to 72h on `bound_at` as a safety margin for agencies whose local
+    // "today" trails UTC "now" by up to a few hours.
+    const seventyTwoHoursAgo = new Date(now.getTime() - (72 * 60 * 60 * 1000)).toISOString();
     const { data: allPolicies, error: polError } = await supabase
       .from('policies')
-      .select('agency_id, status, premium_amount, logged_at')
-      .gte('logged_at', twentyFourHoursAgo);
+      .select('agency_id, status, premium_amount, bound_at, written_at, logged_at')
+      .in('status', ['bound', 'issued'])
+      .gte('bound_at', seventyTwoHoursAgo);
     if (polError) throw polError;
 
     const results = [];
@@ -79,7 +89,7 @@ serve(async (req) => {
 
         const agencyPolicies = allPolicies?.filter(p => {
           if (p.agency_id !== owner.agency_id) return false;
-          return dateFormatter.format(new Date(p.logged_at)) === localTodayString;
+          return dateFormatter.format(new Date(p.bound_at || p.written_at || p.logged_at)) === localTodayString;
         }) || [];
 
         // E. Calculate the localized stats

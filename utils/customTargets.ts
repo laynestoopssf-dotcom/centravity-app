@@ -132,12 +132,15 @@ export function computeRawMetricValue(
 
   const matches = (policies || []).filter((p) => {
     if (target.office_id && p.office_id !== target.office_id) return false;
-    // written_at (the actual bind date, stamped once at creation) - not logged_at, which gets
-    // re-stamped to "now" on every later status change (e.g. bound -> issued) - is what decides
-    // whether a policy falls inside this window. Otherwise a policy bound in a prior period but
-    // merely touched/updated during this one would count toward it. See the identical fix/note on
-    // the personal Scoreboard's own MTD calc in app/dashboard/page.tsx (fetchDashboardData).
-    const t = new Date(p.written_at || p.logged_at).getTime();
+    // bound_at (stamped exactly once, at the moment status first becomes 'bound') - not logged_at,
+    // which gets re-stamped to "now" on every later status change (e.g. bound -> issued), and not
+    // written_at alone, which is only set at creation and stays stale for an existing quote that
+    // gets converted to bound later - is what decides whether a policy falls inside this window.
+    // Otherwise a policy bound in a prior period but merely touched/updated (or quoted) during this
+    // one would count toward it. Falls back to written_at/logged_at for legacy rows written before
+    // bound_at existed. See the identical fix/note on the personal Scoreboard's own MTD calc in
+    // app/dashboard/page.tsx (fetchDashboardData).
+    const t = new Date(p.bound_at || p.written_at || p.logged_at).getTime();
     if (t < startMs || t > endMs) return false;
     if (def.parentLine && resolveParentLine(p.product_line, linesDict) !== def.parentLine) return false;
     return true;

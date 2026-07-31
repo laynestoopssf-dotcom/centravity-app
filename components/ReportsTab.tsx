@@ -196,12 +196,22 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       // MTD, and Commission tallies already use). The `activities` table has no product_line column
       // anywhere in this schema, so quote counts stay agency/producer-level only - not broken down
       // by line - per the fallback called out in the spec.
+      //
+      // Filters/orders on `bound_at` (not `logged_at`) - since this query is already scoped to
+      // status IN ('bound','issued'), every matching row is guaranteed a `bound_at` (set once, the
+      // moment status first became bound; back-filled for legacy rows by the
+      // add_policies_bound_at migration). `logged_at` gets re-stamped to "now" on every later status
+      // change and `written_at` never updates past the original quote, so a custom range like "just
+      // today" filtered on either of those could silently miss a policy quoted long ago and bound
+      // inside the selected window (or double-count one bound long ago but touched again inside it)
+      // - the exact bug already fixed on the main Scoreboard's own MTD calc in
+      // app/dashboard/page.tsx (fetchDashboardData).
       let policyQuery = supabase.from('policies')
-        .select('user_id, status, premium_amount, logged_at, product_line')
+        .select('user_id, status, premium_amount, bound_at, written_at, logged_at, product_line')
         .eq('agency_id', profile.agency_id)
         .in('status', ['bound', 'issued'])
-        .gte('logged_at', startIso)
-        .lte('logged_at', endIso)
+        .gte('bound_at', startIso)
+        .lte('bound_at', endIso)
         .limit(10000);
 
       if (selectedUserId !== 'all') {
@@ -246,7 +256,7 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       const customLines = agencySettings?.custom_product_lines || [];
       (policies || []).forEach((pol: any) => {
         const g = getGroup(pol.user_id);
-        const point = getDailyPoint(fmtDate(new Date(pol.logged_at)));
+        const point = getDailyPoint(fmtDate(new Date(pol.bound_at || pol.written_at || pol.logged_at)));
         const premium = Number(pol.premium_amount) || 0;
 
         g.bound += 1;

@@ -215,7 +215,7 @@ export default function CockpitPage() {
       const [policiesRes, activitiesRes] = await Promise.all([
         supabase
           .from("policies")
-          .select("id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at")
+          .select("id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at")
           .eq("agency_id", agencyId)
           .gte("logged_at", startOfYear)
           .limit(20000),
@@ -325,7 +325,12 @@ export default function CockpitPage() {
     // separately here only so "Projected Annual Revenue" stays complete.
     let nbCommPrem = 0;
     policies.forEach((pol: any) => {
-      const logDate = new Date(pol.logged_at);
+      // bound_at (stamped once, the moment status first becomes 'bound') - not raw logged_at,
+      // which stays at quote time for an existing quote converted to bound later, and gets
+      // re-stamped to "now" on a later bound -> issued transition - is what decides which year
+      // this bound/issued app counts toward. Same fix/note as the Scoreboard's boundDate calc in
+      // app/dashboard/page.tsx (fetchDashboardData).
+      const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
       if (logDate.getFullYear() !== currentYear) return;
       if (!(pol.status === "bound" || pol.status === "issued")) return;
       const parentLine = getParentLine(pol.product_line);
@@ -500,7 +505,10 @@ export default function CockpitPage() {
     let issuedHealthCred = 0;
     let pendingHealthCred = 0;
     policies.forEach((pol) => {
-      const logDate = new Date(pol.logged_at);
+      // Same bound_at fallback as the Commercial-premium loop above - quoted rows have no
+      // bound_at yet, so this naturally falls back to written_at (their quote date), unchanged
+      // from before; bound/issued rows now key off their real bind date.
+      const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
       if (logDate.getFullYear() !== currentYear) return;
       const prem = num(pol.premium_amount);
       const isAnnual = pol.payment_cycle === "annual";

@@ -125,7 +125,7 @@ export default function RevealPage() {
       const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString();
       const policiesRes = await supabase
         .from("policies")
-        .select("id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at")
+        .select("id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at")
         .eq("agency_id", agencyId)
         .gte("logged_at", startOfYear)
         .limit(20000);
@@ -234,7 +234,12 @@ export default function RevealPage() {
     // of the baseline (bound/issued only — matches the main dashboard's rule).
     const production = policies.reduce(
       (acc, pol) => {
-        const logDate = new Date(pol.logged_at);
+        // bound_at (stamped once, the moment status first becomes 'bound') - not raw logged_at,
+        // which stays at quote time for an existing quote converted to bound later, and gets
+        // re-stamped to "now" on a later bound -> issued transition - decides which year this
+        // bound/issued app counts toward. Same fix/note as the Scoreboard's boundDate calc in
+        // app/dashboard/page.tsx (fetchDashboardData).
+        const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
         if (logDate.getFullYear() !== today.getFullYear()) return acc;
         if (!(pol.status === "bound" || pol.status === "issued")) return acc;
         const prem = num(pol.premium_amount);
@@ -323,7 +328,7 @@ export default function RevealPage() {
       nbLifePrem = 0,
       nbHealthPrem = 0;
     policies.forEach((pol) => {
-      const logDate = new Date(pol.logged_at);
+      const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
       if (logDate.getFullYear() !== today.getFullYear()) return;
       if (!(pol.status === "bound" || pol.status === "issued")) return;
       const prem = num(pol.premium_amount);

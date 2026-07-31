@@ -74,7 +74,11 @@ export default function DashboardTab({
     const todayStr = new Date().toDateString();
     const todaysPolicies = (pipeline || []).filter((p: any) => {
       if (p.status !== 'bound' && p.status !== 'issued') return false;
-      return new Date(p.logged_at).toDateString() === todayStr;
+      // bound_at (stamped once, the moment status first becomes 'bound') - not logged_at, which
+      // stays at quote time for an existing quote converted to bound later, and gets re-stamped to
+      // "now" on a later bound -> issued transition - is what decides "today". See the identical
+      // fix/note on the Scoreboard's own boundDate calc in app/dashboard/page.tsx.
+      return new Date(p.bound_at || p.written_at || p.logged_at).toDateString() === todayStr;
     });
 
     const byUser = new Map<string, any>();

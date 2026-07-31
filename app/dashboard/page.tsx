@@ -53,7 +53,7 @@ const GlobalStyles = () => (
 
 type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; };
 type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates; global_close_rate?: number; stripe_customer_id?: string | null; stripe_subscription_id?: string | null; subscription_status?: string | null; plan_id?: string | null; target_vc_active?: boolean; target_travel_active?: boolean;};
-type Policy = { id: string; user_id: string; customer_name: string; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
+type Policy = { id: string; user_id: string; customer_name: string; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
 type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
 
@@ -532,9 +532,9 @@ export default function Home() {
     // NOTE: `id` must be selected here - monthPolicies feeds CommissionTab's itemized statement
     // table, which keys each <tr> off pol.id. Omitting it left every row keyed as undefined,
     // triggering React's "missing unique key" warning for the whole list.
-    // `written_at` is also required here - see the `boundDate` note below in the policies.forEach
-    // loop for why MTD/QTD/YTD Bound Apps must key off it instead of `logged_at`.
-    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, customer_name').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
+    // `bound_at`/`written_at` are also required here - see the `boundDate` note below in the
+    // policies.forEach loop for why MTD/QTD/YTD Bound Apps must key off them instead of `logged_at`.
+    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, customer_name').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) polQuery = polQuery.in('user_id', officeMemberIds);
     const { data: policies, error: policiesError } = await polQuery;
     if (policiesError) {
@@ -542,7 +542,7 @@ export default function Home() {
       showToast('Failed to load policy data — revenue numbers below may be incomplete.', 'error');
     }
 
-    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(p.written_at || p.logged_at), targetDate)) || []);
+    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(p.bound_at || p.written_at || p.logged_at), targetDate)) || []);
 
     let bonusQuery = supabase.from('manual_bonuses').select('*').eq('agency_id', agencyId).gte('logged_at', firstDayOfMonth.toISOString());
     const { data: fetchedBonuses, error: bonusesError } = await bonusQuery;
@@ -642,11 +642,12 @@ export default function Home() {
       // by updatePolicyStatus on every status transition (e.g. bound -> issued, possibly weeks or
       // months after the policy was actually bound), so filtering on it made those calcs silently
       // pull in policies whose real bind date was outside the period, purely because they'd been
-      // touched/updated recently. `written_at` is stamped once at creation and never touched again
-      // by any later status update (see updatePolicyStatus), so it reliably reflects when the app
-      // was actually bound. Falls back to logged_at only for legacy rows written before written_at
-      // existed.
-      const boundDate = new Date(pol.written_at || pol.logged_at);
+      // touched/updated recently. `bound_at` is stamped exactly once, at the moment status first
+      // becomes 'bound' (see updatePolicyStatus / submitLogActivity), so it's the authoritative bind
+      // date. Falls back to `written_at` (creation-time only - stale for an existing quote converted
+      // to bound later, which was the original bug here) then `logged_at` only for legacy rows
+      // written before `bound_at` existed.
+      const boundDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
       const parentLine = getParentLine(pol.product_line);
       
       if (pol.product_line === 'Complex Resolution') {
@@ -1037,9 +1038,10 @@ export default function Home() {
     const startOfYear = new Date(new Date().getFullYear(), 0, 1);
     const [{ data: acts, error: actErr }, { data: pols, error: polErr }] = await Promise.all([
       supabase.from('activities').select('activity_type, logged_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
-      // written_at is required alongside logged_at - see the boundDate note in computeRawMetricValue
-      // (utils/customTargets.ts) for why Custom Target progress must key off it for policies.
-      supabase.from('policies').select('product_line, status, premium_amount, logged_at, written_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
+      // bound_at/written_at are required alongside logged_at - see the boundDate note in
+      // computeRawMetricValue (utils/customTargets.ts) for why Custom Target progress must key off
+      // them for policies.
+      supabase.from('policies').select('product_line, status, premium_amount, logged_at, written_at, bound_at, office_id').eq('agency_id', agencyId).gte('logged_at', startOfYear.toISOString()).limit(100000),
     ]);
     if (actErr) console.error('[Custom Targets] activities fetch failed', actErr);
     if (polErr) console.error('[Custom Targets] policies fetch failed', polErr);
@@ -1333,7 +1335,8 @@ export default function Home() {
              payment_cycle: 'monthly',
              status: 'bound', 
              logged_at: scatteredDate,
-             written_at: scatteredDate
+             written_at: scatteredDate,
+             bound_at: scatteredDate
            });
          }
 
@@ -1350,6 +1353,7 @@ export default function Home() {
              status: 'issued', 
              logged_at: scatteredDate,
              written_at: scatteredDate,
+             bound_at: scatteredDate,
              issued_at: scatteredDate
            });
          }
@@ -1656,6 +1660,9 @@ export default function Home() {
             status: data.status, 
             logged_at: data.loggedAt,
             written_at: data.writtenAt || data.loggedAt,
+            // Only stamp bound_at for rows the CSV already reports as bound/issued - a row still
+            // sitting at 'quoted' hasn't been bound yet, so it should have no bind date at all.
+            bound_at: (data.status === 'bound' || data.status === 'issued') ? (data.writtenAt || data.loggedAt) : null,
             issued_at: data.issuedAt
          });
 
@@ -1895,6 +1902,22 @@ export default function Home() {
       // issued_at is stamped the moment a policy actually becomes issued; written_at is left untouched
       // so it keeps reflecting whenever the policy was originally written/bound.
       if (newStatus === 'issued') updateData.issued_at = new Date().toISOString();
+
+      // bound_at is stamped exactly once, at the moment status first becomes 'bound' - this is what
+      // the Scoreboard/custom-targets date-window checks (Today/Week/Month/Quarter/Year Bound Apps)
+      // key off, instead of written_at (only correct for brand-new bound rows, stale for an
+      // existing quote converted to bound later) or logged_at (re-stamped above on every later
+      // transition, e.g. bound -> issued, which would look like a fresh bind on the issue date).
+      if (newStatus === 'bound') {
+        updateData.bound_at = new Date().toISOString();
+      } else if (newStatus === 'issued') {
+        // Edge case: the status dropdown allows jumping straight from 'quoted' to 'issued',
+        // skipping 'bound' entirely, so bound_at may never have been set. Backfill it here (best
+        // approximation: "now") only if it's still missing, so it never overwrites a real bind
+        // timestamp set on an earlier quoted -> bound transition.
+        const { data: existing } = await supabase.from('policies').select('bound_at').eq('id', policyId).maybeSingle();
+        if (!existing?.bound_at) updateData.bound_at = new Date().toISOString();
+      }
       
       if (finalPremium !== undefined && finalPremium !== null) updateData.premium_amount = finalPremium;
 
@@ -2064,17 +2087,21 @@ export default function Home() {
           if (isExistingQuote && item.existingQuoteIds.length > 0) {
             const idsToUpdate = item.existingQuoteIds.slice(0, item.count);
             if (idsToUpdate.length > 0) {
-              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle }).in('id', idsToUpdate);
+              // bound_at = currentTime (not stampFor(i) - these rows are a single batch update, not
+              // sequential inserts) so this conversion-from-quote is credited to the day it's ACTUALLY
+              // bound. Previously this update never touched any timestamp, so a quote logged on one
+              // day and bound days/weeks later kept counting as bound on its original quote date.
+              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in('id', idsToUpdate);
               if (updErr) { console.error('[submitLogActivity] bind existing-quote update failed:', updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
             }
             if (item.count > idsToUpdate.length) {
                const extraCount = item.count - idsToUpdate.length;
-               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i) }));
+               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
                const { error: extraErr } = await supabase.from('policies').insert(extraPolicies);
                if (extraErr) { console.error('[submitLogActivity] bind extra-policies insert failed:', extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
-            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i) }));
+            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
             const { error: bndErr } = await supabase.from('policies').insert(policiesToLog);
             if (bndErr) { console.error('[submitLogActivity] bound policies insert failed:', bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
           }
@@ -2368,11 +2395,15 @@ export default function Home() {
   const filteredPolicies = useMemo(() => {
     const byOffice = globalOfficeFilter === 'all' ? agencyPolicies : agencyPolicies.filter(p => p.office_id === globalOfficeFilter);
     // Written vs. Issued toggle: attach the date that should actually drive month/year bucketing
-    // for this policy, based on dateFilterMode. Falls back to logged_at for legacy rows or
-    // not-yet-issued policies (issued_at is null until a policy is marked 'issued').
+    // for this policy, based on dateFilterMode. "Written" means "bound" here, so it must key off
+    // `bound_at` (set once, the moment status first became bound) - not `written_at` alone, which
+    // is only set at creation and stays stale for an existing quote converted to bound later (the
+    // same bug already fixed on the main Scoreboard's own MTD calc in fetchDashboardData). Falls
+    // back to written_at/logged_at for legacy rows, or to logged_at for not-yet-issued policies in
+    // 'issued' mode (issued_at is null until a policy is marked 'issued').
     return byOffice.map(p => ({
       ...p,
-      effectiveDate: (dateFilterMode === 'written' ? (p.written_at || p.logged_at) : (p.issued_at || p.logged_at))
+      effectiveDate: (dateFilterMode === 'written' ? (p.bound_at || p.written_at || p.logged_at) : (p.issued_at || p.logged_at))
     }));
   }, [agencyPolicies, globalOfficeFilter, dateFilterMode]);
 
@@ -2703,7 +2734,10 @@ export default function Home() {
 
       filteredPolicies.forEach(pol => {
         if (pol.user_id !== member.id) return;
-        const logDate = new Date(pol.logged_at);
+        // bound_at (falls back to written_at, unchanged from before, for still-'quoted' rows) - not
+        // raw logged_at - decides week membership for bound/issued apps, same fix/note as the
+        // Scoreboard's own boundDate calc in fetchDashboardData above.
+        const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
         const parentLine = getParentLine(pol.product_line);
         
         if (logDate >= startOfWeek && logDate <= endOfWeek) {
@@ -3073,15 +3107,25 @@ export default function Home() {
       filteredPolicies.forEach(pol => {
         const parentLine = getParentLine(pol.product_line);
         if (pol.user_id !== member.id || parentLine !== 'Life') return;
-        const logDate = new Date(pol.logged_at);
+        // Two distinct dates on purpose: mQuotes/monthQuotes counts every Life app that entered the
+        // pipeline this month regardless of status (a "was this quoted this month" question, so it
+        // must key off the quote date - written_at, unaffected by a later bind), while
+        // mWritten/mIssued/ytdApps below ask "was this actually bound/issued this month/year"
+        // (bound_at - the real bind date). Blending these into one date, as before, made a policy
+        // quoted in one month but bound the next miscount as written+issued in its ORIGINAL quote
+        // month instead of the month it was actually bound.
+        const quoteDate = new Date(pol.written_at || pol.logged_at);
+        const boundDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
         
-        if (logDate.getFullYear() === targetYear && logDate.getMonth() === targetMonthNum) {
+        if (quoteDate.getFullYear() === targetYear && quoteDate.getMonth() === targetMonthNum) {
           mQuotes++; totals.monthQuotes++;
+        }
+        if (boundDate.getFullYear() === targetYear && boundDate.getMonth() === targetMonthNum) {
           if (pol.status === 'issued') { mIssued++; totals.monthIssued++; mWritten++; totals.monthWritten++; mPremium += Number(pol.premium_amount); totals.monthPremium += Number(pol.premium_amount); } 
           else if (pol.status === 'bound') { mWritten++; totals.monthWritten++; mPremium += Number(pol.premium_amount); totals.monthPremium += Number(pol.premium_amount); }
         }
 
-        if (logDate.getFullYear() === targetYear && (pol.status === 'bound' || pol.status === 'issued')) {
+        if (boundDate.getFullYear() === targetYear && (pol.status === 'bound' || pol.status === 'issued')) {
             ytdApps++;
             ytdPrem += Number(pol.premium_amount);
         }
@@ -3121,7 +3165,10 @@ export default function Home() {
         let issuedLifeCred = 0, carryOverCred = 0, pendingLifeCred = 0, pendingCarryOver = 0, pendingLifeApps = 0, issuedHealthCred = 0, pendingHealthCred = 0;
         
         policies.forEach(pol => {
-            const logDate = new Date(pol.logged_at);
+            // bound_at (falls back to written_at, unchanged from before, for still-'quoted' rows) -
+            // not raw logged_at - decides which year a bound/issued app counts toward. Same fix/
+            // note as the Scoreboard's own boundDate calc in fetchDashboardData above.
+            const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
             if (logDate.getFullYear() === today.getFullYear()) {
                 const prem = Number(pol.premium_amount);
                 const isBoundOrIssued = pol.status === 'bound' || pol.status === 'issued';
@@ -3378,7 +3425,7 @@ export default function Home() {
         let nbAutoPrem = 0, nbFirePrem = 0, nbCommPrem = 0, nbLifePrem = 0, nbHealthPrem = 0;
         const currentYear = new Date().getFullYear();
         policies.forEach(pol => {
-            const logDate = new Date(pol.logged_at);
+            const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
             if (logDate.getFullYear() === currentYear && (pol.status === 'bound' || pol.status === 'issued')) {
                 const prem = Number(pol.premium_amount);
                 const parentLine = getParentLine(pol.product_line);

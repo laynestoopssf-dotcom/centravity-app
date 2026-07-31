@@ -21,7 +21,16 @@ serve(async (req) => {
     // 3. Fetch Global Data for the last 24 hours (filtered locally in memory)
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000)).toISOString();
     const { data: allActivities } = await supabase.from('activities').select('agency_id, user_id, activity_type, logged_at').gte('logged_at', twentyFourHoursAgo);
-    const { data: allPolicies } = await supabase.from('policies').select('agency_id, user_id, status, logged_at').gte('logged_at', twentyFourHoursAgo);
+    // Scoped to bound/issued only (the only statuses this function ever reads below - see "apps"
+    // below), so every matching row is guaranteed a `bound_at` (set once, the moment status first
+    // became bound; back-filled for legacy rows by the add_policies_bound_at migration) - letting
+    // us bucket "today" by the real bind date instead of `logged_at`, which never moves for a
+    // policy quoted earlier and only bound within the last 24h (the "convert existing quote ->
+    // bound" path doesn't touch `logged_at`), so that bind would be silently missed and could wrongly
+    // break/reset a producer's daily bound-apps streak. Floor widened from 24h to 72h on `bound_at`
+    // as a safety margin for agencies whose local "today" trails UTC "now" by up to a few hours.
+    const seventyTwoHoursAgo = new Date(now.getTime() - (72 * 60 * 60 * 1000)).toISOString();
+    const { data: allPolicies } = await supabase.from('policies').select('agency_id, user_id, status, bound_at, written_at, logged_at').in('status', ['bound', 'issued']).gte('bound_at', seventyTwoHoursAgo);
 
     const profileUpdates = [];
     const agencyUpdates = [];
@@ -51,7 +60,7 @@ serve(async (req) => {
         const localTodayString = dateFormatter.format(now);
 
         const agencyActs = allActivities?.filter(a => a.agency_id === agency.id && dateFormatter.format(new Date(a.logged_at)) === localTodayString) || [];
-        const agencyPols = allPolicies?.filter(p => p.agency_id === agency.id && dateFormatter.format(new Date(p.logged_at)) === localTodayString) || [];
+        const agencyPols = allPolicies?.filter(p => p.agency_id === agency.id && dateFormatter.format(new Date(p.bound_at || p.written_at || p.logged_at)) === localTodayString) || [];
 
         const team = profiles?.filter(p => p.agency_id === agency.id) || [];
 
