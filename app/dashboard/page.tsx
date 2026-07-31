@@ -10,6 +10,7 @@ import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
+import { isLoggerMessage } from "../../utils/loggerBridge";
 import { 
   Target, 
   FileText, ShieldCheck, CheckCircle2, 
@@ -2165,6 +2166,27 @@ export default function Home() {
     showToast("+1 Inbound Call!");
     if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
+
+  // Relays taps from the /logger pop-out window (see app/logger/page.tsx + utils/loggerBridge.ts)
+  // into this exact same tab's own logInboundCall/logTouchpoint/openLogModal - the pop-out has no
+  // Supabase client or modal UI of its own, it's purely a remote control for whichever dashboard
+  // tab launched it (window.opener), so a Quote/Bound tap there opens the full line-item modal
+  // right here, and this tab's own state/toasts/stats update exactly as if the tap happened on
+  // this tab's own Quick Actions dock.
+  useEffect(() => {
+    const handleLoggerMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || !profile) return;
+      if (!isLoggerMessage(event.data)) return;
+      switch (event.data.action) {
+        case 'inbound': logInboundCall(); break;
+        case 'outbound': logTouchpoint(); break;
+        case 'quote': openLogModal(profile.role === 'service' ? 'complex_res' : 'quote'); break;
+        case 'bound': openLogModal(profile.role === 'service' ? 'cross_sell' : 'bound'); break;
+      }
+    };
+    window.addEventListener('message', handleLoggerMessage);
+    return () => window.removeEventListener('message', handleLoggerMessage);
+  }, [profile, logInboundCall, logTouchpoint, openLogModal]);
 
   // "Log Past Data" - covers Touches/Inbound Calls, which (unlike Quotes/Bound Apps) are logged
   // via a single click with no modal in the normal flow, so they have no other way to backdate.

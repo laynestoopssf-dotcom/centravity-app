@@ -52,7 +52,11 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./utils/supabaseEnv";
 // Proxy" section of the authentication guide linked above).
 // =============================================================================
 
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding"];
+// /logger (the pop-out Quick Actions window - see app/logger/page.tsx) is gated the same as
+// /dashboard/onboarding: it's only ever reached via a window.open() from an already-authenticated
+// dashboard session, and it directly triggers real activity-logging actions in that opener via
+// postMessage, so it must never render for a signed-out visitor.
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/logger"];
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

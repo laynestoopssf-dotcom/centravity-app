@@ -15,6 +15,14 @@ export interface QuickActionsBarProps {
   onLogOutboundTouch: () => void;
   onOpenQuoteModal: () => void;
   onOpenBoundModal: () => void;
+  // True only for the dedicated /logger pop-out window (see app/logger/page.tsx), which is
+  // nothing BUT this grid inside a tiny, purpose-sized browser window. The default
+  // `fixed bottom-4 inset-x-3` dock positioning exists to float this bar over OTHER dashboard
+  // content on a narrow-but-tall browser window - there's no other content in the pop-out to float
+  // over, so that same fixed positioning would just leave dead space above a card stuck to the
+  // bottom edge instead of filling the window. Standalone mode renders the identical grid/card,
+  // just centered in normal document flow so it actually fills the small popup.
+  standalone?: boolean;
 }
 
 interface ActionButtonProps {
@@ -62,25 +70,28 @@ export default function QuickActionsBar({
   onLogOutboundTouch,
   onOpenQuoteModal,
   onOpenBoundModal,
+  standalone = false,
 }: QuickActionsBarProps) {
-  return (
-    <div className="lg:hidden fixed bottom-4 inset-x-3 z-40">
-      <div className="mx-auto max-w-md grid grid-cols-4 gap-1 rounded-2xl border border-gray-200 bg-white/95 backdrop-blur-md p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.18)]">
-        <ActionButton icon={PhoneIncoming} label="Inbound" colorClass="bg-emerald-50 text-emerald-600" onClick={onLogInboundCall} />
-        <ActionButton icon={PhoneOutgoing} label="Outbound" colorClass="bg-blue-50 text-blue-600" onClick={onLogOutboundTouch} />
-        <ActionButton
-          icon={isService ? RefreshCw : FileText}
-          label={isService ? "Complex Res" : "Quote"}
-          colorClass="bg-purple-50 text-purple-600"
-          onClick={onOpenQuoteModal}
-        />
-        <ActionButton
-          icon={isService ? Users : ShieldCheck}
-          label={isService ? "Cross-Sell" : "Bound"}
-          colorClass="bg-emerald-50 text-emerald-600"
-          onClick={onOpenBoundModal}
-        />
-      </div>
+  const grid = (
+    <div className={`grid grid-cols-4 gap-1 rounded-2xl border border-gray-200 bg-white/95 backdrop-blur-md p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.18)] ${standalone ? "w-full" : "mx-auto max-w-md"}`}>
+      <ActionButton icon={PhoneIncoming} label="Inbound" colorClass="bg-emerald-50 text-emerald-600" onClick={onLogInboundCall} />
+      <ActionButton icon={PhoneOutgoing} label="Outbound" colorClass="bg-blue-50 text-blue-600" onClick={onLogOutboundTouch} />
+      <ActionButton
+        icon={isService ? RefreshCw : FileText}
+        label={isService ? "Complex Res" : "Quote"}
+        colorClass="bg-purple-50 text-purple-600"
+        onClick={onOpenQuoteModal}
+      />
+      <ActionButton
+        icon={isService ? Users : ShieldCheck}
+        label={isService ? "Cross-Sell" : "Bound"}
+        colorClass="bg-emerald-50 text-emerald-600"
+        onClick={onOpenBoundModal}
+      />
     </div>
   );
+
+  if (standalone) return grid;
+
+  return <div className="lg:hidden fixed bottom-4 inset-x-3 z-40">{grid}</div>;
 }

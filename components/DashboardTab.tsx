@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
@@ -217,6 +217,27 @@ export default function DashboardTab({
 
   const isService = activeProfile.role === 'service';
 
+  // "Launch Logger" pop-out (see app/logger/page.tsx) - a tiny standalone window that's nothing but
+  // this Scoreboard's Quick Actions dock, for docking to the side of a screen without needing to
+  // resize/narrow the whole dashboard tab to get QuickActionsBar's lg:hidden dock to show. Sized to
+  // hug that grid's natural footprint (4 columns of icon+label buttons) plus a small header - see
+  // QuickActionsBar.tsx's `standalone` prop for the layout it renders inside this window.
+  // Deliberately keyed off `profile.role` (the actual signed-in user), NOT the `isService` above
+  // (which reflects whichever producer's board a manager happens to be VIEWING via selectedProducer)
+  // - logging always attributes activity to whoever is actually signed in, exactly like the main
+  // Quick Actions dock's own wiring in app/dashboard/page.tsx.
+  const handleLaunchLogger = () => {
+    const params = new URLSearchParams({
+      service: profile?.role === 'service' ? '1' : '0',
+      agency: agencySettings?.name || 'Centravity',
+    });
+    window.open(
+      `/logger?${params.toString()}`,
+      'CentravityLogger',
+      'width=380,height=300,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes'
+    );
+  };
+
   // Mirrors the same owner/manager (or custom "office manager"-style role with an explicit
   // view_agency_dash permission) check used to gate every other team-wide view in the app, so the
   // Daily Production Roster - which surfaces every producer's numbers, not just the viewer's own -
@@ -355,6 +376,16 @@ export default function DashboardTab({
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3">
+          <button
+            type="button"
+            onClick={handleLaunchLogger}
+            title="Pop out a compact Quick Actions window you can dock anywhere on your screen"
+            className="flex items-center gap-1.5 bg-white border border-gray-200 hover:border-blue-200 hover:bg-blue-50 text-gray-600 hover:text-blue-600 px-3 py-1.5 rounded-xl shadow-sm h-[40px] text-xs font-bold transition-colors"
+          >
+            <ExternalLink size={14} />
+            Pop Out Logger
+          </button>
+
           <div className="flex bg-gray-50 border border-gray-200 p-1 rounded-xl shadow-sm h-[40px]">
             <button onClick={() => setTimeframe('daily')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'daily' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Daily</button>
             <button onClick={() => setTimeframe('weekly')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'weekly' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Weekly</button>
