@@ -1,0 +1,33 @@
+-- =============================================================================
+-- Fixes a live bind failure: Policy Insert Error [23502] - null value in
+-- column "customer_name" of relation "policies" violates not-null constraint.
+-- -----------------------------------------------------------------------------
+-- 20260805000000_add_client_identifier_hash.sql added `client_identifier_hash`
+-- and stopped every write path from populating `customer_name` going forward
+-- (it's the deprecated plaintext column, kept around only until Phase 2 - see
+-- scripts/PHASE2_hash_and_drop_customer_name.sql - permanently drops it), but
+-- never touched whatever NOT NULL constraint that column already had. Once
+-- the app stopped sending a value for it, every new insert started violating
+-- that constraint.
+--
+-- This is purely a constraint change - no data is touched, and this does NOT
+-- drop the column itself (that's still Phase 2's job, deliberately deferred
+-- pending the export/backup decision - see that script's header). A NULL
+-- customer_name from here on just means "this row was written after the
+-- blind-index change and never had a plaintext name to begin with," which is
+-- indistinguishable from - and requires no special-casing next to - a
+-- pre-existing row whose name was later scrubbed by Phase 2.
+--
+-- SCOPE CHECK for other deprecated-plaintext-name columns, per the same
+-- concern:
+--   - manual_bonuses.bonus_name: NOT deprecated - still actively written by
+--     addManualBonus() for every bonus (the bonus TYPE, e.g. "Google Review",
+--     never a customer name - see 20260805020000_add_manual_bonuses_policy_id.sql).
+--     Always non-null in practice, so left untouched.
+--   - activities: never had a customer/name column at all in any insert path
+--     (activity_type, agency_id, office_id, user_id, logged_at only) - nothing
+--     to fix here.
+-- =============================================================================
+
+alter table public.policies
+  alter column customer_name drop not null;

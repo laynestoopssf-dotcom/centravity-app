@@ -32,6 +32,14 @@
 -- The column/index added here are unaffected - only how the hash going into
 -- it is computed changed. The `comment on column` below reflects the current
 -- (post-hardening) scheme.
+--
+-- ADDENDUM 2 (2026-08-05, still the same day): this migration said above that
+-- application code "stopped writing customer_name" but never dropped that
+-- column's pre-existing NOT NULL constraint - so every insert started failing
+-- with `null value in column "customer_name" violates not-null constraint`
+-- the moment the app actually stopped sending it. See
+-- 20260805040000_drop_customer_name_not_null.sql, which fixes the constraint
+-- (not the data/column - that's still Phase 2's job).
 -- =============================================================================
 
 alter table public.policies
