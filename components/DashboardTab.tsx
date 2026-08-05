@@ -1,9 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
 import DashboardMetrics from './dashboard/DashboardMetrics';
+import { hashIdentifier } from '../utils/crypto';
+import { getCachedIdentifier } from '../utils/identifierCache';
+
+/** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
+const displayIdentifier = (policyId: string) => getCachedIdentifier(policyId) || '—';
 
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
@@ -18,6 +23,27 @@ export default function DashboardTab({
   const [archiveSearch, setArchiveSearch] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [timeframe, setTimeframe] = useState<'daily'|'weekly'|'monthly'>('daily');
+
+  // Identifiers are blind-indexed - there's no plaintext to substring-match against anymore,
+  // only an exact-match hash comparison, computed server-side (see utils/crypto.ts - the pepper
+  // never reaches this browser). The search term is re-hashed on a short debounce rather than on
+  // every keystroke, both to avoid firing an RPC per character and because typing "jo" no longer
+  // finds "John D." the way it used to - only the full, exact identifier will match.
+  const [activeSearchHash, setActiveSearchHash] = useState<string | null>(null);
+  const [archiveSearchHash, setArchiveSearchHash] = useState<string | null>(null);
+  useEffect(() => {
+    const term = showArchive ? archiveSearch : activeSearch;
+    const setHash = showArchive ? setArchiveSearchHash : setActiveSearchHash;
+    if (!term) { setHash(null); return; }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      // Hashing is now a network round trip (RPC), so a slower-to-resolve call for an earlier
+      // keystroke could otherwise land AFTER a faster one for a later keystroke and clobber it
+      // with stale results - `cancelled` guards against that out-of-order resolution.
+      hashIdentifier(term).then(hash => { if (!cancelled) setHash(hash); });
+    }, 200);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [activeSearch, archiveSearch, showArchive]);
 
   // Pipeline table sorting + pagination (Category 1: Scoreboard Table upgrades)
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'logged_at', direction: 'desc' });
@@ -133,7 +159,7 @@ export default function DashboardTab({
     }
     if (activeSearch) {
       const term = activeSearch.toLowerCase();
-      return p.customer_name.toLowerCase().includes(term) || p.product_line.toLowerCase().includes(term);
+      return (activeSearchHash !== null && p.client_identifier_hash === activeSearchHash) || p.product_line.toLowerCase().includes(term);
     }
     return true;
   });
@@ -149,7 +175,7 @@ export default function DashboardTab({
 
     if (archiveSearch) {
       const term = archiveSearch.toLowerCase();
-      return p.customer_name.toLowerCase().includes(term) || p.product_line.toLowerCase().includes(term);
+      return (archiveSearchHash !== null && p.client_identifier_hash === archiveSearchHash) || p.product_line.toLowerCase().includes(term);
     }
     return true;
   });
@@ -158,7 +184,9 @@ export default function DashboardTab({
     return [...rows].sort((a, b) => {
       let aVal: any, bVal: any;
       switch (sortConfig.key) {
-        case 'customer_name': aVal = (a.customer_name || '').toLowerCase(); bVal = (b.customer_name || '').toLowerCase(); break;
+        // Best-effort: sorts by whatever readable label this browser can resolve locally
+        // (see displayIdentifier above) - there is no plaintext name left to sort by otherwise.
+        case 'identifier': aVal = displayIdentifier(a.id).toLowerCase(); bVal = displayIdentifier(b.id).toLowerCase(); break;
         case 'product_line': aVal = (a.product_line || '').toLowerCase(); bVal = (b.product_line || '').toLowerCase(); break;
         case 'premium_amount': aVal = Number(a.premium_amount) || 0; bVal = Number(b.premium_amount) || 0; break;
         case 'status': aVal = a.status || ''; bVal = b.status || ''; break;
@@ -804,7 +832,7 @@ export default function DashboardTab({
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="text-gray-400 uppercase font-semibold">
-                                <th className="text-left py-1.5">Customer</th>
+                                <th className="text-left py-1.5">Identifier</th>
                                 <th className="text-left py-1.5">Product Line</th>
                                 <th className="text-right py-1.5">Premium</th>
                               </tr>
@@ -812,7 +840,7 @@ export default function DashboardTab({
                             <tbody className="divide-y divide-gray-100">
                               {row.policies.map((p: any) => (
                                 <tr key={p.id}>
-                                  <td className="py-1.5 font-semibold text-gray-700">{p.customer_name}</td>
+                                  <td className="py-1.5 font-semibold text-gray-700">{displayIdentifier(p.id)}</td>
                                   <td className="py-1.5 text-gray-500">{p.product_line}</td>
                                   <td className="py-1.5 text-right font-bold text-gray-700">${Math.round(Number(p.premium_amount) || 0).toLocaleString()}</td>
                                 </tr>
@@ -841,7 +869,7 @@ export default function DashboardTab({
                <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                <input
                  type="text"
-                 placeholder="Search Name or Line..."
+                 placeholder="Search exact Identifier or Line..."
                  value={showArchive ? archiveSearch : activeSearch}
                  onChange={(e) => { setCurrentPage(1); if (showArchive) setArchiveSearch(e.target.value); else setActiveSearch(e.target.value); }}
                  className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400"
@@ -858,7 +886,7 @@ export default function DashboardTab({
             <thead>
               <tr className="bg-white border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400">
                 <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('logged_at')}>Date Logged<SortIcon column="logged_at" /></th>
-                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('customer_name')}>Customer<SortIcon column="customer_name" /></th>
+                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('identifier')}>Identifier<SortIcon column="identifier" /></th>
                 <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('product_line')}>Line<SortIcon column="product_line" /></th>
                 <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('premium_amount')}>Premium<SortIcon column="premium_amount" /></th>
                 <th className="p-4 font-bold text-right cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('status')}>Status / Action<SortIcon column="status" /></th>
@@ -871,7 +899,7 @@ export default function DashboardTab({
                 paginatedPipelineRows.map((pol: any) => (
                   <tr key={pol.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="p-4 text-sm font-semibold text-gray-500 whitespace-nowrap">{new Date(pol.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td className="p-4 text-sm font-bold text-gray-900">{pol.customer_name}</td>
+                    <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id)}</td>
                     <td className="p-4 text-sm font-bold text-gray-600">
                        {pol.product_line === 'Complex Resolution' ? <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">Complex Res.</span> : pol.product_line}
                     </td>

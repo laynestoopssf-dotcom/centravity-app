@@ -11,6 +11,8 @@ import { generateCoachingInsight as generateCoachingInsightAction } from "../act
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
 import { isLoggerMessage } from "../../utils/loggerBridge";
+import { hashIdentifier, hashIdentifiers } from "../../utils/crypto";
+import { cacheIdentifier, getCachedIdentifierForAny, forgetCachedIdentifier } from "../../utils/identifierCache";
 import { 
   Target, 
   FileText, ShieldCheck, CheckCircle2, 
@@ -54,7 +56,11 @@ const GlobalStyles = () => (
 
 type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; };
 type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates; global_close_rate?: number; stripe_customer_id?: string | null; stripe_subscription_id?: string | null; subscription_status?: string | null; plan_id?: string | null; target_vc_active?: boolean; target_travel_active?: boolean;};
-type Policy = { id: string; user_id: string; customer_name: string; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
+// `client_identifier_hash` is a one-way SHA-256 blind index (see utils/crypto.ts)
+// - there is no plaintext name on this object, by design. Any "readable label"
+// shown for a policy row comes only from utils/identifierCache.ts's local,
+// browser-only cache (see components consuming this type), never from here.
+type Policy = { id: string; user_id: string; client_identifier_hash?: string | null; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
 type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
 
@@ -214,8 +220,10 @@ export default function Home() {
   const [loggingType, setLoggingType] = useState<'quote' | 'bound' | 'complex_res' | 'cross_sell'>('quote');
   const [resolutionStatus, setResolutionStatus] = useState<'positive' | 'negative'>('positive');
   const [isExistingQuote, setIsExistingQuote] = useState(false);
-  const [custFirstName, setCustFirstName] = useState("");
-  const [custLastInitial, setCustLastInitial] = useState("");
+  // Free-text "Identifier (Optional)" - a blind-index search key, not a name field.
+  // It's hashed client-side (utils/crypto.ts) right before submit; nothing here
+  // is ever sent to Supabase in plain text.
+  const [custIdentifier, setCustIdentifier] = useState("");
   const [lineItems, setLineItems] = useState<LineItemData[]>([]);
 
   const [ledgerActivities, setLedgerActivities] = useState<any[]>([]);
@@ -535,7 +543,7 @@ export default function Home() {
     // triggering React's "missing unique key" warning for the whole list.
     // `bound_at`/`written_at` are also required here - see the `boundDate` note below in the
     // policies.forEach loop for why MTD/QTD/YTD Bound Apps must key off them instead of `logged_at`.
-    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, customer_name').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
+    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, client_identifier_hash').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) polQuery = polQuery.in('user_id', officeMemberIds);
     const { data: policies, error: policiesError } = await polQuery;
     if (policiesError) {
@@ -767,19 +775,19 @@ export default function Home() {
     setChartData(newChartData);
   };
 
-  const addManualBonus = async (name: string, amount: number, customerName?: string) => {
+  const addManualBonus = async (name: string, amount: number, policyId?: string | null) => {
     if (!profile) return;
     const targetUserId = selectedProducer === 'all' ? profile.id : selectedProducer;
     // Spiffs like Google Review / Personal Referral / Referral bonuses are verified against a
-    // customer before payout; fold that name into bonus_name so the claim stays auditable without
-    // requiring a schema change (manual_bonuses has no dedicated customer_name column).
-    const finalBonusName = customerName ? `${name} — ${customerName}` : name;
+    // customer before payout - that's now a real FK to the customer's policy row (policy_id),
+    // never a name typed into bonus_name. See 20260805020000_add_manual_bonuses_policy_id.sql.
 
     try {
       const { data, error } = await supabase.from('manual_bonuses').insert([{
         agency_id: profile.agency_id,
         user_id: targetUserId,
-        bonus_name: finalBonusName,
+        bonus_name: name,
+        policy_id: policyId || null,
         amount: amount
       }]).select().single();
       
@@ -1329,12 +1337,13 @@ export default function Home() {
            policiesToLog.push({
              agency_id: profile?.agency_id,
              office_id: targetOffice,
-             user_id: bulkProducerId,
-             customer_name: `Historical ${line} Import`,
-             product_line: line,
-             premium_amount: premPerApp,
-             payment_cycle: 'monthly',
-             status: 'bound', 
+            user_id: bulkProducerId,
+            // No real identifier for a bulk-scattered historical count row - leave
+            // client_identifier_hash null rather than hashing a meaningless placeholder.
+            product_line: line,
+            premium_amount: premPerApp,
+            payment_cycle: 'monthly',
+            status: 'bound', 
              logged_at: scatteredDate,
              written_at: scatteredDate,
              bound_at: scatteredDate
@@ -1346,12 +1355,11 @@ export default function Home() {
            policiesToLog.push({
              agency_id: profile?.agency_id,
              office_id: targetOffice,
-             user_id: bulkProducerId,
-             customer_name: `Historical ${line} Import`,
-             product_line: line,
-             premium_amount: premPerApp,
-             payment_cycle: 'monthly',
-             status: 'issued', 
+            user_id: bulkProducerId,
+            product_line: line,
+            premium_amount: premPerApp,
+            payment_cycle: 'monthly',
+            status: 'issued', 
              logged_at: scatteredDate,
              written_at: scatteredDate,
              bound_at: scatteredDate,
@@ -1648,13 +1656,22 @@ export default function Home() {
 
       const policiesToLog: any[] = [];
       const activitiesToLog: any[] = []; 
-      
-      policiesArray.forEach((data) => {
+
+      // `finalCustomerName` only ever lived in-memory for in-upload dedup/formatting above -
+      // it must become a hash (never plaintext) before it's part of an insert payload. The
+      // generic "Historical Import" fallback isn't a real identifier, so it's passed through as
+      // "" (the batch RPC returns null for blanks) rather than hashing a meaningless placeholder
+      // shared by every unmatched row. One round trip for the whole file, not one per row.
+      const identifierHashes = await hashIdentifiers(
+        policiesArray.map((data) => (data.finalCustomerName && data.finalCustomerName !== 'Historical Import') ? data.finalCustomerName : '')
+      );
+
+      policiesArray.forEach((data, idx) => {
          policiesToLog.push({
             agency_id: profile.agency_id,
             office_id: data.mappedOfficeId,
             user_id: data.mappedUserId,
-            customer_name: data.finalCustomerName, 
+            client_identifier_hash: identifierHashes[idx],
             product_line: data.productLine, 
             premium_amount: data.premium,
             payment_cycle: 'monthly', 
@@ -1937,22 +1954,11 @@ export default function Home() {
     setLoggingType(type);
     setResolutionStatus('positive');
     setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: defaultLine, count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]);
-    setCustFirstName("");
-    setCustLastInitial("");
+    setCustIdentifier("");
     setIsExistingQuote(false);
     setLogOfficeId(profile?.office_id || "");
     setLogDate(todayDateStr());
     setIsLoggingModalOpen(true);
-  };
-
-  const formatCustomerName = (name: string) => {
-    if (!name) return "";
-    const parts = name.trim().split(/\s+/);
-    if (parts.length > 1) {
-      const first = parts[0]; const last = parts[parts.length - 1];
-      return `${first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()} ${last.charAt(0).toUpperCase()}.`;
-    }
-    return parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase() : "";
   };
 
   const addLineItem = () => {
@@ -1972,8 +1978,12 @@ export default function Home() {
     if (isSubmittingActivity) return;
     setIsSubmittingActivity(true);
 
-    const finalFirstName = custFirstName.charAt(0).toUpperCase() + custFirstName.slice(1).toLowerCase();
-    const finalFormattedName = `${finalFirstName.trim()} ${custLastInitial.toUpperCase()}.`;
+    // Blind index: the raw identifier never gets included in any Supabase request -
+    // only its SHA-256 hash does (see utils/crypto.ts). `trimmedIdentifier` is kept
+    // around purely in-memory for this submit (toast text, and the local-only
+    // picker cache in utils/identifierCache.ts) - it's never written anywhere.
+    const trimmedIdentifier = custIdentifier.trim();
+    const identifierHash = await hashIdentifier(custIdentifier);
 
     try {
       // Builds the effective timestamp from the (possibly backdated) `logDate` combined with the
@@ -2000,10 +2010,10 @@ export default function Home() {
         const { error: actErr } = await supabase.from('activities').insert([{ id: makeRowId(), activity_type: 'complex_res', agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }]);
         if (actErr) { console.error('[submitLogActivity] complex_res activity insert failed:', actErr); throw new Error(`Activity Error: ${actErr.message}${actErr.details ? ` (${actErr.details})` : ''}`); }
 
-        const { error: polErr } = await supabase.from('policies').insert([{ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
+        const { error: polErr } = await supabase.from('policies').insert([{ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
         if (polErr) { console.error('[submitLogActivity] complex_res policy insert failed:', polErr); throw new Error(`Policy Error: ${polErr.message}${polErr.details ? ` (${polErr.details})` : ''}`); }
 
-        showToast(`Resolution logged for ${finalFormattedName}!`);
+        showToast(trimmedIdentifier ? `Resolution logged for ${trimmedIdentifier}!` : 'Resolution logged!');
         setIsLoggingModalOpen(false);
         fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
         fetchPipeline(selectedProducer, profile.agency_id);
@@ -2060,7 +2070,11 @@ export default function Home() {
         // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
         // entry books $100/unit instead of multiplying the household's premium by 3. Same
         // sequential-insert bypass as activities above.
-        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
+        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
+        // Local-only convenience cache (never sent to Supabase) so the "Bind from existing
+        // Household Quote?" picker can still show this identifier back to this same browser
+        // later, since the DB will only ever have the hash - see utils/identifierCache.ts.
+        if (trimmedIdentifier) policiesPayload.forEach(p => cacheIdentifier(p.id, trimmedIdentifier));
         const insertedPolicyIds: string[] = [];
         for (const policy of policiesPayload) {
           const { error: polErr } = await supabase.from('policies').insert(policy);
@@ -2092,17 +2106,22 @@ export default function Home() {
               // sequential inserts) so this conversion-from-quote is credited to the day it's ACTUALLY
               // bound. Previously this update never touched any timestamp, so a quote logged on one
               // day and bound days/weeks later kept counting as bound on its original quote date.
-              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in('id', idsToUpdate);
+              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in('id', idsToUpdate);
               if (updErr) { console.error('[submitLogActivity] bind existing-quote update failed:', updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
+              // Refresh (or clear) the local picker cache to match whatever the producer just
+              // re-typed here - it may differ from what was cached when this was first quoted.
+              idsToUpdate.forEach(id => trimmedIdentifier ? cacheIdentifier(id, trimmedIdentifier) : forgetCachedIdentifier(id));
             }
             if (item.count > idsToUpdate.length) {
                const extraCount = item.count - idsToUpdate.length;
-               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+               if (trimmedIdentifier) extraPolicies.forEach(p => cacheIdentifier(p.id, trimmedIdentifier));
                const { error: extraErr } = await supabase.from('policies').insert(extraPolicies);
                if (extraErr) { console.error('[submitLogActivity] bind extra-policies insert failed:', extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
-            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, customer_name: finalFormattedName, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+            if (trimmedIdentifier) policiesToLog.forEach(p => cacheIdentifier(p.id, trimmedIdentifier));
             const { error: bndErr } = await supabase.from('policies').insert(policiesToLog);
             if (bndErr) { console.error('[submitLogActivity] bound policies insert failed:', bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
           }
@@ -3902,17 +3921,22 @@ export default function Home() {
               {loggingType === 'bound' && (
                 <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl mb-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <input type="checkbox" id="existingQuoteToggle" checked={isExistingQuote} onChange={(e) => { setIsExistingQuote(e.target.checked); if (!e.target.checked) { setCustFirstName(""); setCustLastInitial(""); setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: agencySettings?.custom_product_lines?.[0]?.name || 'Auto', count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]); } }} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-600" />
+                    <input type="checkbox" id="existingQuoteToggle" checked={isExistingQuote} onChange={(e) => { setIsExistingQuote(e.target.checked); if (!e.target.checked) { setCustIdentifier(""); setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: agencySettings?.custom_product_lines?.[0]?.name || 'Auto', count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]); } }} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-600" />
                     <label htmlFor="existingQuoteToggle" className="text-sm font-semibold text-blue-900 cursor-pointer">Bind from existing Household Quote?</label>
                   </div>
                   {isExistingQuote && (
                      <div className="mt-3">
+                       {/* Quotes are grouped by client_identifier_hash (the DB can never show a
+                           readable name once it's hashed) - the label falls back to this
+                           browser's local identifierCache if this same device typed the quote,
+                           otherwise to product lines/premium/date, which is still enough to tell
+                           households apart. See utils/identifierCache.ts for why. */}
                        <select
                          className="w-full p-2 bg-white border border-blue-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
                          onChange={(e) => {
-                           const selectedName = e.target.value;
-                           if (!selectedName) return;
-                           const customerQuotes = pipeline.filter(p => p.status === 'quoted' && p.customer_name === selectedName);
+                           const groupKey = e.target.value;
+                           if (!groupKey) return;
+                           const customerQuotes = pipeline.filter(p => p.status === 'quoted' && (p.client_identifier_hash || p.id) === groupKey);
                            
                            if (customerQuotes.length > 0) {
                               const getParent = (pLine: string) => {
@@ -3930,25 +3954,29 @@ export default function Home() {
                                   existingQuoteIds: [q.id]
                               }));
                               setLineItems(newLineItems);
-                              const parts = selectedName.split(' ');
-                              setCustFirstName(parts[0] || "");
-                              setCustLastInitial(parts[1] ? parts[1].replace('.','').charAt(0) : "");
+                              // Only recoverable if THIS browser cached it when the quote was typed -
+                              // otherwise there's no plaintext anywhere to prefill, so it stays blank.
+                              setCustIdentifier(getCachedIdentifierForAny(customerQuotes.map(q => q.id)) || "");
                            }
                          }}
                        >
                          <option value="">-- Choose a Household --</option>
                          {Object.entries(
                            pipeline.filter(p => p.status === 'quoted').reduce((acc: any, curr: any) => {
-                             if (!acc[curr.customer_name]) acc[curr.customer_name] = [];
-                             acc[curr.customer_name].push(curr);
+                             const key = curr.client_identifier_hash || curr.id;
+                             if (!acc[key]) acc[key] = [];
+                             acc[key].push(curr);
                              return acc;
                            }, {})
-                         ).map(([name, quotes]: [string, any]) => {
+                         ).map(([groupKey, quotes]: [string, any]) => {
                            const lines = quotes.map((q: any) => q.product_line).join(', ');
                            const totalPrem = quotes.reduce((sum: number, q: any) => sum + Number(q.premium_amount), 0);
+                           const cachedName = getCachedIdentifierForAny(quotes.map((q: any) => q.id));
+                           const loggedDate = quotes[0]?.logged_at ? new Date(quotes[0].logged_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+                           const label = cachedName || `Quote${loggedDate ? ` — ${loggedDate}` : ''}`;
                            return (
-                             <option key={name} value={name}>
-                               {name} - {quotes.length} Items ({lines}) - ${totalPrem.toLocaleString()}
+                             <option key={groupKey} value={groupKey}>
+                               {label} - {quotes.length} Items ({lines}) - ${totalPrem.toLocaleString()}
                              </option>
                            );
                          })}
@@ -3958,15 +3986,20 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="grid grid-cols-4 gap-4 mb-2">
-                <div className="col-span-3">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">First Name</label>
-                  <input type="text" required placeholder="e.g. John" value={custFirstName} onChange={e => setCustFirstName(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600" />
+              <div className="mb-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <label className="block text-sm font-semibold text-gray-700">Identifier (Optional)</label>
+                  <span title="For compliance, this identifier is cryptographically scrambled before leaving your browser and is never stored in plain text." className="cursor-help shrink-0">
+                    <ShieldCheck size={14} className="text-blue-500" />
+                  </span>
                 </div>
-                <div className="col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Last Initial</label>
-                  <input type="text" required maxLength={1} placeholder="D" value={custLastInitial} onChange={e => setCustLastInitial(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase())} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 text-center font-bold uppercase" />
-                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. John D. (used only to search your own Pipeline later)"
+                  value={custIdentifier}
+                  onChange={e => setCustIdentifier(e.target.value)}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600"
+                />
               </div>
 
               {loggingType === 'complex_res' ? (

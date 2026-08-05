@@ -2,6 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, TrendingUp, Users, ArrowRightCircle, Sparkles, Target, ClipboardList, X, Gift } from 'lucide-react';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
+import { getCachedIdentifier } from '../utils/identifierCache';
+
+/** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
+const displayIdentifier = (policyId: string) => getCachedIdentifier(policyId) || '—';
 
 export default function CommissionTab({ 
   profile, stats, commissionData, manualBonuses, 
@@ -16,35 +20,30 @@ export default function CommissionTab({
 
   // Spiff/bonus claims (Google Review, Personal Referral, Referral, etc.) require verifying which
   // customer earned the reward before the payout is awarded, instead of firing instantly on click.
+  // The claim links directly to that customer's policy row (a real FK, policy_id) rather than
+  // asking the producer to type the name in again - there is zero free-text PII entry point here,
+  // by design. See 20260805020000_add_manual_bonuses_policy_id.sql for why.
   const [pendingBonus, setPendingBonus] = useState<{ name: string; amount: number } | null>(null);
-  const [bonusCustFirstName, setBonusCustFirstName] = useState("");
-  const [bonusCustLastInitial, setBonusCustLastInitial] = useState("");
+  const [bonusPolicyId, setBonusPolicyId] = useState("");
   const [isSubmittingBonus, setIsSubmittingBonus] = useState(false);
 
   const openBonusModal = (bonus: { name: string; amount: number }) => {
     setPendingBonus(bonus);
-    setBonusCustFirstName("");
-    setBonusCustLastInitial("");
+    setBonusPolicyId("");
   };
 
   const closeBonusModal = () => {
     setPendingBonus(null);
-    setBonusCustFirstName("");
-    setBonusCustLastInitial("");
+    setBonusPolicyId("");
     setIsSubmittingBonus(false);
   };
 
   const submitBonusClaim = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pendingBonus) return;
-    const firstName = bonusCustFirstName.trim();
-    const lastInitial = bonusCustLastInitial.trim();
-    if (!firstName || !lastInitial) return;
-
-    const formattedName = `${firstName.charAt(0).toUpperCase()}${firstName.slice(1).toLowerCase()} ${lastInitial.charAt(0).toUpperCase()}.`;
+    if (!pendingBonus || !bonusPolicyId) return;
 
     setIsSubmittingBonus(true);
-    await addManualBonus(pendingBonus.name, pendingBonus.amount, formattedName);
+    await addManualBonus(pendingBonus.name, pendingBonus.amount, bonusPolicyId);
     closeBonusModal();
   };
 
@@ -411,7 +410,10 @@ export default function CommissionTab({
                         {manualBonuses.map((bonus: any) => (
                           <div key={bonus.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-purple-100 shadow-sm">
                             <div>
-                              <p className="font-bold text-gray-800 text-xs">{bonus.bonus_name}</p>
+                              <p className="font-bold text-gray-800 text-xs">
+                                {bonus.bonus_name}
+                                {bonus.policy_id && <span className="text-gray-400 font-medium"> — {displayIdentifier(bonus.policy_id)}</span>}
+                              </p>
                               <p className="text-[10px] text-gray-400">{new Date(bonus.logged_at).toLocaleDateString()}</p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -489,7 +491,7 @@ export default function CommissionTab({
                  <thead>
                    <tr className="bg-gray-50 border-b border-gray-200">
                      <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Customer</th>
+                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Identifier</th>
                      <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Line</th>
                      <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                      <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Premium</th>
@@ -512,7 +514,7 @@ export default function CommissionTab({
                      return (
                        <tr key={pol.id || idx} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                          <td className="p-4 text-sm font-medium text-gray-500">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="p-4 text-sm font-bold text-gray-900">{pol.customer_name}</td>
+                         <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id)}</td>
                          <td className="p-4">
                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
                              {pol.product_line} {isGhost && <span className="ml-1 opacity-50 text-[10px]">(0%)</span>}
@@ -558,23 +560,27 @@ export default function CommissionTab({
               <button type="button" onClick={closeBonusModal} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
-            <p className="text-sm text-gray-500 mb-4">Who earned this? Verifying the customer keeps the spiff log auditable before the commission is awarded.</p>
+            <p className="text-sm text-gray-500 mb-4">Which customer earned this? Linking the claim to their policy keeps the spiff log auditable without ever writing their name down.</p>
 
             <form onSubmit={submitBonusClaim} className="space-y-4">
-              <div className="grid grid-cols-4 gap-4">
-                <div className="col-span-3">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Customer First Name</label>
-                  <input type="text" required autoFocus placeholder="e.g. John" value={bonusCustFirstName} onChange={e => setBonusCustFirstName(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-600" />
-                </div>
-                <div className="col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Last Initial</label>
-                  <input type="text" required maxLength={1} placeholder="D" value={bonusCustLastInitial} onChange={e => setBonusCustLastInitial(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase())} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-600 text-center font-bold uppercase" />
-                </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Linked Policy</label>
+                <select required autoFocus value={bonusPolicyId} onChange={e => setBonusPolicyId(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-600">
+                  <option value="" disabled>Select the customer&apos;s policy...</option>
+                  {userPolicies.map((pol: any) => (
+                    <option key={pol.id} value={pol.id}>
+                      {displayIdentifier(pol.id)} — {pol.product_line} — ${Number(pol.premium_amount).toLocaleString()} — {new Date(pol.logged_at).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+                {userPolicies.length === 0 && (
+                  <p className="text-xs text-amber-600 font-medium mt-1.5">No bound/issued policies this month for this producer. Switch the month above to find the customer&apos;s policy first.</p>
+                )}
               </div>
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={closeBonusModal} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
-                <button type="submit" disabled={isSubmittingBonus || !bonusCustFirstName.trim() || !bonusCustLastInitial.trim()} className="flex-1 py-3 px-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={isSubmittingBonus || !bonusPolicyId} className="flex-1 py-3 px-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   {isSubmittingBonus ? 'Awarding...' : `Confirm & Award $${pendingBonus.amount}`}
                 </button>
               </div>

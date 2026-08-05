@@ -9,6 +9,8 @@
 
 BEGIN;
 
+create extension if not exists pgcrypto;
+
 -- =============================================================================
 -- STEP 1: WIPE prior mock agency + production records
 -- =============================================================================
@@ -149,15 +151,20 @@ BEGIN
   -- Closed/won policies (bound/issued) — strict product mix + rising premium
   -- Mix index n%20 → 10 Auto, 5 Fire, 2 Life, 1 Commercial, 1 Health, 1 Bank
   -- --------------------------------------------------------------------------
+  -- customer_name has been replaced by a blind-index hash (see utils/crypto.ts /
+  -- supabase/migrations/20260805000000_add_client_identifier_hash.sql). Even this mock/demo
+  -- data goes through the exact same pepper-keyed hashing helper the app's RPCs use (see
+  -- 20260805010000_secure_pepper_hash_rpc.sql, which must run before this script does), so it
+  -- stays consistent with live data and keeps working once customer_name is eventually dropped.
   INSERT INTO public.policies (
-    agency_id, office_id, user_id, customer_name, product_line,
+    agency_id, office_id, user_id, client_identifier_hash, product_line,
     premium_amount, payment_cycle, status, logged_at, written_at, issued_at
   )
   SELECT
     v_agency_id,
     v_office_id,
     s.user_id,
-    initcap(c.first) || ' ' || upper(left(c.last, 1)) || '.',
+    public._hash_client_identifier_internal(initcap(c.first) || ' ' || upper(left(c.last, 1)) || '.', v_agency_id),
     s.product_line,
     round((s.base_prem * (1 + (s.day_idx * 0.025)))::numeric, 2),
     CASE WHEN s.product_line IN ('Life', 'Health', 'Bank') THEN 'annual'
@@ -226,14 +233,14 @@ BEGIN
   -- Active pipeline — 20 quoted prospects, same strict product mix
   -- --------------------------------------------------------------------------
   INSERT INTO public.policies (
-    agency_id, office_id, user_id, customer_name, product_line,
+    agency_id, office_id, user_id, client_identifier_hash, product_line,
     premium_amount, payment_cycle, status, logged_at, written_at, issued_at
   )
   SELECT
     v_agency_id,
     v_office_id,
     q.user_id,
-    q.customer_name,
+    public._hash_client_identifier_internal(q.identifier_name, v_agency_id),
     q.product_line,
     q.premium_amount,
     q.payment_cycle,
@@ -269,7 +276,7 @@ BEGIN
       (v_chelsy_id,  'Felix R.',  'Health',     2650,          'annual',  4,  interval '10 hours'),
       -- 1 Bank/Other (5%)
       (v_alex_id,    'Ruby K.',   'Bank',       1200,          'annual',  0,  interval '14 hours')
-  ) AS q(user_id, customer_name, product_line, premium_amount, payment_cycle, days_ago, tod);
+  ) AS q(user_id, identifier_name, product_line, premium_amount, payment_cycle, days_ago, tod);
 
 END $$;
 
