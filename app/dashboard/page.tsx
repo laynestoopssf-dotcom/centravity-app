@@ -1983,9 +1983,15 @@ export default function Home() {
     // around purely in-memory for this submit (toast text, and the local-only
     // picker cache in utils/identifierCache.ts) - it's never written anywhere.
     const trimmedIdentifier = custIdentifier.trim();
-    const identifierHash = await hashIdentifier(custIdentifier);
 
     try {
+      // Deliberately INSIDE the try block (unlike the very first version of this line) -
+      // hashIdentifier() itself never throws (see utils/crypto.ts), but keeping this call here
+      // rather than before the try means a bind/quote can never be silently stuck "submitting
+      // forever" (finally below resets isSubmittingActivity) or fail with no visible toast if
+      // that ever changes.
+      const identifierHash = await hashIdentifier(custIdentifier);
+
       // Builds the effective timestamp from the (possibly backdated) `logDate` combined with the
       // actual current time-of-day, so same-day submissions are byte-for-byte identical to before
       // and a backdated submission still sorts sensibly within its chosen day.
@@ -3616,7 +3622,10 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <GlobalStyles />
         {toastMessage && (
-          <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white max-w-md ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
+          // z-[200]: must always render above every modal backdrop in the app (the highest of
+          // which is z-[60] in SettingsTab) so an error toast fired while a modal is open (e.g. a
+          // failed bind submitted from the Log Activity modal) is never hidden behind it.
+          <div className={`fixed top-4 right-4 z-[200] flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white max-w-md ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
             {toastMessage.type === 'success' ? <CheckCircle2 size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
             <span className="font-medium">{toastMessage.msg}</span>
             <button type="button" onClick={() => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); setToastMessage(null); }} className="ml-1 shrink-0 opacity-80 hover:opacity-100" aria-label="Dismiss">
@@ -3773,7 +3782,9 @@ export default function Home() {
       )}
 
       {toastMessage && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white max-w-md ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
+        // z-[200]: see the matching comment on the other toastMessage render above - must beat
+        // every modal backdrop (max z-[60] today) so errors are never hidden behind an open modal.
+        <div className={`fixed top-4 right-4 z-[200] flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white max-w-md ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} transition-all animate-in slide-in-from-top-2`}>
           {toastMessage.type === 'success' ? <CheckCircle2 size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
           <span className="font-medium">{toastMessage.msg}</span>
           <button type="button" onClick={() => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); setToastMessage(null); }} className="ml-1 shrink-0 opacity-80 hover:opacity-100" aria-label="Dismiss">
@@ -3995,7 +4006,7 @@ export default function Home() {
                 </div>
                 <input
                   type="text"
-                  placeholder="e.g. John D. (used only to search your own Pipeline later)"
+                  placeholder="e.g. Lead #459 (used only to search your own Pipeline later)"
                   value={custIdentifier}
                   onChange={e => setCustIdentifier(e.target.value)}
                   className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600"

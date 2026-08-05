@@ -494,9 +494,9 @@ export default function SettingsTab({
   };
 
   const downloadCsvTemplate = () => {
-    const headers = "Customer Name,Product Line,Premium,Payment Cycle,Status,Date\n";
-    const example1 = "John Doe,Auto,1200,monthly,bound,2026-07-14\n";
-    const example2 = "Smith Family,Life,850,annual,issued,2026-07-15\n";
+    const headers = "Identifier,Product Line,Premium,Payment Cycle,Status,Date\n";
+    const example1 = "Lead #459,Auto,1200,monthly,bound,2026-07-14\n";
+    const example2 = "File Alpha,Life,850,annual,issued,2026-07-15\n";
     const blob = new Blob([headers + example1 + example2], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2339,13 +2339,13 @@ export default function SettingsTab({
 
                    <div className="flex items-center justify-between px-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
                       <p className="text-xs text-gray-500 leading-relaxed max-w-2xl">
-                        <strong>Expected Columns:</strong> Team Member Name, Date Written, Customer, Activity, Line of Business, Product, Premium, Issued Date, Status.<br/>
+                        <strong>Expected Columns:</strong> Team Member Name, Date Written, Identifier, Activity, Line of Business, Product, Premium, Issued Date, Status.<br/>
                         <span className="italic">Note: The script automatically handles "Last, First" producer names and safely ignores missing issue dates.</span>
                       </p>
                       <button type="button" onClick={() => {
-                        const headers = "Team Member Name,Date Written,Customer,Activity,Line of Business,Product,Premium,Issued Date,Status\n";
-                        const example1 = "\"Stoops, Layne\",2026-07-14,John Doe,application,Auto,Auto,1200,2026-07-15,issued\n";
-                        const example2 = "\"Smith, Jane\",2026-07-15,Sarah Connor,quote,Fire,Homeowners,600,,written\n";
+                        const headers = "Team Member Name,Date Written,Identifier,Activity,Line of Business,Product,Premium,Issued Date,Status\n";
+                        const example1 = "\"Stoops, Layne\",2026-07-14,Lead #459,application,Auto,Auto,1200,2026-07-15,issued\n";
+                        const example2 = "\"Smith, Jane\",2026-07-15,File Alpha,quote,Fire,Homeowners,600,,written\n";
                         const blob = new Blob([headers + example1 + example2], { type: 'text/csv' });
                         const url = window.URL.createObjectURL(blob);
                         const a = document.createElement('a');

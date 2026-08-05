@@ -135,3 +135,12 @@ revoke all on function public.hash_client_identifier(text) from public;
 revoke all on function public.hash_client_identifiers(text[]) from public;
 grant execute on function public.hash_client_identifier(text) to authenticated;
 grant execute on function public.hash_client_identifiers(text[]) to authenticated;
+
+-- ADDENDUM (2026-08-05, later same day): a live bind attempt failed after this
+-- migration ran - root cause was these functions' SET search_path missing
+-- `extensions`, the schema pgcrypto's digest() actually lives in on a
+-- standard Supabase project (this file's `create extension if not exists
+-- pgcrypto;` above is a no-op if Supabase already installed it there, which
+-- it does by default). See 20260805030000_fix_hash_rpc_search_path.sql,
+-- which re-declares all three functions below with the fix - run that
+-- migration too.
