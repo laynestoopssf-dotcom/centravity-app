@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
 import { resolveCommissionRates } from "../../utils/commissionRates";
+import { calculateCommission, makeParentLineResolver, resolveAccelerators, resolveRates, emptyCommissionLineTotals } from "../../utils/commissionMath";
 import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
 import { enrichCustomTargets, type CustomTargetRow } from "../../utils/customTargets";
 import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
@@ -61,7 +62,7 @@ type Agency = { id: string; name: string; timezone?: string; production_days_per
 // shown for a policy row comes only from utils/identifierCache.ts's local,
 // browser-only cache (see components consuming this type), never from here.
 type Policy = { id: string; user_id: string; client_identifier_hash?: string | null; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
-type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; };
+type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; isRenewal?: boolean; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
 
 const DEFAULT_PRODUCT_LINES = [
@@ -543,7 +544,7 @@ export default function Home() {
     // triggering React's "missing unique key" warning for the whole list.
     // `bound_at`/`written_at` are also required here - see the `boundDate` note below in the
     // policies.forEach loop for why MTD/QTD/YTD Bound Apps must key off them instead of `logged_at`.
-    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, client_identifier_hash').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
+    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, client_identifier_hash, is_renewal').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) polQuery = polQuery.in('user_id', officeMemberIds);
     const { data: policies, error: policiesError } = await polQuery;
     if (policiesError) {
@@ -656,6 +657,13 @@ export default function Home() {
       // date. Falls back to `written_at` (creation-time only - stale for an existing quote converted
       // to bound later, which was the original bug here) then `logged_at` only for legacy rows
       // written before `bound_at` existed.
+      // Scoreboard KPIs (Bound Apps, Premium - month/week/today/QTD/YTD, plus the 7-day chart's
+      // Bound series) are New Business only, same as the commission engine (utils/commissionMath.ts).
+      // A Renewal-flagged policy contributes to nothing below - it never happened as far as the
+      // Scoreboard is concerned. Touchpoints/Quotes are unaffected since they're tallied purely from
+      // the `activities` table above, which has no concept of a policy's renewal status.
+      if (pol.is_renewal) return;
+
       const boundDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
       const parentLine = getParentLine(pol.product_line);
       
@@ -2081,7 +2089,7 @@ export default function Home() {
         // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
         // entry books $100/unit instead of multiplying the household's premium by 3. Same
         // sequential-insert bypass as activities above.
-        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
+        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, is_renewal: !!item.isRenewal, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
         // Local-only convenience cache (never sent to Supabase) so the "Bind from existing
         // Household Quote?" picker can still show this identifier back to this same browser
         // later, since the DB will only ever have the hash - see utils/identifierCache.ts.
@@ -2117,7 +2125,7 @@ export default function Home() {
               // sequential inserts) so this conversion-from-quote is credited to the day it's ACTUALLY
               // bound. Previously this update never touched any timestamp, so a quote logged on one
               // day and bound days/weeks later kept counting as bound on its original quote date.
-              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in('id', idsToUpdate);
+              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, is_renewal: !!item.isRenewal, bound_at: currentTime }).in('id', idsToUpdate);
               if (updErr) { console.error('[submitLogActivity] bind existing-quote update failed:', updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
               // Refresh (or clear) the local picker cache to match whatever the producer just
               // re-typed here - it may differ from what was cached when this was first quoted.
@@ -2125,13 +2133,13 @@ export default function Home() {
             }
             if (item.count > idsToUpdate.length) {
                const extraCount = item.count - idsToUpdate.length;
-               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, is_renewal: !!item.isRenewal, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
                if (trimmedIdentifier) extraPolicies.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
                const { error: extraErr } = await supabase.from('policies').insert(extraPolicies);
                if (extraErr) { console.error('[submitLogActivity] bind extra-policies insert failed:', extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
-            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, is_renewal: !!item.isRenewal, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
             if (trimmedIdentifier) policiesToLog.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
             const { error: bndErr } = await supabase.from('policies').insert(policiesToLog);
             if (bndErr) { console.error('[submitLogActivity] bound policies insert failed:', bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
@@ -2472,91 +2480,20 @@ export default function Home() {
     const plan = compPlans.find(p => p.id === activeProfile.comp_plan_id);
     if (!plan) return { total: manualBonusTotal, issuedComm: 0, pipelineComm: 0, bonusTotal: manualBonusTotal, isLocked: false, planName: null, thresholds: null, flatBonuses: [], acceleratorBreakdown: {}, appliedBumps: {} };
 
-    const rules = plan.rules || {};
-    const baseRates = rules.base_rates || rules.baseRates || {};
-    const thresholds = rules.thresholds || {};
-    const accelerators = rules.accelerators || [];
-    
-    const rawFlatBonuses = rules.custom_bonuses || rules.flat_bonuses || rules.flatBonuses || [];
-    const flatBonuses = rawFlatBonuses.map((b: any) => ({
-      name: b.name || b.title || b.bonusName || b.description || "Unnamed Bonus",
-      amount: Number(b.amount || b.value || b.payout || b.bonus || 0)
-    }));
-
-    const isLocked = (stats.monthPotentialPremium < Number(thresholds.required_premium_to_unlock || 0)) ||
-                     (stats.monthTotalApps < Number(thresholds.required_apps_to_unlock || 0)) ||
-                     (stats.monthLifeHealthApps < Number(thresholds.required_life_health_apps_to_unlock || 0));
-
-    let bumps = { pnc_base: 0, auto_base: 0, fire_base: 0, life_base: 0, health_base: 0 };
-    let maxFlatBonusPerMetric: Record<string, number> = {};
-
-    accelerators.forEach((acc: any) => {
-      let metricVal = 0;
-      if (acc.metric === 'life_health_apps') metricVal = stats.monthLifeHealthApps;
-      else if (acc.metric === 'life_premium') metricVal = stats.monthLifePrem;
-      else if (acc.metric === 'pnc_premium') metricVal = (stats.monthAutoPrem + stats.monthFirePrem + stats.monthCommPrem);
-      else if (acc.metric === 'total_premium') metricVal = stats.monthPotentialPremium;
-      else if (acc.metric === 'total_apps') metricVal = stats.monthTotalApps;
-
-      const thresholdAmt = Number(acc.threshold || 0);
-
-      if (metricVal >= thresholdAmt) {
-         if (acc.reward_type === 'flat_bonus') {
-            const bonusAmt = Number(acc.bonus_amount || 0);
-            if (bonusAmt > (maxFlatBonusPerMetric[acc.metric] || 0)) {
-               maxFlatBonusPerMetric[acc.metric] = bonusAmt;
-            }
-         } else {
-            const bumpAmt = Number(acc.bump_percent || 0);
-            const targetKey = acc.target_line as keyof typeof bumps;
-            if (bumpAmt > (bumps[targetKey] || 0)) {
-                bumps[targetKey] = bumpAmt;
-            }
-         }
-      }
+    // Real math (retroactive tiers, additive stacking, renewal exclusion, Financial Services =
+    // Life+Health) lives in utils/commissionMath.ts - shared with the teamCommissions loop below so
+    // the two can never drift out of sync again.
+    const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
+    const result = calculateCommission({
+      policies: monthPolicies,
+      userId: activeUserId || '',
+      rules: plan.rules,
+      manualBonusTotal,
+      getParentLine: makeParentLineResolver(lines),
     });
 
-    const acceleratorBonusTotal = Object.values(maxFlatBonusPerMetric).reduce((sum, val) => sum + val, 0);
-
-    const rates = {
-      auto: Number(baseRates.auto_nb || 0) + bumps.pnc_base + bumps.auto_base,
-      fire: Number(baseRates.fire_nb || 0) + bumps.pnc_base + bumps.fire_base,
-      comm: Number(baseRates.commercial_nb || 0) + bumps.pnc_base,
-      life: Number(baseRates.life_nb || 0) + bumps.life_base,
-      health: Number(baseRates.health_nb || 0) + bumps.health_base
-    };
-
-    const issuedComm = isLocked ? 0 : 
-      stats.monthIssuedPremLOB.Auto * (rates.auto / 100) +
-      stats.monthIssuedPremLOB.Fire * (rates.fire / 100) +
-      stats.monthIssuedPremLOB.Commercial * (rates.comm / 100) +
-      stats.monthIssuedPremLOB.Life * (rates.life / 100) +
-      stats.monthIssuedPremLOB.Health * (rates.health / 100);
-
-    const pipelineComm = isLocked ? 0 : 
-      stats.monthPipelinePremLOB.Auto * (rates.auto / 100) +
-      stats.monthPipelinePremLOB.Fire * (rates.fire / 100) +
-      stats.monthPipelinePremLOB.Commercial * (rates.comm / 100) +
-      stats.monthPipelinePremLOB.Life * (rates.life / 100) +
-      stats.monthPipelinePremLOB.Health * (rates.health / 100);
-
-    const earnedRuleBonuses = isLocked ? 0 : acceleratorBonusTotal;
-
-    return {
-      total: issuedComm + pipelineComm + manualBonusTotal + earnedRuleBonuses,
-      issuedComm,
-      pipelineComm,
-      bonusTotal: manualBonusTotal + earnedRuleBonuses,
-      isLocked,
-      thresholds,
-      rates,
-      planName: plan.name,
-      activeBumps: bumps,
-      flatBonuses,
-      acceleratorBreakdown: maxFlatBonusPerMetric, 
-      appliedBumps: bumps
-    };
-  }, [profile, team, selectedProducer, compPlans, stats, manualBonuses]);
+    return { ...result, planName: plan.name };
+  }, [profile, team, selectedProducer, compPlans, monthPolicies, agencySettings, manualBonuses]);
 
   const blendedCommRate = useMemo(() => {
     const totalPrem = stats.monthAutoPrem + stats.monthFirePrem + stats.monthCommPrem + stats.monthLifePrem + stats.monthHealthPrem;
@@ -2590,6 +2527,7 @@ export default function Home() {
     let agencyTotalPremium = 0, agencyTotalApps = 0;
     monthPolicies.forEach((pol: any) => {
       if (pol.status !== 'bound' && pol.status !== 'issued') return;
+      if (pol.is_renewal) return; // Scoreboard/What-If math is New Business only.
       const parentLine = getParentLine(pol.product_line);
       if (!(PARENT_CATEGORIES as readonly string[]).includes(parentLine)) return;
       agencyTotalPremium += Number(pol.premium_amount) || 0;
@@ -2616,45 +2554,9 @@ export default function Home() {
 
     const result: Record<string, any> = {};
     const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
-    const getParentLine = (line: string) => resolveParentLine(line, lines);
+    const getParentLine = makeParentLineResolver(lines);
 
     team.forEach(member => {
-      let pStats = {
-        monthPotentialPremium: 0, monthTotalApps: 0, monthLifeHealthApps: 0,
-        monthLifePrem: 0, monthAutoPrem: 0, monthFirePrem: 0, monthCommPrem: 0,
-        monthIssuedPremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 },
-        monthPipelinePremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 }
-      };
-
-      monthPolicies.forEach(pol => {
-          if (pol.user_id !== member.id) return;
-          const isBoundOrIssued = pol.status === 'bound' || pol.status === 'issued';
-          if (!isBoundOrIssued) return;
-
-          const premium = Number(pol.premium_amount) || 0;
-          const parentLine = getParentLine(pol.product_line);
-          pStats.monthPotentialPremium += premium;
-          pStats.monthTotalApps++;
-
-          // Same issued-only rule as fetchDashboardData above: Life/Health accelerator metrics
-          // must not count bound-but-unissued apps toward unlocking a bump or threshold.
-          if ((parentLine === 'Life' || parentLine === 'Health') && pol.status === 'issued') pStats.monthLifeHealthApps++;
-          if (parentLine === 'Auto') pStats.monthAutoPrem += premium;
-          if (parentLine === 'Fire') pStats.monthFirePrem += premium;
-          if (parentLine === 'Commercial') pStats.monthCommPrem += premium;
-          if (parentLine === 'Life' && pol.status === 'issued') pStats.monthLifePrem += premium;
-
-          if (pol.status === 'issued') {
-            if (parentLine !== 'Standalone' && pStats.monthIssuedPremLOB[parentLine as keyof typeof pStats.monthIssuedPremLOB] !== undefined) {
-                pStats.monthIssuedPremLOB[parentLine as keyof typeof pStats.monthIssuedPremLOB] += premium;
-            }
-          } else if (pol.status === 'bound') {
-            if (parentLine !== 'Standalone' && pStats.monthPipelinePremLOB[parentLine as keyof typeof pStats.monthPipelinePremLOB] !== undefined) {
-                pStats.monthPipelinePremLOB[parentLine as keyof typeof pStats.monthPipelinePremLOB] += premium;
-            }
-          }
-      });
-
       const mBonuses = manualBonuses.filter(b => b.user_id === member.id);
       const manualBonusTotal = mBonuses.reduce((acc, curr) => acc + Number(curr.amount), 0);
 
@@ -2669,72 +2571,16 @@ export default function Home() {
           return;
       }
 
-      const rules = plan.rules || {};
-      const baseRates = rules.base_rates || rules.baseRates || {};
-      const thresholds = rules.thresholds || {};
-      const accelerators = rules.accelerators || [];
-
-      const isLocked = (pStats.monthPotentialPremium < Number(thresholds.required_premium_to_unlock || 0)) ||
-                        (pStats.monthTotalApps < Number(thresholds.required_apps_to_unlock || 0)) ||
-                        (pStats.monthLifeHealthApps < Number(thresholds.required_life_health_apps_to_unlock || 0));
-
-      let bumps = { pnc_base: 0, auto_base: 0, fire_base: 0, life_base: 0, health_base: 0 };
-      let maxFlatBonusPerMetric: Record<string, number> = {};
-
-      accelerators.forEach((acc: any) => {
-        let metricVal = 0;
-        if (acc.metric === 'life_health_apps') metricVal = pStats.monthLifeHealthApps;
-        else if (acc.metric === 'life_premium') metricVal = pStats.monthLifePrem;
-        else if (acc.metric === 'pnc_premium') metricVal = (pStats.monthAutoPrem + pStats.monthFirePrem + pStats.monthCommPrem);
-        else if (acc.metric === 'total_premium') metricVal = pStats.monthPotentialPremium;
-        else if (acc.metric === 'total_apps') metricVal = pStats.monthTotalApps;
-
-        const thresholdAmt = Number(acc.threshold || 0);
-        if (metricVal >= thresholdAmt) {
-            if (acc.reward_type === 'flat_bonus') {
-              const bonusAmt = Number(acc.bonus_amount || 0);
-              if (bonusAmt > (maxFlatBonusPerMetric[acc.metric] || 0)) maxFlatBonusPerMetric[acc.metric] = bonusAmt;
-            } else {
-              const bumpAmt = Number(acc.bump_percent || 0);
-              const targetKey = acc.target_line as keyof typeof bumps;
-              if (bumpAmt > (bumps[targetKey] || 0)) bumps[targetKey] = bumpAmt;
-            }
-        }
+      // Same shared engine as commissionData above (utils/commissionMath.ts) - retroactive tiers,
+      // additive stacking, renewal exclusion, and Financial Services = Life+Health all applied
+      // identically for every team member.
+      result[member.id] = calculateCommission({
+        policies: monthPolicies,
+        userId: member.id,
+        rules: plan.rules,
+        manualBonusTotal,
+        getParentLine,
       });
-
-      const acceleratorBonusTotal = Object.values(maxFlatBonusPerMetric).reduce((sum: number, val: any) => sum + val, 0);
-
-      const rates = {
-        auto: Number(baseRates.auto_nb || 0) + bumps.pnc_base + bumps.auto_base,
-        fire: Number(baseRates.fire_nb || 0) + bumps.pnc_base + bumps.fire_base,
-        comm: Number(baseRates.commercial_nb || 0) + bumps.pnc_base,
-        life: Number(baseRates.life_nb || 0) + bumps.life_base,
-        health: Number(baseRates.health_nb || 0) + bumps.health_base
-      };
-
-      const issuedComm = isLocked ? 0 : 
-        pStats.monthIssuedPremLOB.Auto * (rates.auto / 100) +
-        pStats.monthIssuedPremLOB.Fire * (rates.fire / 100) +
-        pStats.monthIssuedPremLOB.Commercial * (rates.comm / 100) +
-        pStats.monthIssuedPremLOB.Life * (rates.life / 100) +
-        pStats.monthIssuedPremLOB.Health * (rates.health / 100);
-
-      const pipelineComm = isLocked ? 0 : 
-        pStats.monthPipelinePremLOB.Auto * (rates.auto / 100) +
-        pStats.monthPipelinePremLOB.Fire * (rates.fire / 100) +
-        pStats.monthPipelinePremLOB.Commercial * (rates.comm / 100) +
-        pStats.monthPipelinePremLOB.Life * (rates.life / 100) +
-        pStats.monthPipelinePremLOB.Health * (rates.health / 100);
-
-      const earnedRuleBonuses = isLocked ? 0 : acceleratorBonusTotal;
-
-      result[member.id] = {
-        total: issuedComm + pipelineComm + manualBonusTotal + earnedRuleBonuses,
-        issuedComm,
-        pipelineComm,
-        bonusTotal: manualBonusTotal + earnedRuleBonuses,
-        isLocked
-      };
     });
 
     return result;
@@ -2901,30 +2747,29 @@ export default function Home() {
     });
 
     // Resolves accelerators from a comp plan's rules against a given set of production metrics,
-    // returning the effective (possibly bumped) per-line commission rates.
+    // returning the effective (possibly bumped) per-line commission rates. Delegates the actual
+    // stacking (Rule 2) to the same utils/commissionMath.ts helper the real payroll engine uses,
+    // so this leaderboard "What-If" projection never disagrees with the real Commission tab about
+    // whether accelerators stack. `lifePremium` here is expected to already be Life + Health
+    // combined (Rule 4: Financial Services) - see the call sites below.
     const resolveAcceleratedRates = (baseRates: any, accelerators: any[], metrics: { lifeHealthApps: number; lifePremium: number; pncPremium: number; totalPremium: number; totalApps: number }) => {
-      let bumps = { pnc_base: 0, auto_base: 0, fire_base: 0, life_base: 0, health_base: 0 };
-      (accelerators || []).forEach((acc: any) => {
-        let metricVal = 0;
-        if (acc.metric === 'life_health_apps') metricVal = metrics.lifeHealthApps;
-        else if (acc.metric === 'life_premium') metricVal = metrics.lifePremium;
-        else if (acc.metric === 'pnc_premium') metricVal = metrics.pncPremium;
-        else if (acc.metric === 'total_premium') metricVal = metrics.totalPremium;
-        else if (acc.metric === 'total_apps') metricVal = metrics.totalApps;
-
-        if (metricVal >= Number(acc.threshold || 0) && acc.reward_type !== 'flat_bonus') {
-          const bumpAmt = Number(acc.bump_percent || 0);
-          const targetKey = acc.target_line as keyof typeof bumps;
-          if (bumpAmt > (bumps[targetKey] || 0)) bumps[targetKey] = bumpAmt;
-        }
-      });
-
+      const pseudoMetrics = {
+        monthLifeHealthApps: metrics.lifeHealthApps,
+        financialServicesPremium: metrics.lifePremium,
+        pncPremium: metrics.pncPremium,
+        monthPotentialPremium: metrics.totalPremium,
+        monthTotalApps: metrics.totalApps,
+        issuedPremLOB: emptyCommissionLineTotals(),
+        pipelinePremLOB: emptyCommissionLineTotals(),
+      };
+      const { bumps } = resolveAccelerators(accelerators, pseudoMetrics);
+      const rates = resolveRates(baseRates, bumps);
       return {
-        Auto: Number(baseRates.auto_nb || 0) + bumps.pnc_base + bumps.auto_base,
-        Fire: Number(baseRates.fire_nb || 0) + bumps.pnc_base + bumps.fire_base,
-        Commercial: Number(baseRates.commercial_nb || 0) + bumps.pnc_base,
-        Life: Number(baseRates.life_nb || 0) + bumps.life_base,
-        Health: Number(baseRates.health_nb || 0) + bumps.health_base
+        Auto: rates.auto,
+        Fire: rates.fire,
+        Commercial: rates.comm,
+        Life: rates.life,
+        Health: rates.health,
       } as Record<typeof PARENT_CATEGORIES[number], number>;
     };
 
@@ -3063,15 +2908,18 @@ export default function Home() {
       const accelerators = rules.accelerators || [];
 
       const ytdLifeHealthApps = (ytdLineAgg.Life?.apps || 0) + (ytdLineAgg.Health?.apps || 0);
+      // Financial Services bucket (Rule 4) = Life + Health premium combined, not Life alone.
+      const ytdFinancialServicesPremium = ytdLifePremium + (ytdLineAgg.Health?.premium || 0);
       const ytdPncPremium = (ytdLineAgg.Auto?.premium || 0) + (ytdLineAgg.Fire?.premium || 0) + (ytdLineAgg.Commercial?.premium || 0);
       const ytdRates = resolveAcceleratedRates(baseRates, accelerators, {
-        lifeHealthApps: ytdLifeHealthApps, lifePremium: ytdLifePremium, pncPremium: ytdPncPremium, totalPremium: ytdPremium, totalApps: ytdBound
+        lifeHealthApps: ytdLifeHealthApps, lifePremium: ytdFinancialServicesPremium, pncPremium: ytdPncPremium, totalPremium: ytdPremium, totalApps: ytdBound
       });
 
       const r30LifeHealthApps = (r30LineAgg.Life?.apps || 0) + (r30LineAgg.Health?.apps || 0);
+      const r30FinancialServicesPremium = r30LineAgg.Life.premium + r30LineAgg.Health.premium;
       const r30PncPremium = r30LineAgg.Auto.premium + r30LineAgg.Fire.premium + r30LineAgg.Commercial.premium;
       const r30Rates = resolveAcceleratedRates(baseRates, accelerators, {
-        lifeHealthApps: r30LifeHealthApps, lifePremium: r30LineAgg.Life.premium, pncPremium: r30PncPremium, totalPremium: r30Premium, totalApps: r30Bound
+        lifeHealthApps: r30LifeHealthApps, lifePremium: r30FinancialServicesPremium, pncPremium: r30PncPremium, totalPremium: r30Premium, totalApps: r30Bound
       });
 
       const ytdCommissionPerApp = commissionPerApp(memberYtdAvgPremium, ytdRates, ytdLineAgg, agencyYtdLines, ytdBound);
@@ -4092,6 +3940,14 @@ export default function Home() {
                         <div className="grid grid-cols-2 gap-4">
                           <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Term Premium</label><div className="relative"><span className="absolute left-3 top-2.5 text-gray-500 font-medium">$</span><input type="number" required step="0.01" placeholder="0.00" value={item.premiumAmount} onChange={e => updateLineItem(item.id, 'premiumAmount', e.target.value)} className="w-full pl-7 p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm" /></div></div>
                           <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Renewal Cycle</label><select value={item.paymentCycle} onChange={e => updateLineItem(item.id, 'paymentCycle', e.target.value)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm"><option value="monthly">6-Month Term</option><option value="annual">12-Month Term</option></select></div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Business Type</label>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => updateLineItem(item.id, 'isRenewal', false)} className={`flex-1 py-2 rounded-lg border-2 font-bold text-xs transition-all ${!item.isRenewal ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>New Business</button>
+                            <button type="button" onClick={() => updateLineItem(item.id, 'isRenewal', true)} className={`flex-1 py-2 rounded-lg border-2 font-bold text-xs transition-all ${item.isRenewal ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Renewal</button>
+                          </div>
+                          {item.isRenewal && <p className="text-[10px] text-amber-600 font-semibold mt-1">Renewals never earn commission or count toward accelerator thresholds.</p>}
                         </div>
                       </div>
                     ))}

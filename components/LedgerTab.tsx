@@ -19,7 +19,7 @@ const toDateTimeLocalValue = (iso: string) => {
 
 type EditingEntry =
   | { kind: "activity"; id: string; loggedAt: string }
-  | { kind: "policyPremium"; id: string; identifier: string; productLine: string; premiumAmount: number; paymentCycle: string; loggedAt: string }
+  | { kind: "policyPremium"; id: string; identifier: string; productLine: string; premiumAmount: number; paymentCycle: string; isRenewal: boolean; loggedAt: string }
   | { kind: "resolution"; id: string; identifier: string; status: "positive" | "negative"; loggedAt: string };
 
 export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolicies, ledgerDateFilter, setLedgerDateFilter, ledgerCustomStart, setLedgerCustomStart, ledgerCustomEnd, setLedgerCustomEnd, ledgerProducerFilter, setLedgerProducerFilter, ledgerLoading, fetchLedgerData, deleteActivity, deletePolicy, updateLedgerActivity, updateLedgerPolicy }: any) {
@@ -40,7 +40,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   // row whose identifier was originally cached under a different row's id - see
   // utils/identifierCache.ts's byHash store for why that happens).
   const openEditResolution = (pol: any) => setEditingEntry({ kind: "resolution", id: pol.id, identifier: getCachedIdentifier(pol.id, pol.client_identifier_hash) || "", status: pol.status === 'positive' ? 'positive' : 'negative', loggedAt: pol.logged_at });
-  const openEditPolicy = (pol: any) => setEditingEntry({ kind: "policyPremium", id: pol.id, identifier: getCachedIdentifier(pol.id, pol.client_identifier_hash) || "", productLine: pol.product_line || "", premiumAmount: Number(pol.premium_amount) || 0, paymentCycle: pol.payment_cycle || "monthly", loggedAt: pol.logged_at });
+  const openEditPolicy = (pol: any) => setEditingEntry({ kind: "policyPremium", id: pol.id, identifier: getCachedIdentifier(pol.id, pol.client_identifier_hash) || "", productLine: pol.product_line || "", premiumAmount: Number(pol.premium_amount) || 0, paymentCycle: pol.payment_cycle || "monthly", isRenewal: !!pol.is_renewal, loggedAt: pol.logged_at });
 
   const saveEdit = async () => {
     if (!editingEntry) return;
@@ -67,6 +67,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           ...(trimmed ? { client_identifier_hash: newHash } : {}),
           premium_amount: Number(editingEntry.premiumAmount) || 0,
           payment_cycle: editingEntry.paymentCycle,
+          is_renewal: editingEntry.isRenewal,
           logged_at: new Date(editingEntry.loggedAt).toISOString(),
         });
         if (trimmed) cacheIdentifier(editingEntry.id, trimmed, newHash);
@@ -227,7 +228,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-700">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
-                         <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
+                         <td className="px-6 py-4"><div className="font-bold text-gray-900 flex items-center gap-1.5">{pol.product_line}{pol.is_renewal && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Renewals never earn commission">Renewal</span>}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold 
                               ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 
@@ -269,7 +270,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
                          <td className="px-6 py-4 font-bold text-gray-700">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
-                         <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
+                         <td className="px-6 py-4"><div className="font-bold text-gray-900 flex items-center gap-1.5">{pol.product_line}{pol.is_renewal && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Renewals never earn commission">Renewal</span>}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>{pol.status.toUpperCase()}</span></td>
                          <td className="px-6 py-4 text-right">
                            <button onClick={() => openEditPolicy(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
@@ -297,7 +298,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
                          <td className="px-6 py-4 font-bold text-gray-700">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
-                         <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-purple-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
+                         <td className="px-6 py-4"><div className="font-bold text-gray-900 flex items-center gap-1.5">{pol.product_line}{pol.is_renewal && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Renewals never earn commission">Renewal</span>}</div><div className="text-xs font-semibold text-purple-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4 text-right">
                            <button onClick={() => openEditPolicy(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
                            <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
@@ -421,6 +422,14 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                         <option value="annual">12-Month Term</option>
                       </select>
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Business Type</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setEditingEntry({ ...editingEntry, isRenewal: false })} className={`flex-1 py-2 rounded-lg border-2 font-bold text-xs transition-all ${!editingEntry.isRenewal ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>New Business</button>
+                      <button type="button" onClick={() => setEditingEntry({ ...editingEntry, isRenewal: true })} className={`flex-1 py-2 rounded-lg border-2 font-bold text-xs transition-all ${editingEntry.isRenewal ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Renewal</button>
+                    </div>
+                    {editingEntry.isRenewal && <p className="text-[10px] text-amber-600 font-semibold mt-1">Renewals never earn commission or count toward accelerator thresholds.</p>}
                   </div>
                 </>
               )}

@@ -1893,18 +1893,19 @@ export default function SettingsTab({
               </div>
 
               <div className="p-6 bg-blue-50 border-b border-gray-200">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-1">
                   <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">3. Variable Accelerators</h4>
                   <button onClick={addAccelerator} className="text-xs font-bold text-blue-600 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-md flex items-center gap-1"><Plus size={14}/> Add Tier</button>
                 </div>
+                <p className="text-[11px] text-gray-500 mb-4 max-w-2xl">Tiers stack: every tier whose threshold is met contributes its bump/bonus, and they all add together (never just the largest one alone). Rates always apply to the producer's full eligible premium for the month, retroactively - never just the amount above a threshold. Renewal-flagged policies never count toward any threshold here and never earn a payout.</p>
                 <div className="space-y-3">
                   {(editingPlan.rules?.accelerators || []).length === 0 && <p className="text-sm text-gray-500">No accelerators added.</p>}
                   {(editingPlan.rules?.accelerators || []).map((acc: any, idx: number) => (
                     <div key={idx} className="flex flex-wrap gap-2 items-center bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
                       <span className="text-xs font-bold text-gray-400">If</span>
                       <select value={acc.metric} onChange={e => updateAccelerator(idx, 'metric', e.target.value)} className="p-2 border border-gray-200 rounded-md text-xs font-bold text-gray-700 outline-none">
-                        <option value="life_health_apps">L/H Apps</option>
-                        <option value="life_premium">Life Premium</option>
+                        <option value="life_health_apps">Financial Services Apps (Life + Health)</option>
+                        <option value="life_premium">Financial Services Premium (Life + Health)</option>
                         <option value="pnc_premium">P&C Premium</option>
                         <option value="total_premium">Total Premium</option>
                         <option value="total_apps">Total Apps</option>
