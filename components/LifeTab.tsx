@@ -3,7 +3,7 @@ import { HeartPulse, CheckCircle2, Clock, FileText, Target, TrendingUp, DollarSi
 import { getCachedIdentifier } from '../utils/identifierCache';
 
 /** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
-const displayIdentifier = (policyId: string) => getCachedIdentifier(policyId) || '—';
+const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
 
 export default function LifeTab({ 
   lifeOverviewData, team, updatePolicyStatus, 
@@ -142,7 +142,7 @@ export default function LifeTab({
                 <div key={pol.id} className="p-4 border border-gray-200 rounded-xl bg-gray-50 hover:border-amber-300 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-bold text-gray-900">{displayIdentifier(pol.id)}</p>
+                      <p className="font-bold text-gray-900">{displayIdentifier(pol.id, pol.client_identifier_hash)}</p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{producer?.first_name} {producer?.last_name}</p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${pol.status === 'bound' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`}>

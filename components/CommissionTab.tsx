@@ -5,7 +5,7 @@ import { isManagerLevelRole } from '../utils/roles';
 import { getCachedIdentifier } from '../utils/identifierCache';
 
 /** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
-const displayIdentifier = (policyId: string) => getCachedIdentifier(policyId) || '—';
+const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
 
 export default function CommissionTab({ 
   profile, stats, commissionData, manualBonuses, 
@@ -514,7 +514,7 @@ export default function CommissionTab({
                      return (
                        <tr key={pol.id || idx} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                          <td className="p-4 text-sm font-medium text-gray-500">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id)}</td>
+                         <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
                          <td className="p-4">
                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
                              {pol.product_line} {isGhost && <span className="ml-1 opacity-50 text-[10px]">(0%)</span>}
@@ -569,7 +569,7 @@ export default function CommissionTab({
                   <option value="" disabled>Select the customer&apos;s policy...</option>
                   {userPolicies.map((pol: any) => (
                     <option key={pol.id} value={pol.id}>
-                      {displayIdentifier(pol.id)} — {pol.product_line} — ${Number(pol.premium_amount).toLocaleString()} — {new Date(pol.logged_at).toLocaleDateString()}
+                      {displayIdentifier(pol.id, pol.client_identifier_hash)} — {pol.product_line} — ${Number(pol.premium_amount).toLocaleString()} — {new Date(pol.logged_at).toLocaleDateString()}
                     </option>
                   ))}
                 </select>

@@ -2016,8 +2016,13 @@ export default function Home() {
         const { error: actErr } = await supabase.from('activities').insert([{ id: makeRowId(), activity_type: 'complex_res', agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }]);
         if (actErr) { console.error('[submitLogActivity] complex_res activity insert failed:', actErr); throw new Error(`Activity Error: ${actErr.message}${actErr.details ? ` (${actErr.details})` : ''}`); }
 
-        const { error: polErr } = await supabase.from('policies').insert([{ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
+        const resolutionPolicyId = makeRowId();
+        const { error: polErr } = await supabase.from('policies').insert([{ id: resolutionPolicyId, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
         if (polErr) { console.error('[submitLogActivity] complex_res policy insert failed:', polErr); throw new Error(`Policy Error: ${polErr.message}${polErr.details ? ` (${polErr.details})` : ''}`); }
+        // This branch used to skip caching entirely - Resolution rows in the Ledger's Recent
+        // Resolutions list (and its edit modal's prefill) would always show "—" no matter what
+        // was typed here, since nothing had ever written this row's id/hash into the local cache.
+        if (trimmedIdentifier) cacheIdentifier(resolutionPolicyId, trimmedIdentifier, identifierHash);
 
         showToast(trimmedIdentifier ? `Resolution logged for ${trimmedIdentifier}!` : 'Resolution logged!');
         setIsLoggingModalOpen(false);
@@ -2080,7 +2085,7 @@ export default function Home() {
         // Local-only convenience cache (never sent to Supabase) so the "Bind from existing
         // Household Quote?" picker can still show this identifier back to this same browser
         // later, since the DB will only ever have the hash - see utils/identifierCache.ts.
-        if (trimmedIdentifier) policiesPayload.forEach(p => cacheIdentifier(p.id, trimmedIdentifier));
+        if (trimmedIdentifier) policiesPayload.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
         const insertedPolicyIds: string[] = [];
         for (const policy of policiesPayload) {
           const { error: polErr } = await supabase.from('policies').insert(policy);
@@ -2116,18 +2121,18 @@ export default function Home() {
               if (updErr) { console.error('[submitLogActivity] bind existing-quote update failed:', updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
               // Refresh (or clear) the local picker cache to match whatever the producer just
               // re-typed here - it may differ from what was cached when this was first quoted.
-              idsToUpdate.forEach(id => trimmedIdentifier ? cacheIdentifier(id, trimmedIdentifier) : forgetCachedIdentifier(id));
+              idsToUpdate.forEach(id => trimmedIdentifier ? cacheIdentifier(id, trimmedIdentifier, identifierHash) : forgetCachedIdentifier(id));
             }
             if (item.count > idsToUpdate.length) {
                const extraCount = item.count - idsToUpdate.length;
                const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
-               if (trimmedIdentifier) extraPolicies.forEach(p => cacheIdentifier(p.id, trimmedIdentifier));
+               if (trimmedIdentifier) extraPolicies.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
                const { error: extraErr } = await supabase.from('policies').insert(extraPolicies);
                if (extraErr) { console.error('[submitLogActivity] bind extra-policies insert failed:', extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
             const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
-            if (trimmedIdentifier) policiesToLog.forEach(p => cacheIdentifier(p.id, trimmedIdentifier));
+            if (trimmedIdentifier) policiesToLog.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
             const { error: bndErr } = await supabase.from('policies').insert(policiesToLog);
             if (bndErr) { console.error('[submitLogActivity] bound policies insert failed:', bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
           }
@@ -3967,7 +3972,13 @@ export default function Home() {
                               setLineItems(newLineItems);
                               // Only recoverable if THIS browser cached it when the quote was typed -
                               // otherwise there's no plaintext anywhere to prefill, so it stays blank.
-                              setCustIdentifier(getCachedIdentifierForAny(customerQuotes.map(q => q.id)) || "");
+                              // Tries every row id in the group first, then falls back to their shared
+                              // client_identifier_hash (every quote in this group has the identical
+                              // hash, by construction of groupKey below) - covers the case where this
+                              // browser cached the identifier under a DIFFERENT row id than the ones in
+                              // this specific group (e.g. it was first typed on an earlier quote for the
+                              // same household that got bound/archived since).
+                              setCustIdentifier(getCachedIdentifierForAny(customerQuotes.map(q => q.id), customerQuotes.map(q => q.client_identifier_hash)) || "");
                            }
                          }}
                        >
@@ -3982,7 +3993,7 @@ export default function Home() {
                          ).map(([groupKey, quotes]: [string, any]) => {
                            const lines = quotes.map((q: any) => q.product_line).join(', ');
                            const totalPrem = quotes.reduce((sum: number, q: any) => sum + Number(q.premium_amount), 0);
-                           const cachedName = getCachedIdentifierForAny(quotes.map((q: any) => q.id));
+                           const cachedName = getCachedIdentifierForAny(quotes.map((q: any) => q.id), quotes.map((q: any) => q.client_identifier_hash));
                            const loggedDate = quotes[0]?.logged_at ? new Date(quotes[0].logged_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
                            const label = cachedName || `Quote${loggedDate ? ` — ${loggedDate}` : ''}`;
                            return (

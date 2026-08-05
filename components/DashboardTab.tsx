@@ -8,7 +8,7 @@ import { hashIdentifier } from '../utils/crypto';
 import { getCachedIdentifier } from '../utils/identifierCache';
 
 /** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
-const displayIdentifier = (policyId: string) => getCachedIdentifier(policyId) || '—';
+const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
 
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
@@ -186,7 +186,7 @@ export default function DashboardTab({
       switch (sortConfig.key) {
         // Best-effort: sorts by whatever readable label this browser can resolve locally
         // (see displayIdentifier above) - there is no plaintext name left to sort by otherwise.
-        case 'identifier': aVal = displayIdentifier(a.id).toLowerCase(); bVal = displayIdentifier(b.id).toLowerCase(); break;
+        case 'identifier': aVal = displayIdentifier(a.id, a.client_identifier_hash).toLowerCase(); bVal = displayIdentifier(b.id, b.client_identifier_hash).toLowerCase(); break;
         case 'product_line': aVal = (a.product_line || '').toLowerCase(); bVal = (b.product_line || '').toLowerCase(); break;
         case 'premium_amount': aVal = Number(a.premium_amount) || 0; bVal = Number(b.premium_amount) || 0; break;
         case 'status': aVal = a.status || ''; bVal = b.status || ''; break;
@@ -840,7 +840,7 @@ export default function DashboardTab({
                             <tbody className="divide-y divide-gray-100">
                               {row.policies.map((p: any) => (
                                 <tr key={p.id}>
-                                  <td className="py-1.5 font-semibold text-gray-700">{displayIdentifier(p.id)}</td>
+                                  <td className="py-1.5 font-semibold text-gray-700">{displayIdentifier(p.id, p.client_identifier_hash)}</td>
                                   <td className="py-1.5 text-gray-500">{p.product_line}</td>
                                   <td className="py-1.5 text-right font-bold text-gray-700">${Math.round(Number(p.premium_amount) || 0).toLocaleString()}</td>
                                 </tr>
@@ -899,7 +899,7 @@ export default function DashboardTab({
                 paginatedPipelineRows.map((pol: any) => (
                   <tr key={pol.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="p-4 text-sm font-semibold text-gray-500 whitespace-nowrap">{new Date(pol.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id)}</td>
+                    <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
                     <td className="p-4 text-sm font-bold text-gray-600">
                        {pol.product_line === 'Complex Resolution' ? <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">Complex Res.</span> : pol.product_line}
                     </td>
