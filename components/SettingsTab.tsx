@@ -1897,7 +1897,7 @@ export default function SettingsTab({
                   <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">3. Variable Accelerators</h4>
                   <button onClick={addAccelerator} className="text-xs font-bold text-blue-600 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-md flex items-center gap-1"><Plus size={14}/> Add Tier</button>
                 </div>
-                <p className="text-[11px] text-gray-500 mb-4 max-w-2xl">Tiers stack: every tier whose threshold is met contributes its bump/bonus, and they all add together (never just the largest one alone). Rates always apply to the producer's full eligible premium for the month, retroactively - never just the amount above a threshold. Renewal-flagged policies never count toward any threshold here and never earn a payout.</p>
+                <p className="text-[11px] text-gray-500 mb-4 max-w-2xl">Tiers stack: every tier whose threshold is met contributes its bump/bonus, and they all add together (never just the largest one alone). Rates always apply to the producer's full eligible premium for the month, retroactively - never just the amount above a threshold.</p>
                 <div className="space-y-3">
                   {(editingPlan.rules?.accelerators || []).length === 0 && <p className="text-sm text-gray-500">No accelerators added.</p>}
                   {(editingPlan.rules?.accelerators || []).map((acc: any, idx: number) => (

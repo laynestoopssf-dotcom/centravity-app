@@ -80,14 +80,11 @@ export default function CommissionTab({
   // below matches the "Earned (Issued + Bonus)" top metric tile instead of the larger Total Expected
   // figure. Pipeline/unissued premium is already broken out separately in its own "Pipeline
   // (Unissued)" money card. Sourced from commissionData.issuedPremLOB (not the shared `stats`
-  // object) so this always agrees with the real payout math in utils/commissionMath.ts - in
-  // particular, Renewal-flagged premium is excluded here exactly like it's excluded from issuedComm.
+  // object) so this always agrees with the real payout math in utils/commissionMath.ts.
   const getLinePremium = (parentLine: string) => {
     return commissionData?.issuedPremLOB?.[parentLine as keyof typeof commissionData.issuedPremLOB] || 0;
   };
 
-  // Renewals are still shown in the itemized statement for visibility, but never earn commission
-  // (see calculatePolicyCommission below) - "Commission is only paid on New Business."
   const userPolicies = (monthPolicies || []).filter((p: any) => 
     p.user_id === activeUserId && (p.status === 'bound' || p.status === 'issued')
   ).sort((a: any, b: any) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime());
@@ -110,7 +107,6 @@ export default function CommissionTab({
 
   const calculatePolicyCommission = (pol: any) => {
     if (commissionData.isLocked) return 0;
-    if (pol.is_renewal) return 0; // Rule: Exclude Renewals - commission is New Business only.
     const parentLine = getParentLine(pol.product_line);
     const rate = getRateForLine(parentLine);
     return (Number(pol.premium_amount) * (rate / 100));
@@ -524,11 +520,6 @@ export default function CommissionTab({
                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
                              {pol.product_line} {isGhost && <span className="ml-1 opacity-50 text-[10px]">(0%)</span>}
                            </span>
-                           {pol.is_renewal && (
-                             <span className="ml-1.5 inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700" title="Renewals never earn commission">
-                               Renewal
-                             </span>
-                           )}
                          </td>
                          <td className="p-4">
                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${pol.status === 'issued' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
@@ -537,11 +528,9 @@ export default function CommissionTab({
                            </span>
                          </td>
                          <td className="p-4 text-sm font-bold text-gray-900 text-right">${Number(pol.premium_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                         <td className="p-4 text-sm font-bold text-gray-500 text-right">{pol.is_renewal ? '—' : `${rate.toFixed(1)}%`}</td>
+                         <td className="p-4 text-sm font-bold text-gray-500 text-right">{rate.toFixed(1)}%</td>
                          <td className="p-4 text-sm font-black text-right">
-                           {pol.is_renewal ? (
-                             <span className="text-amber-600 text-xs font-bold uppercase">Excluded</span>
-                           ) : commissionData.isLocked ? (
+                           {commissionData.isLocked ? (
                              <span className="text-red-400 flex items-center justify-end gap-1"><Lock size={12}/> Locked</span>
                            ) : (
                              <span className="text-emerald-600">{`+$${comm.toLocaleString(undefined, {minimumFractionDigits: 2})}`}</span>
