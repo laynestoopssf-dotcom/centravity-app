@@ -9,7 +9,7 @@ export default function YtdTab({ ytdOverviewData, agencySettings }: any) {
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300 pb-12">
       <header>
-        <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Mountain size={32} className="text-indigo-600" /> The Mountain: YTD Projections</h2>
+        <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Mountain size={32} className="text-indigo-600" /> The Mountain: Year-to-Date (YTD) Projections</h2>
         <p className="text-gray-500 mt-1">Day {ytdOverviewData.global.daysPassed} of {ytdOverviewData.global.daysInYear}. Tracking Year-to-Date net run rates against corporate benchmarks.</p>
       </header>
 

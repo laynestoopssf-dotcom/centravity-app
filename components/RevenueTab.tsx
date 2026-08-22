@@ -1,5 +1,6 @@
 import React from "react";
 import { DollarSign, RefreshCw, TrendingUp, Target } from "lucide-react";
+import InfoTooltip from "./ui/InfoTooltip";
 
 export default function RevenueTab({ revenueOverviewData, agencySettings, primaryOffice, customTargets }: any) {
   const money = (n: any) => {
@@ -34,8 +35,10 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300 pb-12">
       <header>
-        <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><DollarSign size={32} className="text-emerald-600" /> Revenue & VC Engine</h2>
-        <p className="text-gray-500 mt-1">Track actual agency cash flow, renewal book decay, and pace for your 2027 Variable Comp tier.</p>
+        <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+          <DollarSign size={32} className="text-emerald-600" /> Revenue &amp; Variable Compensation
+        </h2>
+        <p className="text-gray-500 mt-1">Track actual agency cash flow, renewal book decay, and your pace toward next year&apos;s Variable Compensation (VC) tier.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -53,7 +56,10 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
                <p className="text-xl font-bold">${money(totalNbRev)}</p>
              </div>
              <div>
-               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase">Net Renewals (P&amp;C)</p>
+               <p className="text-xs text-emerald-300 font-semibold mb-1 uppercase flex items-center gap-1">
+                 Net Renewals (P&amp;C)
+                 <InfoTooltip text="Renewal commission from the Property & Casualty (P&C) book only - Auto, Fire, and Commercial. Life/Health renewal revenue is tracked separately in the tile to the right." />
+               </p>
                <p className="text-xl font-bold">${money(pncRenRev)}</p>
              </div>
              <div>
@@ -65,7 +71,10 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
 
         {agencySettings?.target_vc_active && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center text-center">
-           <h3 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider">Current VC Rate</h3>
+           <h3 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider flex items-center justify-center gap-1.5">
+             Current Variable Compensation (VC) Rate
+             <InfoTooltip text="Variable Compensation is the extra 0-3% commission bump earned on top of base rates, based on Auto/Fire app growth plus Financial Services commission. See the pacing scorecard below for the breakdown." />
+           </h3>
            
            {/* If Multiple Locations, stack them */}
            {revenueOverviewData.locations.length > 1 ? (
@@ -91,8 +100,11 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
           defaults off for carrier-agnostic compliance; an owner opts in explicitly. */}
       {agencySettings?.target_vc_active && (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-         <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2"><RefreshCw size={24} className="text-blue-600"/> 2027 VC Pacing Scorecard</h3>
-         <p className="text-gray-500 mb-8 max-w-3xl">Your projected Variable Comp for next year is based on YTD Net Gain. Auto and Fire contribute up to 1% each. FS Commission (Life, Health, IPS) contributes up to 2%. Max total cap is 3%.</p>
+         <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+           <RefreshCw size={24} className="text-blue-600"/> 2027 Variable Compensation (VC) Pacing Scorecard
+           <InfoTooltip text="Shows how close each office is to the 3% Variable Compensation cap, both where you stand today (VC Earned YTD) and where your current run rate projects you to land by December 31st (Year-End Pace)." />
+         </h3>
+         <p className="text-gray-500 mb-8 max-w-3xl">Your projected Variable Compensation for next year is based on Year-to-Date (YTD) Net Gain. Auto and Fire contribute up to 1% each. Financial Services (FS) Commission (Life, Health, IPS) contributes up to 2%. Max total cap is 3%.</p>
 
          <div className="space-y-6">
             {/* MAP OVER LOCATIONS FOR INDIVIDUAL SCORECARDS */}
@@ -103,7 +115,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
                   
                   {/* Projected VC Module with RUN RATE */}
                   <div className="lg:col-span-1 bg-white rounded-xl border border-gray-200 p-5 text-center flex flex-col justify-center shadow-sm relative overflow-hidden">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">VC Earned YTD</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">VC Earned Year-to-Date</p>
                     <div className={`text-4xl font-black ${locData.projectedVc >= 3.0 ? 'text-green-500' : 'text-gray-900'}`}>+{locData.projectedVc.toFixed(2)}%</div>
                     
                     <div className="mt-5 pt-5 border-t border-gray-100">
@@ -144,7 +156,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
 
                       <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col justify-between">
                         <div>
-                          <div className="flex justify-between items-center mb-2"><span className="font-bold text-sm text-gray-800">FS Commission</span><span className="text-base font-black text-gray-900">+{locData.fsVc.toFixed(2)}%</span></div>
+                          <div className="flex justify-between items-center mb-2"><span className="font-bold text-sm text-gray-800">Financial Services (FS) Commission</span><span className="text-base font-black text-gray-900">+{locData.fsVc.toFixed(2)}%</span></div>
                           <div className="w-full bg-gray-100 h-2 rounded-full mb-3 overflow-hidden">
                             <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000" style={{width: `${(locData.fsVc / 2.0) * 100}%`}}></div>
                           </div>
@@ -165,7 +177,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
 
       {!agencySettings?.target_vc_active && (
         <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-10 text-center">
-          <p className="text-sm font-semibold text-gray-400">VC Target Tracking is currently disabled for this agency.</p>
+          <p className="text-sm font-semibold text-gray-400">Variable Compensation (VC) Target Tracking is currently disabled for this agency.</p>
           <p className="text-xs text-gray-400 mt-1">An owner can turn it on under Settings → Corporate Targets.</p>
         </div>
       )}

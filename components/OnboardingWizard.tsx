@@ -87,6 +87,8 @@ interface OnboardingFormData {
   officeId: string | null;
   agencyName: string;
   primaryOfficeLocation: string;
+  city: string;
+  state: string;
   ownerName: string;
   ownerYtdAutoApps: number | "";
   ownerYtdAutoPremium: number | "";
@@ -216,6 +218,8 @@ const initialFormData: OnboardingFormData = {
   officeId: null,
   agencyName: "",
   primaryOfficeLocation: "",
+  city: "",
+  state: "",
   ownerName: "",
   ownerYtdAutoApps: "",
   ownerYtdAutoPremium: "",
@@ -398,6 +402,8 @@ export default function OnboardingWizard({
             officeId: s.officeId,
             agencyName: s.agencyName || initialAgencyName || s.agencyName,
             primaryOfficeLocation: s.primaryOfficeLocation,
+            city: s.city || "",
+            state: s.state || "",
             ownerName: s.ownerName || initialOwnerName || s.ownerName,
             ownerYtdAutoApps: s.ownerYtd.ytdAutoApps ?? "",
             ownerYtdAutoPremium: s.ownerYtd.ytdAutoPremium ?? "",
@@ -486,7 +492,7 @@ export default function OnboardingWizard({
   };
 
   const updateAgencyField = (
-    field: "agencyName" | "primaryOfficeLocation" | "ownerName",
+    field: "agencyName" | "primaryOfficeLocation" | "city" | "state" | "ownerName",
     value: string
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -563,6 +569,8 @@ export default function OnboardingWizard({
         accessToken,
         agencyName: formData.agencyName,
         primaryOfficeLocation: formData.primaryOfficeLocation,
+        city: formData.city,
+        state: formData.state,
         ownerName: formData.ownerName,
       });
 
@@ -869,6 +877,35 @@ export default function OnboardingWizard({
                       placeholder="Denver, CO"
                       className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                     />
+                    <p className="text-xs text-gray-400 mt-1.5">This is the display name for your primary branch (shown across Settings → Office Locations).</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        City
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.city}
+                        onChange={(e) => updateAgencyField("city", e.target.value)}
+                        placeholder="Denver"
+                        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        State
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.state}
+                        onChange={(e) => updateAgencyField("state", e.target.value)}
+                        placeholder="CO"
+                        maxLength={32}
+                        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                      />
+                    </div>
                   </div>
 
                   <div>

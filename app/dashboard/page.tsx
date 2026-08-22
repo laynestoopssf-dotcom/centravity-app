@@ -11,6 +11,7 @@ import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
+import InfoTooltip from "../../components/ui/InfoTooltip";
 import { isLoggerMessage } from "../../utils/loggerBridge";
 import { hashIdentifier, hashIdentifiers } from "../../utils/crypto";
 import { cacheIdentifier, getCachedIdentifierForAny, forgetCachedIdentifier } from "../../utils/identifierCache";
@@ -3774,7 +3775,10 @@ export default function Home() {
 
               {profile?.is_floater && offices.length > 1 && (
                 <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl mb-4">
-                  <label className="block text-xs font-bold text-indigo-900 mb-1 uppercase tracking-wider">Logging Destination</label>
+                  <label className="flex items-center gap-1 text-xs font-bold text-indigo-900 mb-1 uppercase tracking-wider">
+                    Logging Destination
+                    <InfoTooltip text="Which office this activity counts toward. You're seeing this because your profile is marked as a floater with access to more than one office." />
+                  </label>
                   <select 
                     value={logOfficeId} 
                     onChange={e => setLogOfficeId(e.target.value)}
@@ -3790,6 +3794,7 @@ export default function Home() {
                   <div className="flex items-center gap-2 mb-2">
                     <input type="checkbox" id="existingQuoteToggle" checked={isExistingQuote} onChange={(e) => { setIsExistingQuote(e.target.checked); if (!e.target.checked) { setCustIdentifier(""); setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: agencySettings?.custom_product_lines?.[0]?.name || 'Auto', count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]); } }} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-600" />
                     <label htmlFor="existingQuoteToggle" className="text-sm font-semibold text-blue-900 cursor-pointer">Bind from existing Household Quote?</label>
+                    <InfoTooltip text="Check this if you already logged this client as a Quote earlier - it pre-fills the product line, premium, and term below from that quote instead of you re-typing them, and marks the original quote as bound." />
                   </div>
                   {isExistingQuote && (
                      <div className="mt-3">
@@ -3899,7 +3904,10 @@ export default function Home() {
                         {/* DUAL CASCADING DROPDOWNS */}
                         <div className="grid grid-cols-3 gap-4 mb-4">
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Category</label>
+                            <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                              Category
+                              <InfoTooltip text="The broad line of business (Auto, Fire, Life, etc.) this policy rolls up into for commission and Scoreboard reporting. Choosing a Category filters the specific Product options to the right." />
+                            </label>
                             <select 
                               value={item.parentCategory} 
                               onChange={e => {
@@ -3919,7 +3927,10 @@ export default function Home() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Product</label>
+                            <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                              Product
+                              <InfoTooltip text="The specific product within the Category selected to the left. Your agency's own custom product lines (Settings → Custom Product Lines) show up here." />
+                            </label>
                             <select 
                               value={item.productLine} 
                               onChange={e => updateLineItem(item.id, 'productLine', e.target.value)} 
@@ -3942,7 +3953,13 @@ export default function Home() {
 
                         <div className="grid grid-cols-2 gap-4">
                           <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Term Premium</label><div className="relative"><span className="absolute left-3 top-2.5 text-gray-500 font-medium">$</span><input type="number" required step="0.01" placeholder="0.00" value={item.premiumAmount} onChange={e => updateLineItem(item.id, 'premiumAmount', e.target.value)} className="w-full pl-7 p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm" /></div></div>
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Renewal Cycle</label><select value={item.paymentCycle} onChange={e => updateLineItem(item.id, 'paymentCycle', e.target.value)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm"><option value="monthly">6-Month Term</option><option value="annual">12-Month Term</option></select></div>
+                          <div>
+                            <label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                              Renewal Cycle
+                              <InfoTooltip text="How often this policy's term premium is billed/renewed. This affects how the 'Total Term Premium' amount you entered gets annualized for commission math - pick the term length that matches the actual policy." />
+                            </label>
+                            <select value={item.paymentCycle} onChange={e => updateLineItem(item.id, 'paymentCycle', e.target.value)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm"><option value="monthly">6-Month Term</option><option value="annual">12-Month Term</option></select>
+                          </div>
                         </div>
                       </div>
                     ))}

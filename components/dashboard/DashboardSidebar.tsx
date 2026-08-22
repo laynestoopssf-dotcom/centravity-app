@@ -18,6 +18,7 @@ import {
   DollarSign,
   Crosshair,
   MessageSquare,
+  LifeBuoy,
 } from "lucide-react";
 import { useDashboardTab, type DashboardTabId } from "./DashboardShellContext";
 
@@ -99,7 +100,7 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
     { tab: "agency", label: "Agency MTD", icon: Briefcase, show: canViewAgencyMtd },
     { tab: "life", label: "Life Module", icon: HeartPulse, show: canViewLifeModule },
     { tab: "ytd", label: "YTD Projections", icon: Mountain, show: canViewYtdProjections },
-    { tab: "revenue", label: "Revenue & VC", icon: DollarSign, show: canViewRevenueVc },
+    { tab: "revenue", label: "Revenue & Variable Comp", icon: DollarSign, show: canViewRevenueVc },
   ];
 
   const renderButton = (item: NavItem) => {
@@ -161,7 +162,7 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
         </div>
       )}
 
-      <div className="mt-auto pt-6 border-t border-slate-800">
+      <div className="mt-auto pt-6 border-t border-slate-800 space-y-1">
         <button
           onClick={() => setActiveTab("feedback")}
           className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
@@ -169,6 +170,12 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
           }`}
         >
           <MessageSquare size={18} /> Community Board
+        </button>
+        <button
+          onClick={() => router.push("/dashboard/help")}
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-colors"
+        >
+          <LifeBuoy size={18} /> Help &amp; FAQ
         </button>
       </div>
     </nav>

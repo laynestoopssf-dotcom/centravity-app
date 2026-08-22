@@ -25,6 +25,7 @@ import { resolveCommissionRates, getLifeRate, getHealthRate } from "../../../uti
 import { getWorkingDaysRemainingInYear } from "../../../utils/pacing";
 import { sumOfficeBookSizes, totalBookPremiumOf } from "../../../utils/officeFields";
 import { resolveOfficeRates, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../../utils/revenueEngine";
+import InfoTooltip from "../../../components/ui/InfoTooltip";
 
 // =============================================================================
 // Protected route: /dashboard/cockpit — the "Executive Cockpit" What-If Engine.
@@ -861,8 +862,8 @@ export default function CockpitPage() {
             </div>
             <h1 className="text-3xl sm:text-4xl font-black text-white">The What-If Engine</h1>
             <p className="text-slate-500 mt-2 max-w-xl">
-              Run reverse-math on your goals — pick a VC tier or a revenue target, and see exactly what it takes to
-              get there, built from your actual YTD performance.
+              Run reverse-math on your goals — pick a Variable Compensation (VC) tier or a revenue target, and see
+              exactly what it takes to get there, built from your actual Year-to-Date (YTD) performance.
             </p>
           </div>
         </header>
@@ -875,7 +876,7 @@ export default function CockpitPage() {
               target_travel_active) - default off for carrier-agnostic compliance. */}
           {!agencySettings?.target_vc_active && !agencySettings?.target_travel_active && (
             <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-10 text-center">
-              <p className="text-sm font-semibold text-slate-500">VC and Travel Target Tracking are currently disabled for this agency.</p>
+              <p className="text-sm font-semibold text-slate-500">Variable Compensation (VC) and Travel Target Tracking are currently disabled for this agency.</p>
               <p className="text-xs text-slate-600 mt-1">An owner can turn them on under Settings → Corporate Targets.</p>
             </div>
           )}
@@ -888,8 +889,11 @@ export default function CockpitPage() {
                 <Crosshair size={22} />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">VC Tier Sniper</h2>
-                <p className="text-xs text-slate-500">Auto/Fire Gain + FS Commission → your Variable Comp rate</p>
+                <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
+                  Variable Compensation (VC) Tier Sniper
+                  <InfoTooltip text="Reverse-math tool: pick the VC (Variable Compensation) rate you want by year-end, and this shows exactly how many more Auto/Fire apps or Financial Services (FS) commission dollars you need to get there." />
+                </h2>
+                <p className="text-xs text-slate-500">Auto/Fire Gain + Financial Services (FS) Commission → your Variable Compensation (VC) rate</p>
               </div>
             </div>
 
@@ -905,7 +909,7 @@ export default function CockpitPage() {
                 <p className="text-[10px] text-slate-500 mt-0.5">{model.netFireApps} net apps</p>
               </div>
               <div className="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">FS Comm</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">FS Commission</p>
                 <p className="text-xl font-black text-white">{model.fsVcPts.toFixed(2)}<span className="text-xs text-slate-500"> / 2.0</span></p>
                 <p className="text-[10px] text-slate-500 mt-0.5">${money(model.ytdFsComm)}</p>
               </div>
@@ -915,10 +919,12 @@ export default function CockpitPage() {
               <div>
                 <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1">Current VC Rate</p>
                 <p className="text-3xl font-black text-white">{model.currentVcTotal.toFixed(2)}%</p>
+                <p className="text-[10px] text-slate-500 mt-1">Variable Compensation earned year-to-date</p>
               </div>
               <div className="text-right">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                <label className="flex items-center justify-end gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Target Year-End VC (%)
+                  <InfoTooltip text="The Variable Compensation rate you're aiming to hit by December 31st. Max is 3% - up to 1% each from Auto and Fire, up to 2% from Financial Services (Life/Health) commission." />
                 </label>
                 <input
                   type="number"
@@ -993,8 +999,11 @@ export default function CockpitPage() {
                   <Plane size={22} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">Travel &amp; Incentive Qualifier</h2>
-                  <p className="text-xs text-slate-500">Real YTD pipeline + Cash Flow Architect What-If</p>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
+                    Travel &amp; Incentive Qualifier
+                    <InfoTooltip text="Shows which travel/promotion tier you'd currently qualify for, blending real Year-to-Date (YTD) production with whatever hypothetical premium you've added on the sliders below." />
+                  </h2>
+                  <p className="text-xs text-slate-500">Real Year-to-Date (YTD) pipeline + Cash Flow Architect What-If</p>
                 </div>
               </div>
               <span
@@ -1078,13 +1087,17 @@ export default function CockpitPage() {
                 <Rocket size={22} />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Cash Flow Architect</h2>
+                <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
+                  Cash Flow Architect
+                  <InfoTooltip text="Set a revenue goal for the year and this splits the gap between where you are and that goal across Auto/Fire/Life/Health, using your agency's own historical product mix - then translates each line's share into new premium, apps, and daily activity targets." />
+                </h2>
                 <p className="text-xs text-slate-500">Auto-distributed by your historical product mix</p>
               </div>
             </div>
 
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+            <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
               Target Annual Gross Revenue
+              <InfoTooltip text="The total agency revenue (commission dollars, not premium) you want to hit by year-end. Everything below - the sliders, required apps, and daily quote targets - reverse-engineers from this one number." />
             </label>
             <div className="relative mb-5">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
@@ -1114,8 +1127,9 @@ export default function CockpitPage() {
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <Sliders size={14} className="text-purple-400" />
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                   Fill the gap with new production
+                  <InfoTooltip text="Drag a line's slider to model writing more of that new premium this year. Each slider's dollar value converts to revenue using that line's own commission rate, so the 'Gap Filled' bar below reflects real payout, not raw premium." />
                 </p>
               </div>
               <button
@@ -1205,7 +1219,10 @@ export default function CockpitPage() {
               <Gauge size={22} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Activity Pacing Engine</h2>
+              <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
+                Activity Pacing Engine
+                <InfoTooltip text="Turns the 'Total Year-End Bound Apps Required' numbers above into a daily quote target, using each producer's own close rate (Settings → Conversion Metrics) and the number of working days left in the year." />
+              </h2>
               <p className="text-xs text-slate-500">Required apps above, reverse-engineered into daily quotes</p>
             </div>
           </div>

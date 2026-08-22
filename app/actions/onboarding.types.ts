@@ -54,6 +54,8 @@ export interface Step1Payload {
   accessToken: string;
   agencyName: string;
   primaryOfficeLocation: string;
+  city?: string;
+  state?: string;
   ownerName: string;
 }
 
@@ -179,6 +181,8 @@ export interface OnboardingState {
   officeId: string | null;
   agencyName: string;
   primaryOfficeLocation: string;
+  city: string;
+  state: string;
   ownerName: string;
   ownerYtd: YtdMatrixFields;
   teamMembers: OnboardingStateTeamMember[];

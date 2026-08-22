@@ -162,7 +162,7 @@ export default function WeeklyRankTab({ weeklyOverviewData, selectedWeekStart, s
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100">
-              <tr><th className="px-6 py-4 w-16 text-center">Rank</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4" title="Outbound touches + Inbound calls">WTD Touches</th><th className="px-6 py-4 text-center">WoW Change</th><th className="px-6 py-4 text-right">Pacing Target</th></tr>
+              <tr><th className="px-6 py-4 w-16 text-center">Rank</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4" title="Outbound touches + Inbound calls">WTD Touches</th><th className="px-6 py-4 text-center" title="Week-over-Week change vs. this same point last week">WoW Change</th><th className="px-6 py-4 text-right">Pacing Target</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {weeklyOverviewData?.touchesRank?.map((member: any, idx: number) => {
@@ -215,7 +215,7 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100">
-              <tr><th className="px-6 py-4 w-16 text-center">Rank</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Total Quotes</th><th className="px-6 py-4 text-center">WoW Change</th><th className="px-6 py-4 text-center">Auto</th><th className="px-6 py-4 text-center">Fire</th><th className="px-6 py-4 text-center">Comm</th><th className="px-6 py-4 text-center">Life</th><th className="px-6 py-4 text-center">Health</th><th className="px-6 py-4 text-right">Pacing Target</th></tr>
+              <tr><th className="px-6 py-4 w-16 text-center">Rank</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Total Quotes</th><th className="px-6 py-4 text-center" title="Week-over-Week change vs. this same point last week">WoW Change</th><th className="px-6 py-4 text-center">Auto</th><th className="px-6 py-4 text-center">Fire</th><th className="px-6 py-4 text-center">Comm</th><th className="px-6 py-4 text-center">Life</th><th className="px-6 py-4 text-center">Health</th><th className="px-6 py-4 text-right">Pacing Target</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {weeklyOverviewData?.quotesRank?.map((member: any, idx: number) => {
@@ -274,7 +274,7 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
                 <th className="px-6 py-4 w-16 text-center">Rank</th>
                 <th className="px-6 py-4">Producer</th>
                 <th className="px-6 py-4">Total Apps</th>
-                <th className="px-6 py-4 text-center">WoW Change</th>
+                <th className="px-6 py-4 text-center" title="Week-over-Week change vs. this same point last week">WoW Change</th>
                 <th className="px-6 py-4 text-right">P&C Prem</th>
                 <th className="px-6 py-4 text-right">L&H Prem</th>
                 <th className="px-6 py-4 text-right">Total Premium</th>

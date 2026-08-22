@@ -338,7 +338,11 @@ export async function saveStep1Foundation(payload: Step1Payload): Promise<Step1R
     if (officeId) {
       const { error: officeUpdateError } = await supabaseAdmin
         .from("offices")
-        .update({ name: payload.primaryOfficeLocation?.trim() || "Main Office" })
+        .update({
+          name: payload.primaryOfficeLocation?.trim() || "Main Office",
+          city: payload.city?.trim() || null,
+          state: payload.state?.trim() || null,
+        })
         .eq("id", officeId);
 
       if (officeUpdateError) {
@@ -349,7 +353,12 @@ export async function saveStep1Foundation(payload: Step1Payload): Promise<Step1R
       const { data: office, error: officeError } = await supabaseAdmin
         .from("offices")
         .insert([
-          { agency_id: agencyId, name: payload.primaryOfficeLocation?.trim() || "Main Office" },
+          {
+            agency_id: agencyId,
+            name: payload.primaryOfficeLocation?.trim() || "Main Office",
+            city: payload.city?.trim() || null,
+            state: payload.state?.trim() || null,
+          },
         ])
         .select()
         .single();
@@ -841,6 +850,8 @@ export async function fetchOnboardingState(
           officeId: (ownerProfile?.office_id as string) || null,
           agencyName: "",
           primaryOfficeLocation: "",
+          city: "",
+          state: "",
           ownerName: [ownerProfile?.first_name, ownerProfile?.last_name].filter(Boolean).join(" "),
           ownerYtd,
           teamMembers: [],
@@ -864,6 +875,8 @@ export async function fetchOnboardingState(
     }
 
     let officeName = "";
+    let officeCity = "";
+    let officeState = "";
     let baselineAndGoals = { ...emptyBaselineAndGoals };
     if (officeId) {
       const { data: office, error: officeError } = await supabaseAdmin
@@ -875,6 +888,8 @@ export async function fetchOnboardingState(
       if (officeError) console.error("[onboarding:fetchState] office lookup failed", officeError);
 
       officeName = office?.name || "";
+      officeCity = office?.city || "";
+      officeState = office?.state || "";
       baselineAndGoals = {
         bookSizeAutoPremium: numberOrEmpty(office?.book_size_auto),
         bookSizeAutoCount: numberOrEmpty(office?.prior_pif_auto),
@@ -958,6 +973,8 @@ export async function fetchOnboardingState(
         officeId,
         agencyName: agency?.name || "",
         primaryOfficeLocation: officeName,
+        city: officeCity,
+        state: officeState,
         ownerName: [ownerProfile.first_name, ownerProfile.last_name].filter(Boolean).join(" ").trim(),
         ownerYtd,
         teamMembers,

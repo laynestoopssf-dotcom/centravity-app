@@ -648,7 +648,7 @@ export default function DashboardTab({
                  </div>
 
                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-center">
-                   <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2"><RefreshCw size={18} className="text-purple-500"/> MTD Lapse Trend</h3>
+                   <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2"><RefreshCw size={18} className="text-purple-500"/> Month-to-Date (MTD) Lapse Trend</h3>
                    <div className="space-y-4">
                       <div className="flex justify-between items-center pb-3 border-b border-gray-50">
                          <div>
@@ -683,7 +683,7 @@ export default function DashboardTab({
                    </div>
                  </div>
                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={18} className="text-purple-500"/> MTD Conversion</h3>
+                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={18} className="text-purple-500"/> Month-to-Date (MTD) Conversion</h3>
                    <div className="space-y-4">
                       <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500">Touch to Quote</span><span className="font-black text-purple-600">{monthQuoteRate}%</span></div>
                       <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500">Quote to Bind</span><span className="font-black text-emerald-600">{monthCloseRate}%</span></div>
@@ -697,7 +697,7 @@ export default function DashboardTab({
         <div className="space-y-6">
            <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-xl p-6 text-white flex flex-col justify-center">
               <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Calculator size={18} className="text-gray-400"/> What-If Machine</h3>
-              <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">Enter your target extra commission. Based on your current MTD rates, we calculate exactly what you need.</p>
+              <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">Enter your target extra commission. Based on your current Month-to-Date (MTD) rates, we calculate exactly what you need.</p>
               
               <div className="relative mb-6">
                 <span className="absolute left-4 top-3.5 text-gray-400 font-bold">$</span>
@@ -946,7 +946,7 @@ export default function DashboardTab({
                           <option value="quoted">Quoted</option>
                           <option value="bound">Bound (Pending)</option>
                           <option value="issued">Issued</option>
-                          <option value="not_taken">Not Taken / Declined by UW</option>
+                          <option value="not_taken">Not Taken / Declined by Underwriting</option>
                         </select>
                       )}
                     </td>

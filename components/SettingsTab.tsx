@@ -6,6 +6,7 @@ import { createCheckoutSession } from '../app/actions/billing';
 import { createTeamInvite, resendTeamInviteEmail } from '../app/actions/teamInvites';
 import type { TeamInviteRole } from '../app/actions/teamInvites.types';
 import { CUSTOM_TARGET_METRICS, CUSTOM_TARGET_PERIODS, getMetricDef, type CustomTargetRow } from '../utils/customTargets';
+import InfoTooltip from './ui/InfoTooltip';
 
 // Mirrors Stripe's own Subscription.status enum (see
 // app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
@@ -48,12 +49,12 @@ const HEALTH_SUBTYPE_LABELS: Record<HealthSubType, string> = {
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'view_agency_dash', label: 'View Agency Scoreboard', desc: 'Allows access to macro team stats and global pacing.' },
-  { id: 'view_weekly_rank', label: 'View Weekly Rank', desc: 'Allows access to the WTD Leaderboards.' },
-  { id: 'view_agency_mtd', label: 'View Agency MTD', desc: 'Allows access to the Agency Overview and AI Coaching.' },
+  { id: 'view_weekly_rank', label: 'View Weekly Rank', desc: 'Allows access to the Week-to-Date (WTD) Leaderboards.' },
+  { id: 'view_agency_mtd', label: 'View Agency Month-to-Date (MTD)', desc: 'Allows access to the Agency Overview and AI Coaching.' },
   { id: 'view_life_module', label: 'View Life Module', desc: 'Allows access to the Life-specific pipeline and leaderboards.' },
   { id: 'view_team_comm', label: 'View Team Commissions', desc: 'Allows access to the Agency Payroll overview.' },
-  { id: 'view_ytd_projections', label: 'View YTD Projections', desc: 'Allows access to year-end travel and premium projections.' },
-  { id: 'view_revenue_vc', label: 'View Revenue & VC', desc: 'Allows access to the agency revenue and variable comp breakdowns.' },
+  { id: 'view_ytd_projections', label: 'View Year-to-Date (YTD) Projections', desc: 'Allows access to year-end travel and premium projections.' },
+  { id: 'view_revenue_vc', label: 'View Revenue & Variable Compensation (VC)', desc: 'Allows access to the agency revenue and variable compensation breakdowns.' },
   { id: 'view_reports', label: 'View Reports', desc: 'Allows access to Agency Reports, historical analytics, and PDF exports.' },
   { id: 'edit_historical', label: 'Import Historical Data', desc: 'Can bulk import past activities and policies.' },
   { id: 'delete_records', label: 'Delete Ledger Records', desc: 'Can permanently delete logged policies and activities.' },
@@ -847,8 +848,11 @@ export default function SettingsTab({
              <div className="p-6 border-b border-slate-700 flex items-center gap-3">
                <div className="text-blue-400"><Plane size={24}/></div>
                <div>
-                  <h3 className="font-bold text-white text-lg">Travel & Promotion Qualification Benchmarks</h3>
-                  <p className="text-xs text-slate-400">Set the specific targets for each tier. "Min Life Credits" and "Total Credits" power the YTD Travel tracking engine. Every field starts blank - there are no pre-filled sample goals, so nothing counts toward qualification until you enter your own numbers here.</p>
+                  <h3 className="font-bold text-white text-lg flex items-center gap-1.5">
+                    Travel & Promotion Qualification Benchmarks
+                    <InfoTooltip text="Each tier is a travel/trip incentive level (e.g. a carrier-sponsored trip). A producer qualifies for a tier once their Year-to-Date Life Credits AND Total Credits both clear that tier's minimums." />
+                  </h3>
+                  <p className="text-xs text-slate-400">Set the specific targets for each tier. &quot;Min Life Credits&quot; and &quot;Total Credits&quot; power the Year-to-Date (YTD) Travel tracking engine. Every field starts blank - there are no pre-filled sample goals, so nothing counts toward qualification until you enter your own numbers here.</p>
                </div>
              </div>
              <div className="p-6">
@@ -909,8 +913,11 @@ export default function SettingsTab({
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between p-4 bg-cyan-50/50 border border-cyan-100 rounded-xl">
                 <div>
-                  <h4 className="text-sm font-bold text-cyan-900">Enable VC Target Tracking</h4>
-                  <p className="text-xs text-cyan-700 mt-0.5 max-w-xl">Shows the Variable Comp widgets: the Revenue &amp; VC tab&apos;s VC Rate/Pacing Scorecard, the Cockpit&apos;s VC Tier Sniper, and the onboarding Reveal page&apos;s VC cards.</p>
+                  <h4 className="text-sm font-bold text-cyan-900 flex items-center gap-1.5">
+                    Enable Variable Compensation (VC) Target Tracking
+                    <InfoTooltip text="Variable Compensation is the extra 0-3% commission bump agencies can earn on top of base rates - toggling this on shows VC widgets across the app; off hides them without losing any of your saved numbers." />
+                  </h4>
+                  <p className="text-xs text-cyan-700 mt-0.5 max-w-xl">Shows the Variable Compensation widgets: the Revenue &amp; Variable Compensation tab&apos;s VC Rate/Pacing Scorecard, the Cockpit&apos;s VC Tier Sniper, and the onboarding Reveal page&apos;s VC cards.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
                   <input
@@ -949,7 +956,10 @@ export default function SettingsTab({
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Target size={20}/></div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Custom Target Builder</h3>
+                  <h3 className="font-bold text-gray-900 flex items-center gap-1.5">
+                    Custom Target Builder
+                    <InfoTooltip text="Build a goal from any real metric Centravity already tracks (apps, premium, quotes, touches) for any office/period, then choose whether the whole team sees it on the Scoreboard or it stays owner-only on the Revenue tab." />
+                  </h3>
                   <p className="text-xs text-gray-500">Define your own goals on top of real tracked metrics, and route each one to the team-visible Scoreboard or the owner-only Revenue tab.</p>
                 </div>
               </div>
@@ -1267,7 +1277,7 @@ export default function SettingsTab({
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><MapPin size={20}/></div>
-             <div><h3 className="font-bold text-gray-900">Office Locations & Financials</h3><p className="text-xs text-gray-500">Manage branches and set localized production, revenue, and VC targets</p></div>
+             <div><h3 className="font-bold text-gray-900">Office Locations & Financials</h3><p className="text-xs text-gray-500">Manage branches and set localized production, revenue, and Variable Compensation (VC) targets</p></div>
           </div>
           <div className="p-6 space-y-4">
             <div className="flex gap-4">
@@ -1324,7 +1334,10 @@ export default function SettingsTab({
                        </div>
 
                        {/* PRIOR PIF & LAPSE RATES */}
-                       <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">3. Prior Year PIF & Lapse/Cancel Rates (%)</h4>
+                       <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2 flex items-center gap-1.5">
+                         3. Prior Year Policies In Force (PIF) &amp; Lapse/Cancel Rates (%)
+                         <InfoTooltip text="PIF = Policies In Force, i.e. how many active policies this branch carried at the end of last year. Lapse/Cancel Rate is the % of that book that lapsed or got cancelled - used to project renewal book decay." />
+                       </h4>
                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                          <div className="bg-white border border-gray-200 p-3 rounded-lg"><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Prior Year Auto PIF</label><input type="number" value={localOfficeData[office.id]?.prior_pif_auto || 0} onChange={e => updateLocalOffice(office.id, 'prior_pif_auto', Number(e.target.value))} className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
                          <div className="bg-white border border-gray-200 p-3 rounded-lg"><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Prior Year Fire PIF</label><input type="number" value={localOfficeData[office.id]?.prior_pif_fire || 0} onChange={e => updateLocalOffice(office.id, 'prior_pif_fire', Number(e.target.value))} className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
@@ -1340,7 +1353,10 @@ export default function SettingsTab({
                        </div>
 
                        {/* VARIABLE COMP */}
-                       <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">4. Variable Comp (VC) Targets</h4>
+                       <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2 flex items-center gap-1.5">
+                         4. Variable Compensation (VC) Targets
+                         <InfoTooltip text="Variable Compensation is the extra 0-3% commission bump on top of base rates, earned by hitting Auto/Fire app-gain and Financial Services commission thresholds. Set the Min/Max app or dollar range for each bucket below." />
+                       </h4>
                        <div className="w-1/3 mb-4">
                          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Current Base VC Rate (%)</label>
                          <input type="number" value={localOfficeData[office.id]?.current_vc_rate || 0} onChange={e => updateLocalOffice(office.id, 'current_vc_rate', Number(e.target.value))} className="w-full p-2.5 bg-white border border-blue-200 rounded-lg text-sm font-bold text-blue-900" />
@@ -1361,7 +1377,10 @@ export default function SettingsTab({
                             </div>
                          </div>
                          <div className="bg-white p-4 rounded-xl border border-gray-200 md:col-span-2">
-                            <label className="block text-xs font-bold text-gray-900 mb-3">FS Comm Limits ($) (Life, Health, IPS)</label>
+                            <label className="flex items-center gap-1 text-xs font-bold text-gray-900 mb-3">
+                              Financial Services (FS) Commission Limits ($) (Life, Health, IPS)
+                              <InfoTooltip text="The Min/Max dollar range of Life + Health (+ IPS) commission that maps to the 0-2% Financial Services portion of the Variable Compensation rate above." />
+                            </label>
                             <div className="flex gap-4">
                               <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Min</label><input type="number" value={localOfficeData[office.id]?.vc_min_fs_comm || 0} onChange={e => updateLocalOffice(office.id, 'vc_min_fs_comm', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
                               <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Max</label><input type="number" value={localOfficeData[office.id]?.vc_max_fs_comm ?? 10000} onChange={e => updateLocalOffice(office.id, 'vc_max_fs_comm', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
@@ -1863,7 +1882,10 @@ export default function SettingsTab({
               </div>
               
               <div className="p-6 bg-gray-50 border-b border-gray-200">
-                <h4 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider">1. Base Commission Rates (%)</h4>
+                <h4 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                  1. Base Commission Rates (%)
+                  <InfoTooltip text="The starting commission % this plan pays per line before any accelerator bumps below are applied. Every producer on this plan earns at least this rate on Auto/Fire/Commercial/Life/Health premium." />
+                </h4>
                 <div className="grid grid-cols-5 gap-4">
                   {['auto_nb', 'fire_nb', 'commercial_nb', 'life_nb', 'health_nb'].map(lob => (
                     <div key={lob}>
@@ -1875,7 +1897,10 @@ export default function SettingsTab({
               </div>
 
               <div className="p-6 bg-white border-b border-gray-200">
-                <h4 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider">2. Unlocking Thresholds</h4>
+                <h4 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                  2. Unlocking Thresholds
+                  <InfoTooltip text="Minimums a producer must hit in a month before this plan pays ANY commission at all. Leave at 0 to unlock immediately - these are hard gates, not accelerator tiers." />
+                </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Required Premium ($)</label>
@@ -1886,7 +1911,10 @@ export default function SettingsTab({
                     <input type="number" value={editingPlan.rules?.thresholds?.required_apps_to_unlock || 0} onChange={e => updateRule('thresholds', 'required_apps_to_unlock', Number(e.target.value))} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-emerald-500 uppercase mb-1">Required L/H Apps</label>
+                    <label className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase mb-1">
+                      Required Life/Health Apps
+                      <InfoTooltip text="Short for L/H - just Life and Health apps counted together, separate from the 'Required Apps (Total)' count to the left." />
+                    </label>
                     <input type="number" value={editingPlan.rules?.thresholds?.required_life_health_apps_to_unlock || 0} onChange={e => updateRule('thresholds', 'required_life_health_apps_to_unlock', Number(e.target.value))} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" />
                   </div>
                 </div>
@@ -1894,7 +1922,10 @@ export default function SettingsTab({
 
               <div className="p-6 bg-blue-50 border-b border-gray-200">
                 <div className="flex justify-between items-center mb-1">
-                  <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">3. Variable Accelerators</h4>
+                  <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                    3. Variable Accelerators
+                    <InfoTooltip text="If/then bonus rules layered on top of the Base Commission Rates above - e.g. 'if Total Premium >= $50,000, bump Auto Base by 2%'. Multiple tiers can be met at once and all of them stack." />
+                  </h4>
                   <button onClick={addAccelerator} className="text-xs font-bold text-blue-600 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-md flex items-center gap-1"><Plus size={14}/> Add Tier</button>
                 </div>
                 <p className="text-[11px] text-gray-500 mb-4 max-w-2xl">Tiers stack: every tier whose threshold is met contributes its bump/bonus, and they all add together (never just the largest one alone). Rates always apply to the producer's full eligible premium for the month, retroactively - never just the amount above a threshold.</p>
@@ -1906,7 +1937,7 @@ export default function SettingsTab({
                       <select value={acc.metric} onChange={e => updateAccelerator(idx, 'metric', e.target.value)} className="p-2 border border-gray-200 rounded-md text-xs font-bold text-gray-700 outline-none">
                         <option value="life_health_apps">Financial Services Apps (Life + Health)</option>
                         <option value="life_premium">Financial Services Premium (Life + Health)</option>
-                        <option value="pnc_premium">P&C Premium</option>
+                        <option value="pnc_premium">Property &amp; Casualty (P&amp;C) Premium</option>
                         <option value="total_premium">Total Premium</option>
                         <option value="total_apps">Total Apps</option>
                       </select>
@@ -1930,7 +1961,7 @@ export default function SettingsTab({
                       ) : (
                         <>
                           <select value={acc.target_line} onChange={e => updateAccelerator(idx, 'target_line', e.target.value)} className="p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700 outline-none">
-                            <option value="pnc_base">P&C Base</option>
+                            <option value="pnc_base">Property &amp; Casualty (P&amp;C) Base</option>
                             <option value="auto_base">Auto Base</option>
                             <option value="fire_base">Fire Base</option>
                             <option value="life_base">Life Base</option>
@@ -1952,7 +1983,10 @@ export default function SettingsTab({
 
               <div className="p-6 bg-white">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">4. Custom Flat Bonuses ($)</h4>
+                  <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                    4. Custom Flat Bonuses ($)
+                    <InfoTooltip text="One-time flat dollar bonuses tracked manually per producer (e.g. a Google Review bonus) - these are named rules an owner/manager can claim against a specific policy, not automatic like the accelerators above." />
+                  </h4>
                   <button onClick={addCustomBonus} className="text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-md flex items-center gap-1"><Plus size={14}/> Add Bonus Rule</button>
                 </div>
                 <div className="space-y-3">
@@ -2146,7 +2180,10 @@ export default function SettingsTab({
               </div>
             </div>
             <div className="p-6">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Close Rate (%)</label>
+              <label className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                Close Rate (%)
+                <InfoTooltip text="What % of logged quotes typically turn into a bound app. E.g. a 25% close rate means roughly 1 in 4 quotes closes - the Cockpit uses this to translate a required number of apps into a daily quoting target." />
+              </label>
               <input
                 type="number"
                 step="0.1"
