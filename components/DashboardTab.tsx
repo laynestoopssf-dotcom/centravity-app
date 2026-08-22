@@ -24,17 +24,26 @@ export default function DashboardTab({
   const [activeSearch, setActiveSearch] = useState("");
   const [timeframe, setTimeframe] = useState<'daily'|'weekly'|'monthly'>('daily');
 
-  // Identifiers are blind-indexed - there's no plaintext to substring-match against anymore,
-  // only an exact-match hash comparison, computed server-side (see utils/crypto.ts - the pepper
-  // never reaches this browser). The search term is re-hashed on a short debounce rather than on
-  // every keystroke, both to avoid firing an RPC per character and because typing "jo" no longer
-  // finds "John D." the way it used to - only the full, exact identifier will match.
+  // Identifiers are blind-indexed server-side, so there's no way to ask the DB for a substring
+  // match against every OTHER producer's identifiers - only an exact-match hash comparison,
+  // computed server-side (see utils/crypto.ts - the pepper never reaches this browser). The
+  // search term is re-hashed on a short debounce rather than on every keystroke, both to avoid
+  // firing an RPC per character and because a half-typed term can't match anything server-side
+  // anyway. To keep the common case (searching your own recently-logged pipeline) feeling like
+  // real substring search, the filters below ALSO substring-match against this browser's local
+  // identifierCache label (see utils/identifierCache.ts) wherever one exists, falling back to
+  // the exact-hash comparison only for rows this browser never typed an identifier for itself.
   const [activeSearchHash, setActiveSearchHash] = useState<string | null>(null);
   const [archiveSearchHash, setArchiveSearchHash] = useState<string | null>(null);
   useEffect(() => {
     const term = showArchive ? archiveSearch : activeSearch;
     const setHash = showArchive ? setArchiveSearchHash : setActiveSearchHash;
-    if (!term) { setHash(null); return; }
+    // Reset immediately (not just when the term goes blank) so a hash resolved for the PREVIOUS
+    // keystroke's term can never linger and get compared against the NEW term during the 200ms
+    // debounce window below - that stale-hash race could otherwise flash in a match that has
+    // nothing to do with what's currently typed.
+    setHash(null);
+    if (!term) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       // Hashing is now a network round trip (RPC), so a slower-to-resolve call for an earlier
@@ -148,6 +157,17 @@ export default function DashboardTab({
     setEditingPolicyId(null);
   };
 
+  // Shared by both filters below: matches if the exact server-computed hash lines up, OR this
+  // browser's own local cache resolves a plaintext label for the row that substring-matches the
+  // typed term (see the identifierCache note above), OR the term substring-matches the product
+  // line itself.
+  const matchesIdentifierSearch = (p: any, term: string, hash: string | null) => {
+    if (hash !== null && p.client_identifier_hash === hash) return true;
+    const cachedLabel = getCachedIdentifier(p.id, p.client_identifier_hash);
+    if (cachedLabel && cachedLabel.toLowerCase().includes(term)) return true;
+    return p.product_line.toLowerCase().includes(term);
+  };
+
   const activePipeline = (pipeline || []).filter((p: any) => {
     // "Not Taken / Rejected / Declined by UW" is a terminal outcome like Issued - it belongs in the
     // Archive, not the working pipeline, so it doesn't clutter the list of policies still in play.
@@ -155,11 +175,10 @@ export default function DashboardTab({
     if (p.product_line === 'Complex Resolution') {
        const logDate = new Date(p.logged_at);
        const today = new Date();
-       return logDate.toDateString() === today.toDateString();
+       if (logDate.toDateString() !== today.toDateString()) return false;
     }
     if (activeSearch) {
-      const term = activeSearch.toLowerCase();
-      return (activeSearchHash !== null && p.client_identifier_hash === activeSearchHash) || p.product_line.toLowerCase().includes(term);
+      return matchesIdentifierSearch(p, activeSearch.toLowerCase(), activeSearchHash);
     }
     return true;
   });
@@ -174,8 +193,7 @@ export default function DashboardTab({
     }
 
     if (archiveSearch) {
-      const term = archiveSearch.toLowerCase();
-      return (archiveSearchHash !== null && p.client_identifier_hash === archiveSearchHash) || p.product_line.toLowerCase().includes(term);
+      return matchesIdentifierSearch(p, archiveSearch.toLowerCase(), archiveSearchHash);
     }
     return true;
   });

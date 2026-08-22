@@ -549,12 +549,15 @@ export default function CockpitPage() {
     issuedLifeCred += baselineLifePremium;
     issuedHealthCred += baselineHealthPremium;
 
+    // No hardcoded sample-program fallbacks here (previously 70 apps/$41,300/etc., one specific
+    // carrier's real numbers baked in as defaults) - an agency that hasn't configured its own
+    // Travel benchmarks in Settings gets a hard 0 threshold per tier, not someone else's program.
     const travelTiers = [
-      { name: "Level 1", apps: num(agencySettings?.travel_lvl1_apps, 70), lifeCred: num(agencySettings?.travel_lvl1_life_cred, 41300), totalCred: num(agencySettings?.travel_lvl1_total_cred, 59000) },
-      { name: "Level 2", apps: num(agencySettings?.travel_lvl2_apps, 70), lifeCred: num(agencySettings?.travel_lvl2_life_cred, 53200), totalCred: num(agencySettings?.travel_lvl2_total_cred, 76000) },
-      { name: "Level 3", apps: num(agencySettings?.travel_lvl3_apps, 75), lifeCred: num(agencySettings?.travel_lvl3_life_cred, 80500), totalCred: num(agencySettings?.travel_lvl3_total_cred, 115000) },
-      { name: "Exotic", apps: num(agencySettings?.travel_exotic_apps, 80), lifeCred: num(agencySettings?.travel_exotic_life_cred, 102500), totalCred: num(agencySettings?.travel_exotic_total_cred, 205000) },
-      { name: "Exotic Plus", apps: num(agencySettings?.travel_exotic_plus_apps, 110), lifeCred: num(agencySettings?.travel_exotic_plus_life_cred, 157500), totalCred: num(agencySettings?.travel_exotic_plus_total_cred, 315000) },
+      { name: "Level 1", apps: num(agencySettings?.travel_lvl1_apps), lifeCred: num(agencySettings?.travel_lvl1_life_cred), totalCred: num(agencySettings?.travel_lvl1_total_cred) },
+      { name: "Level 2", apps: num(agencySettings?.travel_lvl2_apps), lifeCred: num(agencySettings?.travel_lvl2_life_cred), totalCred: num(agencySettings?.travel_lvl2_total_cred) },
+      { name: "Level 3", apps: num(agencySettings?.travel_lvl3_apps), lifeCred: num(agencySettings?.travel_lvl3_life_cred), totalCred: num(agencySettings?.travel_lvl3_total_cred) },
+      { name: "Exotic", apps: num(agencySettings?.travel_exotic_apps), lifeCred: num(agencySettings?.travel_exotic_life_cred), totalCred: num(agencySettings?.travel_exotic_total_cred) },
+      { name: "Exotic Plus", apps: num(agencySettings?.travel_exotic_plus_apps), lifeCred: num(agencySettings?.travel_exotic_plus_life_cred), totalCred: num(agencySettings?.travel_exotic_plus_total_cred) },
     ];
 
     // Qualification is strictly REAL production (issued credit, bound+issued gross apps) —
@@ -723,10 +726,22 @@ export default function CockpitPage() {
   const fillPct = revenueGap > 0 ? Math.min(100, (totalFill / revenueGap) * 100) : 100;
   // Sliders hold PREMIUM dollars (revenue / rate), which can run well above the revenue gap
   // itself once divided by a line's own rate (e.g. a 9% P&C rate inflates premium ~11x vs.
-  // revenue) — size the range off the actual current slider values, not the raw revenue gap,
-  // so the auto-distributed value is never clipped by the slider's own max.
-  const maxSliderValue = Math.max(sliders.auto, sliders.fire, sliders.life, sliders.health, 100000);
-  const sliderMax = Math.round(maxSliderValue * 1.5);
+  // revenue) — each line gets its own ceiling sized off the FULL revenue gap converted through
+  // ITS OWN rate (with generous 1.5x headroom), not the raw revenue gap in dollars.
+  //
+  // BUG FIX: this used to derive `max` from `Math.max(sliders.auto, sliders.fire, ...)` — i.e.
+  // the CURRENTLY DRAGGED value of whichever slider was highest, shared across all four inputs.
+  // That created a feedback loop: dragging a slider raised its own value, which raised the
+  // shared max, which shifted the value/max ratio the browser uses to place the thumb — so the
+  // handle would jump/stutter mid-drag instead of tracking the cursor, and moving ONE slider
+  // could visibly shift the other three (since they all shared that same live-computed max).
+  // Deriving the ceiling from `revenueGap` (only changes when the Target Revenue input changes)
+  // and each line's own static rate keeps every slider's scale fixed while the user is dragging.
+  const sliderMaxFor = (k: LineKey) => {
+    const rate = model.sliderRates[k];
+    const gapBasedCeiling = rate > 0 ? (revenueGap / rate) * 1.5 : 0;
+    return Math.max(Math.round(gapBasedCeiling), 100000);
+  };
 
   // --- Translation Layer: premium → required apps (Tweak 3) ---
   const requiredApps: Record<LineKey, number | null> = {
@@ -1121,7 +1136,7 @@ export default function CockpitPage() {
                   <input
                     type="range"
                     min={0}
-                    max={sliderMax}
+                    max={sliderMaxFor(k)}
                     step={1000}
                     value={sliders[k]}
                     onChange={(e) => setSliders((prev) => ({ ...prev, [k]: Number(e.target.value) }))}

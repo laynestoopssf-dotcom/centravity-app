@@ -3149,12 +3149,15 @@ export default function Home() {
             totalsAfterBlend: totals,
         });
 
+        // No hardcoded sample-program fallbacks here (previously 70 apps/$41,300/etc., one specific
+        // carrier's real numbers baked in as defaults) - an agency that hasn't configured its own
+        // Travel benchmarks in Settings gets a hard 0 threshold per tier, not someone else's program.
         const travelTiers = [
-          { name: "Level 1", apps: agencySettings?.travel_lvl1_apps || 70, lifeCred: agencySettings?.travel_lvl1_life_cred || 41300, totalCred: agencySettings?.travel_lvl1_total_cred || 59000 },
-          { name: "Level 2", apps: agencySettings?.travel_lvl2_apps || 70, lifeCred: agencySettings?.travel_lvl2_life_cred || 53200, totalCred: agencySettings?.travel_lvl2_total_cred || 76000 },
-          { name: "Level 3", apps: agencySettings?.travel_lvl3_apps || 75, lifeCred: agencySettings?.travel_lvl3_life_cred || 80500, totalCred: agencySettings?.travel_lvl3_total_cred || 115000 },
-          { name: "Exotic", apps: agencySettings?.travel_exotic_apps || 80, lifeCred: agencySettings?.travel_exotic_life_cred || 102500, totalCred: agencySettings?.travel_exotic_total_cred || 205000 },
-          { name: "Exotic Plus", apps: agencySettings?.travel_exotic_plus_apps || 110, lifeCred: agencySettings?.travel_exotic_plus_life_cred || 157500, totalCred: agencySettings?.travel_exotic_plus_total_cred || 315000 },
+          { name: "Level 1", apps: agencySettings?.travel_lvl1_apps || 0, lifeCred: agencySettings?.travel_lvl1_life_cred || 0, totalCred: agencySettings?.travel_lvl1_total_cred || 0 },
+          { name: "Level 2", apps: agencySettings?.travel_lvl2_apps || 0, lifeCred: agencySettings?.travel_lvl2_life_cred || 0, totalCred: agencySettings?.travel_lvl2_total_cred || 0 },
+          { name: "Level 3", apps: agencySettings?.travel_lvl3_apps || 0, lifeCred: agencySettings?.travel_lvl3_life_cred || 0, totalCred: agencySettings?.travel_lvl3_total_cred || 0 },
+          { name: "Exotic", apps: agencySettings?.travel_exotic_apps || 0, lifeCred: agencySettings?.travel_exotic_life_cred || 0, totalCred: agencySettings?.travel_exotic_total_cred || 0 },
+          { name: "Exotic Plus", apps: agencySettings?.travel_exotic_plus_apps || 0, lifeCred: agencySettings?.travel_exotic_plus_life_cred || 0, totalCred: agencySettings?.travel_exotic_plus_total_cred || 0 },
         ];
 
         let currentTierIndex = -1;

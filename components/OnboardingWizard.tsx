@@ -248,6 +248,57 @@ const initialFormData: OnboardingFormData = {
   agencyVcTotal: "",
 };
 
+// A plain-number `<input type="number">` can't render comma-grouped text at all - the browser
+// rejects "10,000" as an invalid number and just blanks it - so large-dollar fields (YTD/Book
+// Size premium) render as a hard-to-scan wall of digits like "125000". This wraps a text input
+// that formats with commas while blurred (e.g. "$125,000") and drops back to the plain digit
+// string while focused, so typing isn't fighting comma insertion moving the caret around.
+// Non-digit paste noise ($, commas, spaces) is stripped on every change so pasting an
+// already-formatted number ("$10,000") still works.
+function FormattedNumberInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: number | "";
+  onChange: (value: number | "") => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [rawText, setRawText] = useState<string>(value === "" ? "" : String(value));
+
+  // Keeps the edit buffer in sync with externally-driven changes (e.g. hydrating saved
+  // onboarding state) as long as the user isn't actively typing in this exact field.
+  useEffect(() => {
+    if (!isFocused) setRawText(value === "" ? "" : String(value));
+  }, [value, isFocused]);
+
+  const displayValue = isFocused
+    ? rawText
+    : value === ""
+      ? ""
+      : Number(value).toLocaleString("en-US");
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={displayValue}
+      placeholder={placeholder}
+      className={className}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onChange={(e) => {
+        const cleaned = e.target.value.replace(/[^0-9.]/g, "");
+        setRawText(cleaned);
+        onChange(cleaned === "" ? "" : Number(cleaned));
+      }}
+    />
+  );
+}
+
 const STEPS = [
   { id: 1, label: "Agency Setup", icon: Building2 },
   { id: 2, label: "The Roster", icon: Users },
@@ -1024,15 +1075,9 @@ export default function OnboardingWizard({
                                 />
                               </td>
                               <td className="border-b border-gray-100 px-1.5 py-1.5">
-                                <input
-                                  type="number"
+                                <FormattedNumberInput
                                   value={formData[premiumField]}
-                                  onChange={(e) =>
-                                    updateOwnerYtdField(
-                                      premiumField,
-                                      e.target.value === "" ? "" : Number(e.target.value)
-                                    )
-                                  }
+                                  onChange={(v) => updateOwnerYtdField(premiumField, v)}
                                   placeholder="0"
                                   className="w-24 rounded border border-gray-200 bg-white px-1.5 py-1 text-center text-xs text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30"
                                 />
@@ -1070,16 +1115,9 @@ export default function OnboardingWizard({
                                 />
                               </td>
                               <td className="border-b border-gray-100 px-1.5 py-1.5">
-                                <input
-                                  type="number"
+                                <FormattedNumberInput
                                   value={tm[line.premium]}
-                                  onChange={(e) =>
-                                    updateTeamMember(
-                                      tm.id,
-                                      line.premium,
-                                      e.target.value === "" ? "" : Number(e.target.value)
-                                    )
-                                  }
+                                  onChange={(v) => updateTeamMember(tm.id, line.premium, v)}
                                   placeholder="0"
                                   className="w-24 rounded border border-gray-200 bg-white px-1.5 py-1 text-center text-xs text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30"
                                 />
@@ -1147,15 +1185,9 @@ export default function OnboardingWizard({
                           <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                             Book Size — Premium ($)
                           </label>
-                          <input
-                            type="number"
+                          <FormattedNumberInput
                             value={formData[line.premium]}
-                            onChange={(e) =>
-                              updateBaselineField(
-                                line.premium,
-                                e.target.value === "" ? "" : Number(e.target.value)
-                              )
-                            }
+                            onChange={(v) => updateBaselineField(line.premium, v)}
                             placeholder="0"
                             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                           />
@@ -1164,15 +1196,9 @@ export default function OnboardingWizard({
                           <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                             Book Size — Policy Count
                           </label>
-                          <input
-                            type="number"
+                          <FormattedNumberInput
                             value={formData[line.count]}
-                            onChange={(e) =>
-                              updateBaselineField(
-                                line.count,
-                                e.target.value === "" ? "" : Number(e.target.value)
-                              )
-                            }
+                            onChange={(v) => updateBaselineField(line.count, v)}
                             placeholder="0"
                             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                           />
