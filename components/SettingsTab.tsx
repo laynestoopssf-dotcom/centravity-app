@@ -53,16 +53,21 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'view_agency_mtd', label: 'View Agency Month-to-Date (MTD)', desc: 'Allows access to the Agency Overview and AI Coaching.' },
   { id: 'view_life_module', label: 'View Life Module', desc: 'Allows access to the Life-specific pipeline and leaderboards.' },
   { id: 'view_team_comm', label: 'View Team Commissions', desc: 'Allows access to the Agency Payroll overview.' },
-  { id: 'view_ytd_projections', label: 'View Year-to-Date (YTD) Projections', desc: 'Allows access to year-end travel and premium projections.' },
-  { id: 'view_revenue_vc', label: 'View Revenue & Variable Compensation (VC)', desc: 'Allows access to the agency revenue and variable compensation breakdowns.' },
   { id: 'view_reports', label: 'View Reports', desc: 'Allows access to Agency Reports, historical analytics, and PDF exports.' },
   { id: 'edit_historical', label: 'Import Historical Data', desc: 'Can bulk import past activities and policies.' },
   { id: 'delete_records', label: 'Delete Ledger Records', desc: 'Can permanently delete logged policies and activities.' },
   { id: 'manage_settings', label: 'Manage Agency Settings', desc: 'Can create comp plans, locations, and edit agency targets.' }
 ];
+// NOTE: 'view_ytd_projections'/'view_revenue_vc' used to live in the list above,
+// gating the old standalone YTD Projections / Revenue & VC tabs. Those tabs are
+// retired in favor of the merged, owner-only /dashboard/agent "Agent Dashboard"
+// (app/dashboard/agent/page.tsx), which is gated by a hardcoded `role === 'owner'`
+// check instead — not a custom_roles-configurable permission — so there's
+// nothing left for these two toggles to control. Any pre-existing agency's
+// custom_roles JSON may still carry these keys; they're simply inert now.
 
 const DEFAULT_ROLES = [
-  { id: 'owner', name: 'Owner', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_ytd_projections: true, view_revenue_vc: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
+  { id: 'owner', name: 'Owner', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
   // Mirrors 'owner' by default — see isOwnerLevelRole() in utils/roles.ts, the
   // single source of truth every permission check falls back to when (as
   // here) no custom_roles entry overrides it. Kept isSystem so its name can't
@@ -71,10 +76,10 @@ const DEFAULT_ROLES = [
   // screen just like 'manager' can. Billing is the one deliberate exception —
   // it's never granted here or anywhere else regardless of these toggles
   // (see the EXCEPTION note in utils/roles.ts).
-  { id: 'admin', name: 'Admin', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_ytd_projections: true, view_revenue_vc: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
-  { id: 'manager', name: 'Manager', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_ytd_projections: true, view_revenue_vc: false, view_reports: true, edit_historical: true, delete_records: false, manage_settings: false } },
-  { id: 'producer', name: 'Producer', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_ytd_projections: false, view_revenue_vc: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } },
-  { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_ytd_projections: false, view_revenue_vc: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } }
+  { id: 'admin', name: 'Admin', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
+  { id: 'manager', name: 'Manager', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: false, manage_settings: false } },
+  { id: 'producer', name: 'Producer', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } },
+  { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } }
 ];
 
 // `date` inputs need a plain local "YYYY-MM-DD" string. Reading that back out of a stored

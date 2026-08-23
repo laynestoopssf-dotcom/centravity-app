@@ -30,8 +30,6 @@ export type DashboardTabId =
   | "weekly"
   | "agency"
   | "life"
-  | "ytd"
-  | "revenue"
   | "ledger"
   | "reports"
   | "settings"

@@ -42,9 +42,8 @@ const emptyPermissions: DashboardSidebarPermissions = {
   canViewWeeklyRank: false,
   canViewAgencyMtd: false,
   canViewLifeModule: false,
-  canViewYtdProjections: false,
-  canViewRevenueVc: false,
   canViewReports: false,
+  isOwner: false,
 };
 
 interface ShellData {
@@ -91,10 +90,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         (r) => r.id === profileRow.role
       );
       const isOwnerOrManager = isManagerLevelRole(profileRow.role);
-      const isOwner = isOwnerLevelRole(profileRow.role);
+      const isOwnerLevel = isOwnerLevelRole(profileRow.role);
       const canViewAgencyDash = roleConfig?.permissions?.view_agency_dash ?? isOwnerOrManager;
       const canViewTeamComm = roleConfig?.permissions?.view_team_comm ?? isOwnerOrManager;
-      const canManageSettings = roleConfig?.permissions?.manage_settings ?? isOwner;
+      const canManageSettings = roleConfig?.permissions?.manage_settings ?? isOwnerLevel;
 
       setShellData({
         user: {
@@ -110,9 +109,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           canViewWeeklyRank: roleConfig?.permissions?.view_weekly_rank ?? canViewAgencyDash,
           canViewAgencyMtd: roleConfig?.permissions?.view_agency_mtd ?? canViewAgencyDash,
           canViewLifeModule: roleConfig?.permissions?.view_life_module ?? canViewAgencyDash,
-          canViewYtdProjections: roleConfig?.permissions?.view_ytd_projections ?? canManageSettings,
-          canViewRevenueVc: roleConfig?.permissions?.view_revenue_vc ?? canManageSettings,
           canViewReports: roleConfig?.permissions?.view_reports ?? isOwnerOrManager,
+          // Strictly the literal agency owner — no custom_roles override, no
+          // 'admin' inclusion. See DashboardSidebarPermissions.isOwner and
+          // app/dashboard/agent/page.tsx's header comment for why.
+          isOwner: profileRow.role === "owner",
         },
       });
     })();

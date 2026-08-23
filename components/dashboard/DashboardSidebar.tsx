@@ -14,11 +14,10 @@ import {
   CalendarDays,
   Briefcase,
   HeartPulse,
-  Mountain,
-  DollarSign,
   Crosshair,
   MessageSquare,
   LifeBuoy,
+  Crown,
 } from "lucide-react";
 import { useDashboardTab, type DashboardTabId } from "./DashboardShellContext";
 
@@ -29,9 +28,12 @@ export interface DashboardSidebarPermissions {
   canViewWeeklyRank: boolean;
   canViewAgencyMtd: boolean;
   canViewLifeModule: boolean;
-  canViewYtdProjections: boolean;
-  canViewRevenueVc: boolean;
   canViewReports: boolean;
+  // Strictly `role === 'owner'` (not the broader isOwnerLevelRole/'admin'
+  // carve-out every other flag here uses) — see the header comment on
+  // app/dashboard/agent/page.tsx for why the Agent Dashboard is the one
+  // deliberate exception, same as Stripe billing.
+  isOwner: boolean;
 }
 
 interface NavItem {
@@ -47,9 +49,11 @@ const brandTileClass = "flex h-10 w-10 shrink-0 items-center justify-center roun
 // The four items the "Agent View" spec calls out by name — Dashboard, Team,
 // Commissions, Settings — get their own visually separated primary group up
 // top; every other existing tab (Performance, Ledger, Reports, Weekly Rank,
-// Agency MTD, Life, YTD, Revenue & VC, Executive Cockpit) is preserved
-// underneath a "More" divider rather than dropped, per the "keep everything
-// working" call. Community Board stays pinned to the bottom, same as before.
+// Agency MTD, Life, Executive Cockpit) is preserved underneath a "More"
+// divider rather than dropped, per the "keep everything working" call.
+// Community Board stays pinned to the bottom, same as before. The standalone
+// YTD Projections and Revenue & Variable Comp tabs have been retired in favor
+// of the merged, owner-only "Agent Dashboard" entry above (/dashboard/agent).
 export default function DashboardSidebar({ permissions }: { permissions: DashboardSidebarPermissions }) {
   const { activeTab, setActiveTab } = useDashboardTab();
   const router = useRouter();
@@ -60,9 +64,8 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
     canViewWeeklyRank,
     canViewAgencyMtd,
     canViewLifeModule,
-    canViewYtdProjections,
-    canViewRevenueVc,
     canViewReports,
+    isOwner,
   } = permissions;
 
   // "Team" deep-links into SettingsTab's own Team Management section (see
@@ -99,8 +102,6 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
     { tab: "weekly", label: "Weekly Rank", icon: CalendarDays, show: canViewWeeklyRank },
     { tab: "agency", label: "Agency MTD", icon: Briefcase, show: canViewAgencyMtd },
     { tab: "life", label: "Life Module", icon: HeartPulse, show: canViewLifeModule },
-    { tab: "ytd", label: "YTD Projections", icon: Mountain, show: canViewYtdProjections },
-    { tab: "revenue", label: "Revenue & Variable Comp", icon: DollarSign, show: canViewRevenueVc },
   ];
 
   const renderButton = (item: NavItem) => {
@@ -145,12 +146,30 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
 
       <div className="space-y-1">{primaryItems.filter((i) => i.show).map(renderButton)}</div>
 
+      {/* Owner-only "master command center" — merges the old standalone YTD
+          Projections + Revenue & Variable Comp tabs into one route. Deliberately
+          NOT gated by canManageSettings/isOwnerLevelRole like everything else
+          here — strictly the literal agency owner (see DashboardSidebarPermissions
+          and app/dashboard/agent/page.tsx's header comment). Its own visually
+          distinct group (not folded into "More") so it reads as the special,
+          owner-exclusive destination it is. */}
+      {isOwner && (
+        <div className="mt-4">
+          <button
+            onClick={() => router.push("/dashboard/agent")}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold text-sm text-amber-300 bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 transition-colors"
+          >
+            <Crown size={18} /> Agent Dashboard
+          </button>
+        </div>
+      )}
+
       {moreItems.some((i) => i.show) && (
         <div className="mt-6 pt-6 border-t border-slate-800">
           <p className="px-4 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">More</p>
           <div className="space-y-1">
             {moreItems.filter((i) => i.show).map(renderButton)}
-            {canViewRevenueVc && (
+            {canManageSettings && (
               <button
                 onClick={() => router.push("/dashboard/cockpit")}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm text-slate-400 hover:bg-white/5 hover:text-slate-100 transition-colors"

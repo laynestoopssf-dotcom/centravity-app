@@ -3,9 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
-import { resolveCommissionRates } from "../../utils/commissionRates";
 import { calculateCommission, makeParentLineResolver, resolveAccelerators, resolveRates, emptyCommissionLineTotals } from "../../utils/commissionMath";
-import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../utils/revenueEngine";
 import { enrichCustomTargets, type CustomTargetRow } from "../../utils/customTargets";
 import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
@@ -35,8 +33,6 @@ import CommissionTab from '../../components/CommissionTab';
 import WeeklyRankTab from '../../components/WeeklyRankTab';
 import AgencyOverviewTab from '../../components/AgencyOverviewTab';
 import LifeTab from '../../components/LifeTab';
-import YtdTab from '../../components/YtdTab';
-import RevenueTab from '../../components/RevenueTab';
 import LedgerTab from '../../components/LedgerTab';
 import ReportsTab from '../../components/ReportsTab';
 import SettingsTab from '../../components/SettingsTab';
@@ -2444,8 +2440,6 @@ export default function Home() {
   const canViewWeeklyRank = userRoleConfig?.permissions?.view_weekly_rank ?? canViewAgencyDash;
   const canViewAgencyMtd = userRoleConfig?.permissions?.view_agency_mtd ?? canViewAgencyDash;
   const canViewLifeModule = userRoleConfig?.permissions?.view_life_module ?? canViewAgencyDash;
-  const canViewYtdProjections = userRoleConfig?.permissions?.view_ytd_projections ?? canManageSettings;
-  const canViewRevenueVc = userRoleConfig?.permissions?.view_revenue_vc ?? canManageSettings;
   const canViewReports = userRoleConfig?.permissions?.view_reports ?? isManagerLevelRole(profile?.role);
 
   // --- USE MEMO DATA ENGINES ---
@@ -3049,383 +3043,11 @@ export default function Home() {
     return { totals, leaderboard: leaderboard.sort((a, b) => b.lifePremium - a.lifePremium), pendingPipeline };
   }, [filteredPolicies, team, profile, overviewMonth, agencySettings, canViewLifeModule]);
 
-  const ytdOverviewData = useMemo(() => {
-    if (!profile || !canViewYtdProjections) return null;
-
-    const linesDict = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
-    const getParentLine = (line: string) => resolveParentLine(line, linesDict);
-
-    const today = new Date();
-    const startOfYear = new Date(today.getFullYear(), 0, 1);
-    const daysPassed = Math.max(1, Math.floor((today.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)));
-    const daysInYear = 365;
-    const currentMonthRemaining = 12 - today.getMonth(); 
-
-    const calculateStats = (policies: any[], name: string, specificOffice?: any) => {
-        let totals = { ytdBound: 0, ytdPremium: 0, ytdLifeApps: 0, ytdLifePremium: 0, ytdAutoApps: 0, ytdFireApps: 0, ytdCommercialApps: 0, ytdHealthApps: 0, ytdHealthPremium: 0 };
-        let issuedLifeCred = 0, carryOverCred = 0, pendingLifeCred = 0, pendingCarryOver = 0, pendingLifeApps = 0, issuedHealthCred = 0, pendingHealthCred = 0;
-        
-        policies.forEach(pol => {
-            // bound_at (falls back to written_at, unchanged from before, for still-'quoted' rows) -
-            // not raw logged_at - decides which year a bound/issued app counts toward. Same fix/
-            // note as the Scoreboard's own boundDate calc in fetchDashboardData above.
-            const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
-            if (logDate.getFullYear() === today.getFullYear()) {
-                const prem = Number(pol.premium_amount);
-                const isBoundOrIssued = pol.status === 'bound' || pol.status === 'issued';
-                const isAnnual = pol.payment_cycle === 'annual';
-                const parentLine = getParentLine(pol.product_line);
-
-                if (isBoundOrIssued) {
-                    totals.ytdBound++; 
-                    totals.ytdPremium += prem; // REMOVED MULTIPLIER (Confirmed via after.png)
-
-                    if (parentLine === 'Life') { totals.ytdLifeApps++; totals.ytdLifePremium += prem; } 
-                    else if (parentLine === 'Auto') totals.ytdAutoApps++;
-                    else if (parentLine === 'Fire') totals.ytdFireApps++;
-                    else if (parentLine === 'Commercial') totals.ytdCommercialApps++;
-                    else if (parentLine === 'Health') { totals.ytdHealthApps++; totals.ytdHealthPremium += prem; }
-                }
-
-                if (parentLine === 'Life') {
-                    let earnedThisYear = 0, carryOver = 0;
-                    if (pol.status === 'issued') {
-                        if (isAnnual) { earnedThisYear = prem; carryOver = 0; } else { earnedThisYear = (prem / 12) * (12 - logDate.getMonth()); carryOver = prem - earnedThisYear; }
-                        issuedLifeCred += earnedThisYear; carryOverCred += carryOver;
-                    } else if (pol.status === 'bound' || pol.status === 'quoted') {
-                        if (pol.status !== 'quoted') pendingLifeApps++;
-                        if (isAnnual) { earnedThisYear = prem; carryOver = 0; } else { earnedThisYear = (prem / 12) * currentMonthRemaining; carryOver = prem - earnedThisYear; }
-                        pendingLifeCred += earnedThisYear; pendingCarryOver += carryOver;
-                    }
-                } else if (parentLine === 'Health') {
-                    if (pol.status === 'issued') issuedHealthCred += prem;
-                    else if (pol.status === 'bound' || pol.status === 'quoted') pendingHealthCred += prem;
-                }
-            }
-        });
-
-        // Blend in each team member's onboarding "starting YTD" baseline — production that
-        // already happened before the agency started logging activity in Centravity. Without
-        // this, an agency that onboards mid-year always starts every pacing/conversion widget
-        // (Gross/Net apps, run rates, Revenue & VC) from zero even though real production
-        // already exists. Populated by OnboardingWizard Step 3 → saveStep3YTD, and read here via
-        // `team`'s wildcard select (see fetchTeam) so no extra fetch is needed. Scoped to the
-        // team members assigned to `specificOffice` when drilled into one location, otherwise
-        // every active team member counts toward the Enterprise / All Locations totals.
-        const baselineMembers = specificOffice ? team.filter((t: any) => t.office_id === specificOffice.id) : team;
-        const baseline = baselineMembers.reduce(
-            (acc: any, m: any) => ({
-                autoApps: acc.autoApps + (Number(m.starting_ytd_auto_apps) || 0),
-                autoPremium: acc.autoPremium + (Number(m.starting_ytd_auto_premium) || 0),
-                fireApps: acc.fireApps + (Number(m.starting_ytd_fire_apps) || 0),
-                firePremium: acc.firePremium + (Number(m.starting_ytd_fire_premium) || 0),
-                lifeApps: acc.lifeApps + (Number(m.starting_ytd_life_apps) || 0),
-                lifePremium: acc.lifePremium + (Number(m.starting_ytd_life_premium) || 0),
-                healthApps: acc.healthApps + (Number(m.starting_ytd_health_apps) || 0),
-                healthPremium: acc.healthPremium + (Number(m.starting_ytd_health_premium) || 0),
-            }),
-            { autoApps: 0, autoPremium: 0, fireApps: 0, firePremium: 0, lifeApps: 0, lifePremium: 0, healthApps: 0, healthPremium: 0 }
-        );
-
-        totals.ytdAutoApps += baseline.autoApps;
-        totals.ytdFireApps += baseline.fireApps;
-        totals.ytdLifeApps += baseline.lifeApps;
-        totals.ytdLifePremium += baseline.lifePremium;
-        totals.ytdHealthApps += baseline.healthApps;
-        totals.ytdHealthPremium += baseline.healthPremium;
-        totals.ytdPremium += baseline.autoPremium + baseline.firePremium + baseline.lifePremium + baseline.healthPremium;
-        totals.ytdBound += baseline.autoApps + baseline.fireApps + baseline.lifeApps + baseline.healthApps;
-
-        // Baseline Life/Health premium is already-earned credit (real production that already
-        // happened), not a pending pipeline item, so it counts toward the Travel Qualifier the
-        // same way an "issued" policy would.
-        issuedLifeCred += baseline.lifePremium;
-        issuedHealthCred += baseline.healthPremium;
-
-        console.log('[YTD] baseline blend', {
-            name,
-            specificOfficeId: specificOffice?.id ?? null,
-            baselineMemberCount: baselineMembers.length,
-            baseline,
-            totalsAfterBlend: totals,
-        });
-
-        // No hardcoded sample-program fallbacks here (previously 70 apps/$41,300/etc., one specific
-        // carrier's real numbers baked in as defaults) - an agency that hasn't configured its own
-        // Travel benchmarks in Settings gets a hard 0 threshold per tier, not someone else's program.
-        const travelTiers = [
-          { name: "Level 1", apps: agencySettings?.travel_lvl1_apps || 0, lifeCred: agencySettings?.travel_lvl1_life_cred || 0, totalCred: agencySettings?.travel_lvl1_total_cred || 0 },
-          { name: "Level 2", apps: agencySettings?.travel_lvl2_apps || 0, lifeCred: agencySettings?.travel_lvl2_life_cred || 0, totalCred: agencySettings?.travel_lvl2_total_cred || 0 },
-          { name: "Level 3", apps: agencySettings?.travel_lvl3_apps || 0, lifeCred: agencySettings?.travel_lvl3_life_cred || 0, totalCred: agencySettings?.travel_lvl3_total_cred || 0 },
-          { name: "Exotic", apps: agencySettings?.travel_exotic_apps || 0, lifeCred: agencySettings?.travel_exotic_life_cred || 0, totalCred: agencySettings?.travel_exotic_total_cred || 0 },
-          { name: "Exotic Plus", apps: agencySettings?.travel_exotic_plus_apps || 0, lifeCred: agencySettings?.travel_exotic_plus_life_cred || 0, totalCred: agencySettings?.travel_exotic_plus_total_cred || 0 },
-        ];
-
-        let currentTierIndex = -1;
-        for (let i = 0; i < travelTiers.length; i++) {
-            if (totals.ytdLifeApps >= travelTiers[i].apps && issuedLifeCred >= travelTiers[i].lifeCred && (issuedLifeCred + issuedHealthCred) >= travelTiers[i].totalCred) {
-                currentTierIndex = i;
-            }
-        }
-
-        const targetTier = currentTierIndex < travelTiers.length - 1 ? travelTiers[currentTierIndex + 1] : travelTiers[travelTiers.length - 1];
-        const currentTierName = currentTierIndex >= 0 ? travelTiers[currentTierIndex].name : "Not Qualified";
-        const travelStatus = { currentTierName, targetTierName: targetTier.name, issuedLifeApps: totals.ytdLifeApps, pendingLifeApps, targetLifeApps: targetTier.apps, issuedLifeCred, pendingLifeCred, targetLifeCred: targetTier.lifeCred, issuedTotalCred: issuedLifeCred + issuedHealthCred, pendingTotalCred: pendingLifeCred + pendingHealthCred, targetTotalCred: targetTier.totalCred, carryOverCred, pendingCarryOver };
-
-        const targetLifeApps = specificOffice ? (specificOffice.annual_target_life_apps || 0) : offices.reduce((sum, o) => sum + (o.annual_target_life_apps || 0), 0);
-        const targetPremium = specificOffice ? (specificOffice.annual_target_premium || 0) : offices.reduce((sum, o) => sum + (o.annual_target_premium || 0), 0);
-        const targetAuto = specificOffice ? (specificOffice.annual_target_auto_apps || 0) : offices.reduce((sum, o) => sum + (o.annual_target_auto_apps || 0), 0);
-        const targetFire = specificOffice ? (specificOffice.annual_target_fire_apps || 0) : offices.reduce((sum, o) => sum + (o.annual_target_fire_apps || 0), 0);
-        const targetCommercial = specificOffice ? (specificOffice.annual_target_commercial_apps || 0) : offices.reduce((sum, o) => sum + (o.annual_target_commercial_apps || 0), 0);
-        const targetHealth = specificOffice ? (specificOffice.annual_target_health_apps || 0) : offices.reduce((sum, o) => sum + (o.annual_target_health_apps || 0), 0);
-
-        const teamSumTargets = team.reduce((acc, curr) => { acc.lifeApps += (curr.annual_target_life_apps || 0); acc.totalPremium += (curr.monthly_target_premium || 0) * 12; return acc; }, { lifeApps: 0, totalPremium: 0 });
-        
-        // Bifurcated model: Gross (totals.ytdXxxApps, counted above from bound+issued rows) is the
-        // Sales Momentum number shown on the YTD Projections tab's "Gross" fields. Net (below) is the
-        // True Net Gain - Gross minus projected book attrition - and is what the Revenue/VC engine
-        // strictly keys off of for its VC tier calculations. Both are surfaced; neither replaces the
-        // other.
-        const agencyTargets = {
-            lifeApps: targetLifeApps || teamSumTargets.lifeApps, 
-            totalPremium: targetPremium || teamSumTargets.totalPremium,
-            lapseRateGlobal: specificOffice?.ytd_lapse_cancel_rate ?? agencySettings?.ytd_lapse_cancel_rate ?? 0, 
-            // NOTE: no hardcoded literal fallbacks (previously 500/250/50/50) — those masked
-            // real, live per-office goals with fake numbers whenever targetAuto/etc. legitimately
-            // computed to 0 (e.g. a stale/never-synced `agencies` row). targetAuto/targetFire/
-            // targetCommercial/targetHealth are already correctly summed from `offices` above.
-            autoApps: targetAuto, 
-            lapseAuto: specificOffice?.ytd_lapse_cancel_auto ?? agencySettings?.ytd_lapse_cancel_auto ?? 0,
-            fireApps: targetFire, 
-            lapseFire: specificOffice?.ytd_lapse_cancel_fire ?? agencySettings?.ytd_lapse_cancel_fire ?? 0, 
-            commercialApps: targetCommercial,
-            lapseCommercial: specificOffice?.ytd_lapse_cancel_commercial ?? agencySettings?.ytd_lapse_cancel_commercial ?? 0, 
-            healthApps: targetHealth, 
-            lapseHealth: specificOffice?.ytd_lapse_cancel_health ?? agencySettings?.ytd_lapse_cancel_health ?? 0,
-        };
-
-        const ytdTimeFraction = daysPassed / daysInYear;
-
-        const globalMultiplier = 1 - ((agencyTargets.lapseRateGlobal / 100) * ytdTimeFraction);
-        // No floor - True Net Gain is allowed to read negative when projected attrition outpaces
-        // new production, since that's a real (if uncomfortable) signal for the Revenue/VC engine.
-        const netYtdPremium = totals.ytdPremium * globalMultiplier;
-        const netYtdLifeApps = Math.round(totals.ytdLifeApps * globalMultiplier);
-
-        const priorYearAutoPif = specificOffice?.prior_pif_auto ?? agencySettings?.prior_pif_auto ?? 0;
-        const priorYearFirePif = specificOffice?.prior_pif_fire ?? agencySettings?.prior_pif_fire ?? 0;
-
-        const lostAuto = priorYearAutoPif * (agencyTargets.lapseAuto / 100) * ytdTimeFraction;
-        const lostFire = priorYearFirePif * (agencyTargets.lapseFire / 100) * ytdTimeFraction;
-
-        const netYtdAutoApps = Math.round(totals.ytdAutoApps - lostAuto);
-        const netYtdFireApps = Math.round(totals.ytdFireApps - lostFire);
-
-        const netYtdCommercialApps = Math.round(totals.ytdCommercialApps * (1 - ((agencyTargets.lapseCommercial / 100) * ytdTimeFraction)));
-        const netYtdHealthApps = Math.round(totals.ytdHealthApps * (1 - ((agencyTargets.lapseHealth / 100) * ytdTimeFraction)));
-
-        const runRateTotalPremium = (netYtdPremium / daysPassed) * daysInYear;
-        const runRateLifeApps = Math.round((netYtdLifeApps / daysPassed) * daysInYear);
-        const runRateAutoApps = Math.round((netYtdAutoApps / daysPassed) * daysInYear);
-        const runRateFireApps = Math.round((netYtdFireApps / daysPassed) * daysInYear);
-        const runRateCommercialApps = Math.round((netYtdCommercialApps / daysPassed) * daysInYear);
-        const runRateHealthApps = Math.round((netYtdHealthApps / daysPassed) * daysInYear);
-
-        return { name, totals, targets: agencyTargets, globalMultiplier, netYtdPremium, netYtdLifeApps, netYtdAutoApps, netYtdFireApps, netYtdCommercialApps, netYtdHealthApps, runRateTotalPremium, runRateLifeApps, runRateAutoApps, runRateFireApps, runRateCommercialApps, runRateHealthApps, daysPassed, daysInYear, travelStatus };
-    };
-
-    const globalName = globalOfficeFilter === 'all' ? 'Enterprise Global' : offices.find(o => o.id === globalOfficeFilter)?.name || 'Office';
-    const globalOfficeObj = globalOfficeFilter === 'all' ? null : offices.find(o => o.id === globalOfficeFilter);
-    const globalStats = calculateStats(filteredPolicies, globalName, globalOfficeObj);
-
-    const locationsStats: any[] = [];
-    if (globalOfficeFilter === 'all') {
-        offices.forEach(office => {
-            const officePolicies = agencyPolicies.filter(p => p.office_id === office.id);
-            locationsStats.push(calculateStats(officePolicies, office.name, office));
-        });
-    } else {
-        locationsStats.push(globalStats);
-    }
-
-    return { global: globalStats, locations: locationsStats };
-  }, [filteredPolicies, agencyPolicies, offices, team, profile, agencySettings, globalOfficeFilter, canViewYtdProjections]);
-
-  const revenueOverviewData = useMemo(() => {
-    if (!ytdOverviewData || !agencySettings || !profile || !canViewRevenueVc) return null;
-
-    const linesDict = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
-    const getParentLine = (line: string) => resolveParentLine(line, linesDict);
-
-    // Carrier-accurate Life/Health commission table (agencies.commission_rates) — Life & Health
-    // revenue is intentionally decoupled from current_vc_rate entirely; see utils/commissionRates.ts.
-    const commissionRates = resolveCommissionRates(agencySettings?.commission_rates);
-
-    // current_vc_rate/base_comm_auto/base_comm_fire are per-office settings (Settings → Office
-    // Locations writes them onto `offices`, never onto `agencies`) — so for the Enterprise / All
-    // Locations view (specificOffice === null), fall back to the primary office's live values
-    // instead of the perpetually-stale/unset agencySettings columns. Matches Reveal's and
-    // Cockpit's identical primaryOffice convention so all three baselines stay 100% in sync.
-    const primaryOffice = offices[0] || null;
-
-    const calcPoints = (actual: number, min: number, max: number, maxPct: number) => {
-        if (actual <= min) return 0;
-        if (actual >= max) return maxPct;
-        return ((actual - min) / (max - min)) * maxPct;
-    };
-
-    const num = (v: any, fallback = 0) => {
-      if (v == null || v === '') return fallback;
-      if (typeof v === 'number') return Number.isFinite(v) ? v : fallback;
-      // Strip currency formatting that would otherwise Number() → NaN → 0
-      const cleaned = String(v).replace(/[$,\s]/g, '');
-      const n = Number(cleaned);
-      return Number.isFinite(n) ? n : fallback;
-    };
-
-    // Per-office renewal $ using that office's book + rates (rates may fall back to agency
-    // defaults). Enterprise / All Locations sums every office's book + renewal instead of
-    // reading a nonexistent agency.book_size_* aggregate. Both delegate to the single shared
-    // formula in utils/revenueEngine.ts so this page, Reveal, and Cockpit can never drift.
-    const calculateRenewalsForOffice = (office: any, ytdTimeFraction: number) =>
-      calculateOfficeRenewalRevenue(office, agencySettings, commissionRates, ytdTimeFraction);
-
-    const calculateEnterpriseBookAndRenewals = (ytdTimeFraction: number) => {
-      const result = calculateEnterpriseRenewalRevenue(offices, agencySettings, commissionRates, ytdTimeFraction);
-      console.log('[Revenue] calculateEnterpriseBookAndRenewals', {
-        officeCount: offices?.length ?? 0,
-        ytdTimeFraction,
-        totalBookPremium: result.totalBookPremium,
-        totalRenRev: result.totalRenRev,
-        summedBook: result.summedBook,
-      });
-      return result;
-    };
-
-    const calculateRev = (ytdNode: any, policies: any[], name: string, specificOffice?: any) => {
-        // vc_min_*/vc_max_*/base_comm_* are per-office settings. For a specific office
-        // view, specificOffice already carries the right, live values. For "Enterprise /
-        // All" (specificOffice === null), fall back to the primary office's live values
-        // instead of degrading straight to agencySettings, which is only ever a stale
-        // onboarding-time snapshot of these columns — keeps this in sync with primaryOffice
-        // used elsewhere below and in Reveal/Cockpit.
-        const rateOffice = specificOffice ?? primaryOffice;
-        const autoVc = calcPoints(ytdNode.netYtdAutoApps, rateOffice?.vc_min_auto_gain ?? agencySettings?.vc_min_auto_gain ?? 0, rateOffice?.vc_max_auto_gain ?? agencySettings?.vc_max_auto_gain ?? 100, 1.0);
-        const fireVc = calcPoints(ytdNode.netYtdFireApps, rateOffice?.vc_min_fire_gain ?? agencySettings?.vc_min_fire_gain ?? 0, rateOffice?.vc_max_fire_gain ?? agencySettings?.vc_max_fire_gain ?? 100, 1.0);
-
-        const bLife = (rateOffice?.base_comm_life ?? agencySettings?.base_comm_life ?? 20) / 100;
-        const bHealth = (rateOffice?.base_comm_health ?? agencySettings?.base_comm_health ?? 20) / 100;
-        const ytdFsComm = (ytdNode.totals.ytdLifePremium * bLife) + ((ytdNode.totals.ytdHealthPremium || 0) * bHealth);
-
-        const fsVc = calcPoints(ytdFsComm, rateOffice?.vc_min_fs_comm ?? agencySettings?.vc_min_fs_comm ?? 0, rateOffice?.vc_max_fs_comm ?? agencySettings?.vc_max_fs_comm ?? 10000, 2.0);
-        const projectedVc = Math.min(3.0, autoVc + fireVc + fsVc);
-
-        const runRateFsComm = (ytdFsComm / ytdNode.daysPassed) * ytdNode.daysInYear;
-        const runRateAutoVc = calcPoints(ytdNode.runRateAutoApps, rateOffice?.vc_min_auto_gain ?? agencySettings?.vc_min_auto_gain ?? 0, rateOffice?.vc_max_auto_gain ?? agencySettings?.vc_max_auto_gain ?? 100, 1.0);
-        const runRateFireVc = calcPoints(ytdNode.runRateFireApps, rateOffice?.vc_min_fire_gain ?? agencySettings?.vc_min_fire_gain ?? 0, rateOffice?.vc_max_fire_gain ?? agencySettings?.vc_max_fire_gain ?? 100, 1.0);
-        const runRateFsVc = calcPoints(runRateFsComm, rateOffice?.vc_min_fs_comm ?? agencySettings?.vc_min_fs_comm ?? 0, rateOffice?.vc_max_fs_comm ?? agencySettings?.vc_max_fs_comm ?? 10000, 2.0);
-        const runRateProjectedVc = Math.min(3.0, runRateAutoVc + runRateFireVc + runRateFsVc);
-
-        let nbAutoPrem = 0, nbFirePrem = 0, nbCommPrem = 0, nbLifePrem = 0, nbHealthPrem = 0;
-        const currentYear = new Date().getFullYear();
-        policies.forEach(pol => {
-            const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
-            if (logDate.getFullYear() === currentYear && (pol.status === 'bound' || pol.status === 'issued')) {
-                const prem = Number(pol.premium_amount);
-                const parentLine = getParentLine(pol.product_line);
-
-                if (parentLine === 'Auto') nbAutoPrem += prem;
-                else if (parentLine === 'Fire') nbFirePrem += prem;
-                else if (parentLine === 'Commercial') nbCommPrem += prem;
-                else if (parentLine === 'Life') nbLifePrem += prem;
-                else if (parentLine === 'Health') nbHealthPrem += prem;
-            }
-        });
-
-        // Fold in the onboarding "starting YTD" baseline premium (profiles.starting_ytd_*_premium)
-        // the same way calculateStats() does for ytdOverviewData — without this, New Business (YTD)
-        // always read $0 for an agency that hasn't logged real policies yet, even though the owner
-        // entered real Step 3 production numbers. No baseline exists for Commercial (never
-        // collected by the wizard), so nbCommPrem is intentionally left untouched.
-        const nbBaselineMembers = specificOffice ? team.filter((t: any) => t.office_id === specificOffice.id) : team;
-        const nbBaseline = nbBaselineMembers.reduce(
-            (acc: any, m: any) => ({
-                autoPremium: acc.autoPremium + (Number(m.starting_ytd_auto_premium) || 0),
-                firePremium: acc.firePremium + (Number(m.starting_ytd_fire_premium) || 0),
-                lifePremium: acc.lifePremium + (Number(m.starting_ytd_life_premium) || 0),
-                healthPremium: acc.healthPremium + (Number(m.starting_ytd_health_premium) || 0),
-            }),
-            { autoPremium: 0, firePremium: 0, lifePremium: 0, healthPremium: 0 }
-        );
-        nbAutoPrem += nbBaseline.autoPremium;
-        nbFirePrem += nbBaseline.firePremium;
-        nbLifePrem += nbBaseline.lifePremium;
-        nbHealthPrem += nbBaseline.healthPremium;
-
-        // vcRate applies STRICTLY to P&C (Auto/Fire/Commercial) — never to Life/Health. Delegates
-        // to the same shared formula Reveal and Cockpit use (utils/revenueEngine.ts).
-        const { totalNbRev, pncNbRev, lifeHealthNbRev } = calculateNewBusinessRevenue(
-          { autoPremium: nbAutoPrem, firePremium: nbFirePrem, commercialPremium: nbCommPrem, lifePremium: nbLifePrem, healthPremium: nbHealthPrem },
-          specificOffice || primaryOffice,
-          agencySettings,
-          commissionRates
-        );
-
-        const ytdTimeFraction = ytdNode.daysPassed / ytdNode.daysInYear;
-
-        // specificOffice set → one location. null (Enterprise / All) → SUM all offices.
-        const { totalBookPremium, totalRenRev, pncRenRev, lifeHealthRenRev } = specificOffice
-          ? calculateRenewalsForOffice(specificOffice, ytdTimeFraction)
-          : calculateEnterpriseBookAndRenewals(ytdTimeFraction);
-
-        return { 
-          name, projectedVc, autoVc, fireVc, fsVc, ytdFsComm, 
-          runRateAutoVc, runRateFireVc, runRateFsVc, runRateProjectedVc, runRateFsComm, 
-          runRateAutoApps: ytdNode.runRateAutoApps, runRateFireApps: ytdNode.runRateFireApps,
-          lifeVc: fsVc, ytdLifePremium: ytdFsComm, totalNbRev, pncNbRev, lifeHealthNbRev,
-          totalRenRev, pncRenRev, lifeHealthRenRev, totalBookPremium,
-          totalAgencyRev: totalNbRev + totalRenRev, netYtdAutoApps: ytdNode.netYtdAutoApps, netYtdFireApps: ytdNode.netYtdFireApps 
-        };
-    };
-
-    const globalName = globalOfficeFilter === 'all' ? 'Enterprise Global' : offices.find(o => o.id === globalOfficeFilter)?.name || 'Office';
-    const globalOfficeObj = globalOfficeFilter === 'all' ? null : offices.find(o => o.id === globalOfficeFilter);
-    console.log('[Revenue] calculateRev inputs', {
-      globalOfficeFilter,
-      specificOfficeId: globalOfficeObj?.id ?? null,
-      officesLen: offices?.length ?? 0,
-      officeBookSnapshot: (offices || []).map((o: any) => ({
-        id: o.id,
-        name: o.name,
-        book_size_auto: o.book_size_auto,
-        book_size_fire: o.book_size_fire,
-        book_size_commercial: o.book_size_commercial,
-        book_size_life: o.book_size_life,
-        book_size_health: o.book_size_health,
-      })),
-    });
-    const globalRev = calculateRev(ytdOverviewData.global, filteredPolicies, globalName, globalOfficeObj);
-    console.log('[Revenue] globalRev output → RevenueTab', {
-      name: globalRev?.name,
-      totalBookPremium: globalRev?.totalBookPremium,
-      totalRenRev: globalRev?.totalRenRev,
-      totalNbRev: globalRev?.totalNbRev,
-      totalAgencyRev: globalRev?.totalAgencyRev,
-    });
-
-    const locationsRev: any[] = [];
-    if (globalOfficeFilter === 'all') {
-        offices.forEach((office, i) => {
-            const officePolicies = agencyPolicies.filter(p => p.office_id === office.id);
-            const locNode = ytdOverviewData.locations?.[i] || ytdOverviewData.global;
-            locationsRev.push(calculateRev(locNode, officePolicies, office.name, office));
-        });
-    } else {
-        locationsRev.push(globalRev);
-    }
-
-    return { global: globalRev, locations: locationsRev };
-  }, [filteredPolicies, agencyPolicies, offices, team, agencySettings, ytdOverviewData, globalOfficeFilter, canViewRevenueVc]);
+  // NOTE: the old ytdOverviewData/revenueOverviewData useMemos (YTD Projections
+  // + Revenue & VC math) that used to live here have moved to the dedicated,
+  // owner-only /dashboard/agent route (app/dashboard/agent/page.tsx) — see
+  // that file's header comment. They're intentionally not recomputed in this
+  // giant shared component anymore now that nothing here renders them.
 
   // Custom Corporate Targets — enrich the raw builder rows with live progress, then split
   // by display_location so the Scoreboard only ever sees the team-visible set and the
@@ -3437,10 +3059,6 @@ export default function Home() {
 
   const scoreboardCustomTargets = useMemo(
     () => enrichedCustomTargets.filter(t => t.display_location === 'scoreboard'),
-    [enrichedCustomTargets]
-  );
-  const revenueCustomTargets = useMemo(
-    () => enrichedCustomTargets.filter(t => t.display_location === 'revenue'),
     [enrichedCustomTargets]
   );
 
@@ -3714,9 +3332,6 @@ export default function Home() {
         />}
         {activeTab === 'agency' && canViewAgencyMtd && agencyOverviewData && <AgencyOverviewTab agencyOverviewData={agencyOverviewData} expandedProducerId={expandedProducerId} setExpandedProducerId={setExpandedProducerId} whatIfCommission={whatIfCommission} setWhatIfCommission={setWhatIfCommission} generateCoachingInsight={generateCoachingInsight} isGeneratingAi={isGeneratingAi} aiInsights={aiInsights} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} agencySettings={agencySettings} dateFilterMode={dateFilterMode} setDateFilterMode={setDateFilterMode} />}
         {activeTab === 'life' && canViewLifeModule && lifeOverviewData && <LifeTab lifeOverviewData={lifeOverviewData} team={team} updatePolicyStatus={updatePolicyStatus} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} />}
-        
-        {activeTab === 'ytd' && canViewYtdProjections && ytdOverviewData && <YtdTab ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} />}
-        {activeTab === 'revenue' && canViewRevenueVc && ytdOverviewData && revenueOverviewData && <RevenueTab revenueOverviewData={revenueOverviewData} ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} primaryOffice={offices[0] || null} customTargets={revenueCustomTargets} />}
         
         {/* 'team' is the shell sidebar's dedicated "Team" link — same
             SettingsTab, just deep-linked straight to its Team Management
