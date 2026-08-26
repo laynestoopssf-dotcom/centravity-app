@@ -2,9 +2,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Sparkles, X, Send, Loader2 } from "lucide-react";
+import { supabase } from "../../utils/supabase";
 
 // =============================================================================
-// Floating "AI Support" chat widget — frontend shell only, no backend AI yet.
+// Floating "AI Support" chat widget — live, wired to app/api/chat/route.ts.
 // -----------------------------------------------------------------------------
 // Mounted once in app/dashboard/layout.tsx (inside DashboardShellContext.Provider,
 // outside the isShellRoute branch) so it persists across every /dashboard/*
@@ -12,11 +13,10 @@ import { Sparkles, X, Send, Loader2 } from "lucide-react";
 // would, instead of remounting (and losing conversation state) every time the
 // user switches tabs or navigates to a full page route.
 //
-// Sending a message pushes it to local state and echoes back one of a small
-// set of canned, clearly-labeled placeholder replies after a short delay —
-// there's no API call, no model, nothing persisted. This is intentionally
-// just the UI shell described in the punch list; wiring it to a real
-// assistant is a separate, future backend task.
+// Sending a message posts the running conversation + the caller's own
+// Supabase access token to /api/chat, which re-derives their name/role
+// server-side, streams "Stratt"'s reply from OpenAI, and hands back a plain
+// text stream that gets appended into the assistant bubble chunk by chunk.
 // =============================================================================
 
 interface ChatMessage {
@@ -27,18 +27,7 @@ interface ChatMessage {
 
 const SUGGESTED_PROMPTS = ["How do I log an activity?", "How does my commission get calculated?", "How do I invite a team member?"];
 
-const CANNED_REPLIES = [
-  "Thanks for the question! Our AI assistant is still in training and can't give real answers yet — in the meantime, check the Help & FAQ page or ask your agency owner.",
-  "Good question — that's exactly the kind of thing this assistant will be able to answer soon. For now, the Help & FAQ page (or your agency owner) is your best bet.",
-  "I hear you! I'm just a preview of what's coming — full AI support isn't live yet. Try Help & FAQ in the meantime.",
-];
-
-let replyCounter = 0;
-function nextCannedReply(): string {
-  const reply = CANNED_REPLIES[replyCounter % CANNED_REPLIES.length];
-  replyCounter++;
-  return reply;
-}
+const WELCOME_MESSAGE_ID = "welcome";
 
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -48,9 +37,9 @@ export default function AiSupportChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: "welcome",
+      id: WELCOME_MESSAGE_ID,
       role: "assistant",
-      text: "Hi! I'm your AI Support assistant (preview). Ask me anything about Centravity — full answers are coming soon, but feel free to try me out.",
+      text: "Hi! I'm Stratt, your AI Support assistant. Ask me anything about navigating or using Centravity.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -61,17 +50,62 @@ export default function AiSupportChat() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isTyping, isOpen]);
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    setMessages((prev) => [...prev, { id: makeId(), role: "user", text: trimmed }]);
+    if (!trimmed || isTyping) return;
+
+    const userMessage: ChatMessage = { id: makeId(), role: "user", text: trimmed };
+    // The welcome message is local-only flavor text, never sent as conversation
+    // history to the model — it isn't something Stratt ever actually said.
+    const history = [...messages, userMessage]
+      .filter((m) => m.id !== WELCOME_MESSAGE_ID)
+      .map((m) => ({ role: m.role, content: m.text }));
+
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
-    // Simulated "thinking" delay so the canned reply doesn't feel instant/fake.
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { id: makeId(), role: "assistant", text: nextCannedReply() }]);
+
+    const assistantId = makeId();
+    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", text: "" }]);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error("You've been signed out — please refresh and sign back in.");
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken, messages: history }),
+      });
+
+      if (!res.ok || !res.body) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error || "Something went wrong. Please try again.");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      // A ref (not a plain local variable) so the streaming buffer isn't
+      // treated as component render state by the React Compiler's
+      // immutability analysis — it's just a mutable accumulator scoped to
+      // this one in-flight request.
+      const bufferRef = { current: "" };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        bufferRef.current += decoder.decode(value, { stream: true });
+        const nextText = bufferRef.current;
+        setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: nextText } : m)));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: message } : m)));
+    } finally {
       setIsTyping(false);
-    }, 900);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -91,7 +125,7 @@ export default function AiSupportChat() {
               </div>
               <div>
                 <p className="font-bold text-sm leading-tight">AI Support</p>
-                <p className="text-[10px] text-indigo-200 leading-tight">Preview — not yet live</p>
+                <p className="text-[10px] text-indigo-200 leading-tight">Ask Stratt anything about Centravity</p>
               </div>
             </div>
             <button
@@ -106,20 +140,22 @@ export default function AiSupportChat() {
 
           {/* MESSAGES */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
-            {messages.map((m) => (
-              <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                    m.role === "user"
-                      ? "bg-blue-600 text-white rounded-br-sm"
-                      : "bg-white text-gray-700 border border-gray-100 shadow-sm rounded-bl-sm"
-                  }`}
-                >
-                  {m.text}
+            {messages
+              .filter((m) => m.text !== "")
+              .map((m) => (
+                <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                      m.role === "user"
+                        ? "bg-blue-600 text-white rounded-br-sm"
+                        : "bg-white text-gray-700 border border-gray-100 shadow-sm rounded-bl-sm"
+                    }`}
+                  >
+                    {m.text}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {isTyping && (
+              ))}
+            {isTyping && messages[messages.length - 1]?.text === "" && (
               <div className="flex justify-start">
                 <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-sm px-3.5 py-2.5 flex items-center gap-1.5">
                   <Loader2 size={14} className="animate-spin text-gray-400" />
@@ -152,11 +188,12 @@ export default function AiSupportChat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type a message…"
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isTyping}
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60"
             />
             <button
               type="submit"
-              disabled={!input.trim()}
+              disabled={!input.trim() || isTyping}
               className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shrink-0"
               aria-label="Send message"
             >
