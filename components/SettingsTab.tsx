@@ -60,11 +60,12 @@ const AVAILABLE_PERMISSIONS = [
 ];
 // NOTE: 'view_ytd_projections'/'view_revenue_vc' used to live in the list above,
 // gating the old standalone YTD Projections / Revenue & VC tabs. Those tabs are
-// retired in favor of the merged, owner-only /dashboard/agent "Agent Dashboard"
-// (app/dashboard/agent/page.tsx), which is gated by a hardcoded `role === 'owner'`
-// check instead — not a custom_roles-configurable permission — so there's
-// nothing left for these two toggles to control. Any pre-existing agency's
-// custom_roles JSON may still carry these keys; they're simply inert now.
+// retired in favor of the merged, owner-only "Agent Dashboard" tab
+// (components/AgentDashboardTab.tsx), which is gated by a hardcoded
+// `role === 'owner'` check instead — not a custom_roles-configurable
+// permission — so there's nothing left for these two toggles to control. Any
+// pre-existing agency's custom_roles JSON may still carry these keys;
+// they're simply inert now.
 
 const DEFAULT_ROLES = [
   { id: 'owner', name: 'Owner', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
@@ -855,7 +856,12 @@ export default function SettingsTab({
                <div>
                   <h3 className="font-bold text-white text-lg flex items-center gap-1.5">
                     Travel & Promotion Qualification Benchmarks
-                    <InfoTooltip text="Each tier is a travel/trip incentive level (e.g. a carrier-sponsored trip). A producer qualifies for a tier once their Year-to-Date Life Credits AND Total Credits both clear that tier's minimums." />
+                    {/* This header sits right at the top edge of a `overflow-hidden` dark
+                        card (barely 24px of padding above it) - the tooltip's default "top"
+                        placement got clipped by that overflow boundary before it could even
+                        render, making the "?" look broken/invisible. "bottom" drops it down
+                        into the header's own open space instead, where it can't get clipped. */}
+                    <InfoTooltip text="Each tier is a travel/trip incentive level (e.g. a carrier-sponsored trip). A producer qualifies for a tier once their Year-to-Date Life Credits AND Total Credits both clear that tier's minimums." position="bottom" />
                   </h3>
                   <p className="text-xs text-slate-400">Set the specific targets for each tier. &quot;Min Life Credits&quot; and &quot;Total Credits&quot; power the Year-to-Date (YTD) Travel tracking engine. Every field starts blank - there are no pre-filled sample goals, so nothing counts toward qualification until you enter your own numbers here.</p>
                </div>
@@ -963,7 +969,9 @@ export default function SettingsTab({
                 <div>
                   <h3 className="font-bold text-gray-900 flex items-center gap-1.5">
                     Custom Target Builder
-                    <InfoTooltip text="Build a goal from any real metric Centravity already tracks (apps, premium, quotes, touches) for any office/period, then choose whether the whole team sees it on the Scoreboard or it stays owner-only on the Revenue tab." />
+                    {/* Same top-of-overflow-hidden-card clipping issue as the Corporate
+                        Promotions header above - "bottom" keeps it from getting cut off. */}
+                    <InfoTooltip text="Build a goal from any real metric Centravity already tracks (apps, premium, quotes, touches) for any office/period, then choose whether the whole team sees it on the Scoreboard or it stays owner-only on the Revenue tab." position="bottom" />
                   </h3>
                   <p className="text-xs text-gray-500">Define your own goals on top of real tracked metrics, and route each one to the team-visible Scoreboard or the owner-only Revenue tab.</p>
                 </div>

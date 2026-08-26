@@ -1,41 +1,46 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Loader2, AlertCircle, ShieldAlert, ArrowLeft, Crown } from "lucide-react";
-import { supabase } from "../../../utils/supabase";
-import { resolveParentLine } from "../../../utils/productLines";
-import { resolveCommissionRates } from "../../../utils/commissionRates";
-import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../../utils/revenueEngine";
-import { enrichCustomTargets, type CustomTargetRow } from "../../../utils/customTargets";
-import YtdTab from "../../../components/YtdTab";
-import RevenueTab from "../../../components/RevenueTab";
+import { Loader2, AlertCircle, ShieldAlert, Crown } from "lucide-react";
+import { supabase } from "../utils/supabase";
+import { resolveParentLine } from "../utils/productLines";
+import { resolveCommissionRates } from "../utils/commissionRates";
+import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../utils/revenueEngine";
+import { enrichCustomTargets, type CustomTargetRow } from "../utils/customTargets";
+import { useDashboardTab } from "./dashboard/DashboardShellContext";
+import YtdTab from "./YtdTab";
+import RevenueTab from "./RevenueTab";
 
 // =============================================================================
-// Protected route: /dashboard/agent — the "Agent Dashboard" (Agency Owner's
-// master command center). Merges the standalone YTD Projections and Revenue &
-// Variable Compensation tabs into a single, top-to-bottom flow: Year-to-Date
-// macro pacing first, then Revenue/VC projections built off that same YTD
-// data — so the owner reads it as one continuous story instead of two
-// disconnected tabs.
+// The "Agent Dashboard" — the Agency Owner's master command center. Merges
+// the old standalone YTD Projections and Revenue & Variable Compensation
+// tabs into a single, top-to-bottom flow: Year-to-Date macro pacing first,
+// then Revenue/VC projections built off that same YTD data — so the owner
+// reads it as one continuous story instead of two disconnected tabs.
+// -----------------------------------------------------------------------------
+// This used to live at its own route, app/dashboard/agent/page.tsx, but that
+// forced a full page load every time an owner switched into it from the
+// Scoreboard. It's now just another tab rendered by app/dashboard/page.tsx
+// (activeTab === 'agent'), swapped in instantly like every other tab, with
+// app/dashboard/layout.tsx defaulting owners straight into it on login.
 // -----------------------------------------------------------------------------
 // Access is intentionally narrower than every other "owner-ish" gate in this
 // app. Everywhere else, isOwnerLevelRole() (utils/roles.ts) treats 'admin' as
-// fully owner-equivalent. This page is the one deliberate exception — same
+// fully owner-equivalent. This tab is the one deliberate exception — same
 // carve-out already established for Stripe billing (see roles.ts's header
 // comment) — because it's a literal "only the person who owns this agency"
 // command center, not a manage-the-agency permission. A hardcoded
 // `profile.role === 'owner'` check, no custom_roles override, no 'admin'
-// inclusion, on purpose.
+// inclusion, on purpose. DashboardSidebar only ever offers this tab to a
+// strict owner and app/dashboard/layout.tsx only ever defaults a strict
+// owner into it, but this component re-checks independently rather than
+// trusting its caller, so it can never leak data even if that ever drifts.
 // -----------------------------------------------------------------------------
-// Self-contained page (own light data fetch + own condensed math), mirroring
-// app/dashboard/reveal/page.tsx and app/dashboard/cockpit/page.tsx's pattern,
-// rather than a tab bolted onto the giant app/dashboard/page.tsx component.
-// The YTD/Revenue math below (calculateStats/calculateRev) is what used to be
-// app/dashboard/page.tsx's ytdOverviewData/revenueOverviewData useMemos,
-// before the standalone YTD Projections / Revenue & VC tabs were retired in
-// favor of this merged page — this is now the one and only home for that
-// math. Delegates to the shared utils/revenueEngine.ts helpers wherever
+// Keeps its own light data fetch + own condensed math (mirroring
+// app/dashboard/reveal/page.tsx and app/dashboard/cockpit/page.tsx's
+// pattern) rather than reaching into app/dashboard/page.tsx's already-loaded
+// state, which is filtered/shaped for very different (ledger, scoreboard)
+// purposes. Delegates to the shared utils/revenueEngine.ts helpers wherever
 // possible so the $ formulas themselves still can't drift from Reveal/Cockpit.
 // =============================================================================
 
@@ -47,11 +52,11 @@ const DEFAULT_PRODUCT_LINES = [
   { name: "Health", parent: "Health" },
 ];
 
-type LoadState = "checking" | "loading" | "ready" | "error" | "forbidden";
+type LoadState = "loading" | "ready" | "error" | "forbidden";
 
-export default function AgentDashboardPage() {
-  const router = useRouter();
-  const [status, setStatus] = useState<LoadState>("checking");
+export default function AgentDashboardTab() {
+  const { setActiveTab } = useDashboardTab();
+  const [status, setStatus] = useState<LoadState>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [ownerFirstName, setOwnerFirstName] = useState("");
 
@@ -75,11 +80,10 @@ export default function AgentDashboardPage() {
       if (!mounted) return;
 
       if (!session?.user?.id) {
-        router.replace("/");
+        setErrorMsg("Your session expired. Please sign in again.");
+        setStatus("error");
         return;
       }
-
-      setStatus("loading");
 
       const { data: prof, error: profErr } = await supabase
         .from("profiles")
@@ -90,7 +94,7 @@ export default function AgentDashboardPage() {
       if (!mounted) return;
 
       if (profErr || !prof?.agency_id) {
-        console.error("[AgentDashboard] profile/agency lookup failed", profErr);
+        console.error("[AgentDashboardTab] profile/agency lookup failed", profErr);
         setErrorMsg("We couldn't load your profile.");
         setStatus("error");
         return;
@@ -98,7 +102,7 @@ export default function AgentDashboardPage() {
 
       // Strict, literal owner-only gate — see header comment. No data is
       // fetched at all for anyone else, so a non-owner can never "see" this
-      // page's data even via devtools/network tab.
+      // tab's data even via devtools/network tab.
       if (prof.role !== "owner") {
         setStatus("forbidden");
         return;
@@ -137,7 +141,7 @@ export default function AgentDashboardPage() {
       if (!mounted) return;
 
       if (agencyRes.error || officesRes.error || teamRes.error || policiesRes.error) {
-        console.error("[AgentDashboard] fetch failed", {
+        console.error("[AgentDashboardTab] fetch failed", {
           agency: agencyRes.error,
           offices: officesRes.error,
           team: teamRes.error,
@@ -147,9 +151,9 @@ export default function AgentDashboardPage() {
         setStatus("error");
         return;
       }
-      if (targetsRes.error) console.error("[AgentDashboard] custom targets fetch failed", targetsRes.error);
-      if (targetActsRes.error) console.error("[AgentDashboard] custom target activities fetch failed", targetActsRes.error);
-      if (targetPolsRes.error) console.error("[AgentDashboard] custom target policies fetch failed", targetPolsRes.error);
+      if (targetsRes.error) console.error("[AgentDashboardTab] custom targets fetch failed", targetsRes.error);
+      if (targetActsRes.error) console.error("[AgentDashboardTab] custom target activities fetch failed", targetActsRes.error);
+      if (targetPolsRes.error) console.error("[AgentDashboardTab] custom target policies fetch failed", targetPolsRes.error);
 
       setAgencySettings(agencyRes.data || null);
       setOffices(officesRes.data || []);
@@ -162,28 +166,20 @@ export default function AgentDashboardPage() {
     };
 
     load().catch((err) => {
-      console.error("[AgentDashboard] unexpected error loading agent dashboard", err);
+      console.error("[AgentDashboardTab] unexpected error loading agent dashboard", err);
       if (mounted) {
         setErrorMsg("Something went wrong loading the Agent Dashboard.");
         setStatus("error");
       }
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, sess) => {
-      if (event === "SIGNED_OUT" || !sess) router.replace("/");
-    });
-
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
-  // Faithful port of app/dashboard/page.tsx's ytdOverviewData useMemo
-  // (calculateStats), scoped to whichever office `officeFilter` selects
-  // instead of that page's shared globalOfficeFilter state.
+  // Faithful port of the old ytdOverviewData useMemo (calculateStats),
+  // scoped to whichever office `officeFilter` selects.
   const ytdOverviewData = useMemo(() => {
     if (status !== "ready") return null;
 
@@ -351,9 +347,9 @@ export default function AgentDashboardPage() {
     return { global: globalStats, locations: locationsStats };
   }, [status, policies, offices, team, agencySettings, officeFilter]);
 
-  // Faithful port of app/dashboard/page.tsx's revenueOverviewData useMemo
-  // (calculateRev), delegating to the same shared utils/revenueEngine.ts
-  // helpers so the $ math can never drift from the main dashboard's.
+  // Faithful port of the old revenueOverviewData useMemo (calculateRev),
+  // delegating to the same shared utils/revenueEngine.ts helpers so the $
+  // math can never drift from the main dashboard's.
   const revenueOverviewData = useMemo(() => {
     if (!ytdOverviewData || status !== "ready") return null;
 
@@ -466,9 +462,9 @@ export default function AgentDashboardPage() {
     return enriched.filter((t) => t.display_location === "revenue");
   }, [status, customTargets, customTargetActivities, customTargetPolicies, agencySettings, offices]);
 
-  if (status === "checking" || status === "loading") {
+  if (status === "loading") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
+      <div className="flex flex-col items-center justify-center py-24 px-4">
         <Loader2 className="h-10 w-10 animate-spin text-indigo-600" aria-hidden="true" />
         <p className="mt-6 text-sm font-semibold text-gray-500">Assembling your Agent Dashboard…</p>
       </div>
@@ -477,17 +473,17 @@ export default function AgentDashboardPage() {
 
   if (status === "forbidden") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center">
+      <div className="flex flex-col items-center justify-center gap-4 py-24 px-4 text-center">
         <ShieldAlert className="h-10 w-10 text-amber-500" aria-hidden="true" />
         <h1 className="text-xl font-black text-gray-900">Owners Only</h1>
         <p className="max-w-md text-sm font-semibold text-gray-500">
           The Agent Dashboard is reserved for this agency&apos;s Owner. If you believe you should have access, ask your agency owner to check your role in Settings → Team.
         </p>
         <button
-          onClick={() => router.replace("/dashboard")}
+          onClick={() => setActiveTab("dashboard")}
           className="mt-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-indigo-700"
         >
-          Back To Dashboard
+          Back To Scoreboard
         </button>
       </div>
     );
@@ -495,72 +491,58 @@ export default function AgentDashboardPage() {
 
   if (status === "error" || !ytdOverviewData || !revenueOverviewData) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center">
+      <div className="flex flex-col items-center justify-center gap-4 py-24 px-4 text-center">
         <AlertCircle className="h-10 w-10 text-red-500" aria-hidden="true" />
         <p className="max-w-md text-sm font-semibold text-gray-500">{errorMsg || "We couldn't load the Agent Dashboard."}</p>
-        <button
-          onClick={() => router.replace("/dashboard")}
-          className="mt-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-indigo-700"
-        >
-          Back To Dashboard
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors mb-3"
-            >
-              <ArrowLeft size={14} /> Back To Dashboard
-            </button>
-            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-indigo-700 mb-3">
-              <Crown size={14} /> Agent Dashboard · Owner Command Center
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-gray-900">
-              {ownerFirstName ? `${ownerFirstName}'s` : "Your"} Master Command Center
-            </h1>
-            <p className="text-gray-500 mt-2 max-w-2xl">
-              Everything the standalone Year-to-Date (YTD) Projections and Revenue &amp; Variable Compensation tabs used to
-              show, combined into one continuous view — macro pacing at the top, flowing down into what it means for
-              cash flow and next year&apos;s Variable Compensation (VC) tier.
-            </p>
+    <div className="max-w-6xl mx-auto space-y-8">
+      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-indigo-700 mb-3">
+            <Crown size={14} /> Agent Dashboard · Owner Command Center
           </div>
+          <h1 className="text-3xl sm:text-4xl font-black text-gray-900">
+            {ownerFirstName ? `${ownerFirstName}'s` : "Your"} Master Command Center
+          </h1>
+          <p className="text-gray-500 mt-2 max-w-2xl">
+            Everything the standalone Year-to-Date (YTD) Projections and Revenue &amp; Variable Compensation tabs used to
+            show, combined into one continuous view — macro pacing at the top, flowing down into what it means for
+            cash flow and next year&apos;s Variable Compensation (VC) tier.
+          </p>
+        </div>
 
-          {offices.length > 1 && (
-            <div className="w-full sm:w-64 shrink-0">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Location View</label>
-              <select
-                value={officeFilter}
-                onChange={(e) => setOfficeFilter(e.target.value)}
-                className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-600 shadow-sm"
-              >
-                <option value="all">🌍 All Locations</option>
-                {offices.map((o: any) => (
-                  <option key={o.id} value={o.id}>📍 {o.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </header>
+        {offices.length > 1 && (
+          <div className="w-full sm:w-64 shrink-0">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Location View</label>
+            <select
+              value={officeFilter}
+              onChange={(e) => setOfficeFilter(e.target.value)}
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-600 shadow-sm"
+            >
+              <option value="all">🌍 All Locations</option>
+              {offices.map((o: any) => (
+                <option key={o.id} value={o.id}>📍 {o.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </header>
 
-        {/* YEAR-TO-DATE MACRO PACING (top of the funnel) */}
-        <YtdTab ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} />
+      {/* YEAR-TO-DATE MACRO PACING (top of the funnel) */}
+      <YtdTab ytdOverviewData={ytdOverviewData} agencySettings={agencySettings} />
 
-        {/* REVENUE & VARIABLE COMPENSATION PROJECTIONS (flows from the YTD data above) */}
-        <RevenueTab
-          revenueOverviewData={revenueOverviewData}
-          ytdOverviewData={ytdOverviewData}
-          agencySettings={agencySettings}
-          primaryOffice={offices[0] || null}
-          customTargets={revenueCustomTargets}
-        />
-      </div>
+      {/* REVENUE & VARIABLE COMPENSATION PROJECTIONS (flows from the YTD data above) */}
+      <RevenueTab
+        revenueOverviewData={revenueOverviewData}
+        ytdOverviewData={ytdOverviewData}
+        agencySettings={agencySettings}
+        primaryOffice={offices[0] || null}
+        customTargets={revenueCustomTargets}
+      />
     </div>
   );
 }

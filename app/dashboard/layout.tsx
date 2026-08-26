@@ -57,6 +57,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const [activeTab, setActiveTab] = useState<DashboardTabId>("dashboard");
   const [shellData, setShellData] = useState<ShellData | null>(null);
+  // Only ever applies the role-based default ONCE per mount of this layout —
+  // this effect re-runs any time `isShellRoute` flips (e.g. Cockpit -> back
+  // to /dashboard), and without this guard that would silently snap an owner
+  // back to the Agent Dashboard tab every time, even after they'd
+  // deliberately switched to something else.
+  const hasSetDefaultTabRef = React.useRef(false);
 
   useEffect(() => {
     if (!isShellRoute) return;
@@ -95,6 +101,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const canViewTeamComm = roleConfig?.permissions?.view_team_comm ?? isOwnerOrManager;
       const canManageSettings = roleConfig?.permissions?.manage_settings ?? isOwnerLevel;
 
+      // Owners land on their Agent Dashboard master command center by
+      // default; everyone else (Team Members, Managers, etc.) lands on the
+      // Team Scoreboard, same as before this tab existed.
+      if (!hasSetDefaultTabRef.current) {
+        hasSetDefaultTabRef.current = true;
+        setActiveTab(profileRow.role === "owner" ? "agent" : "dashboard");
+      }
+
       setShellData({
         user: {
           firstName: profileRow.first_name || "",
@@ -112,7 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           canViewReports: roleConfig?.permissions?.view_reports ?? isOwnerOrManager,
           // Strictly the literal agency owner — no custom_roles override, no
           // 'admin' inclusion. See DashboardSidebarPermissions.isOwner and
-          // app/dashboard/agent/page.tsx's header comment for why.
+          // components/AgentDashboardTab.tsx's header comment for why.
           isOwner: profileRow.role === "owner",
         },
       });
@@ -130,7 +144,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") setShellData(null);
+      if (event === "SIGNED_OUT") {
+        setShellData(null);
+        hasSetDefaultTabRef.current = false;
+      }
     });
     return () => subscription.unsubscribe();
   }, []);

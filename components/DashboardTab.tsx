@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { resolveParentLine } from '../utils/productLines';
@@ -18,7 +18,23 @@ export default function DashboardTab({
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
   const [editPremium, setEditPremium] = useState<string>("");
-  
+
+  // "Log Activity" split-button menu (Inbound/Outbound/Quote/Bound) - a single
+  // prominent entry point that surfaces all four logging actions the tile
+  // grid below already supports, so it can sit right next to "Log Past Data"
+  // as an equally-visible pair instead of that being the only thing calling
+  // attention to itself up here.
+  const [showLogMenu, setShowLogMenu] = useState(false);
+  const logMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showLogMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (logMenuRef.current && !logMenuRef.current.contains(e.target as Node)) setShowLogMenu(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLogMenu]);
+
   const [showArchive, setShowArchive] = useState(false);
   const [archiveSearch, setArchiveSearch] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
@@ -485,13 +501,47 @@ export default function DashboardTab({
         />
       )}
 
-      {openBackdateModal && (
-        <div className="flex justify-end -mb-2">
-          <button onClick={openBackdateModal} className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-blue-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-blue-50">
-            <Calendar size={14}/> Log Past Data
+      {/* PRIMARY ACTIVITY-LOGGING PAIR — "Log Activity" (opens the same four
+          actions as the tile grid below, via a menu) sits front-and-center
+          as the bold, unmissable primary action; "Log Past Data" rides right
+          alongside it as an equally visible secondary button instead of the
+          easy-to-miss text link it used to be. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative" ref={logMenuRef}>
+          <button
+            type="button"
+            onClick={() => setShowLogMenu(v => !v)}
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white pl-4 pr-3 py-2.5 rounded-xl shadow-md text-sm font-bold transition-all"
+          >
+            <Plus size={16}/> Log Activity <ChevronDown size={14} className={`transition-transform ${showLogMenu ? 'rotate-180' : ''}`} />
           </button>
+          {showLogMenu && (
+            <div className="absolute z-20 mt-2 w-60 bg-white border border-gray-100 rounded-xl shadow-xl py-1.5 animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+              <button onClick={() => { logInboundCall(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">
+                <PhoneIncoming size={15}/> Inbound Call
+              </button>
+              <button onClick={() => { logTouchpoint(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors">
+                <PhoneCall size={15}/> Outbound Touch
+              </button>
+              <button onClick={() => { openLogModal(isService ? 'complex_res' : 'quote'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors">
+                {isService ? <RefreshCw size={15}/> : <FileText size={15}/>} {isService ? 'Complex Res.' : 'Quote'}
+              </button>
+              <button onClick={() => { openLogModal(isService ? 'cross_sell' : 'bound'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">
+                {isService ? <Users size={15}/> : <ShieldCheck size={15}/>} {isService ? 'Cross-Sell' : 'Bound'}
+              </button>
+            </div>
+          )}
         </div>
-      )}
+
+        {openBackdateModal && (
+          <button
+            onClick={openBackdateModal}
+            className="flex items-center gap-2 bg-white border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
+          >
+            <Calendar size={16}/> Log Past Data
+          </button>
+        )}
+      </div>
 
       {/* TILE METRICS SECTION */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

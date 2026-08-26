@@ -17,14 +17,22 @@ import { createContext, useContext } from "react";
 // every existing `activeTab === 'whatever'` check throughout that file keeps
 // working completely unchanged.
 //
-// 'team' is a distinct value from 'settings' even though both ultimately
-// render <SettingsTab> — see the settings render branch in
-// app/dashboard/page.tsx for why (it's the "Team" sidebar item deep-linking
-// into SettingsTab's own internal Team Management section).
+// The standalone "Team" sidebar item has been retired — team roster
+// management lives inside SettingsTab's own internal Team Management
+// section (Settings → Team Management), reachable without a dedicated
+// top-level tab.
+//
+// 'agent' is the owner-only "Agent Dashboard" master command center
+// (merged YTD Projections + Revenue & Variable Comp) — a tab like any
+// other here now, not a separate /dashboard/agent route, so switching to
+// it is an instant client-side tab swap instead of a full page load. See
+// components/AgentDashboardTab.tsx's header comment for the owner-only
+// gating rationale.
 // =============================================================================
 
 export type DashboardTabId =
   | "dashboard"
+  | "agent"
   | "performance"
   | "commission"
   | "weekly"
@@ -33,7 +41,6 @@ export type DashboardTabId =
   | "ledger"
   | "reports"
   | "settings"
-  | "team"
   | "feedback";
 
 export interface DashboardShellContextValue {

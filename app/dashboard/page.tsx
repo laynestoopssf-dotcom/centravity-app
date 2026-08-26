@@ -28,6 +28,7 @@ import {
 } from "recharts";
 
 import DashboardTab from '../../components/DashboardTab';
+import AgentDashboardTab from '../../components/AgentDashboardTab';
 import MyPerformanceTab from '../../components/MyPerformanceTab';
 import CommissionTab from '../../components/CommissionTab';
 import WeeklyRankTab from '../../components/WeeklyRankTab';
@@ -2436,6 +2437,11 @@ export default function Home() {
   const canViewAgencyDash = userRoleConfig?.permissions?.view_agency_dash ?? isManagerLevelRole(profile?.role);
   const canViewTeamComm = userRoleConfig?.permissions?.view_team_comm ?? isManagerLevelRole(profile?.role);
   const canManageSettings = userRoleConfig?.permissions?.manage_settings ?? isOwnerLevelRole(profile?.role);
+  // Strictly the literal agency owner (no custom_roles override, no 'admin'
+  // carve-out) — gates the "Agent Dashboard" tab. See
+  // components/AgentDashboardTab.tsx's header comment for why this is
+  // deliberately narrower than canManageSettings/isOwnerLevelRole.
+  const isStrictOwner = profile?.role === 'owner';
 
   const canViewWeeklyRank = userRoleConfig?.permissions?.view_weekly_rank ?? canViewAgencyDash;
   const canViewAgencyMtd = userRoleConfig?.permissions?.view_agency_mtd ?? canViewAgencyDash;
@@ -3044,10 +3050,10 @@ export default function Home() {
   }, [filteredPolicies, team, profile, overviewMonth, agencySettings, canViewLifeModule]);
 
   // NOTE: the old ytdOverviewData/revenueOverviewData useMemos (YTD Projections
-  // + Revenue & VC math) that used to live here have moved to the dedicated,
-  // owner-only /dashboard/agent route (app/dashboard/agent/page.tsx) — see
-  // that file's header comment. They're intentionally not recomputed in this
-  // giant shared component anymore now that nothing here renders them.
+  // + Revenue & VC math) that used to live here have moved into the owner-only
+  // "Agent Dashboard" tab's own component, components/AgentDashboardTab.tsx —
+  // see that file's header comment. They're intentionally not recomputed in
+  // this giant shared component anymore now that nothing here renders them.
 
   // Custom Corporate Targets — enrich the raw builder rows with live progress, then split
   // by display_location so the Scoreboard only ever sees the team-visible set and the
@@ -3310,7 +3316,9 @@ export default function Home() {
           offices={offices} selectedOffice={selectedOffice} setSelectedOffice={setSelectedOffice} 
           customTargets={scoreboardCustomTargets}
         />}
-        
+
+        {activeTab === 'agent' && isStrictOwner && <AgentDashboardTab />}
+
         {activeTab === 'performance' && <MyPerformanceTab 
           profile={profile} stats={stats} chartData={chartData} agencySettings={agencySettings} 
           team={team} selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} 
@@ -3333,16 +3341,8 @@ export default function Home() {
         {activeTab === 'agency' && canViewAgencyMtd && agencyOverviewData && <AgencyOverviewTab agencyOverviewData={agencyOverviewData} expandedProducerId={expandedProducerId} setExpandedProducerId={setExpandedProducerId} whatIfCommission={whatIfCommission} setWhatIfCommission={setWhatIfCommission} generateCoachingInsight={generateCoachingInsight} isGeneratingAi={isGeneratingAi} aiInsights={aiInsights} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} agencySettings={agencySettings} dateFilterMode={dateFilterMode} setDateFilterMode={setDateFilterMode} />}
         {activeTab === 'life' && canViewLifeModule && lifeOverviewData && <LifeTab lifeOverviewData={lifeOverviewData} team={team} updatePolicyStatus={updatePolicyStatus} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} />}
         
-        {/* 'team' is the shell sidebar's dedicated "Team" link — same
-            SettingsTab, just deep-linked straight to its Team Management
-            section. `key` forces a remount when switching between 'settings'
-            and 'team' so SettingsTab's own initialSection-seeded useState
-            actually re-seeds instead of preserving whatever section was last
-            open (see SettingsTab's own comment on the initialSection prop). */}
-        {(activeTab === 'settings' || activeTab === 'team') && canManageSettings && (
+        {activeTab === 'settings' && canManageSettings && (
           <SettingsTab 
-            key={activeTab}
-            initialSection={activeTab === 'team' ? 'team' : 'agency'}
             profile={profile} team={team} setTeam={setTeam} offices={offices} compPlans={compPlans} 
             handleAddLocation={handleAddLocation} handleUpdateLocation={handleUpdateLocation} handleDeleteLocation={handleDeleteLocation} 
             handleSaveCompPlan={handleSaveCompPlan} handleDeleteCompPlan={handleDeleteCompPlan} 
