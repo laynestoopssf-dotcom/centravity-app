@@ -6,6 +6,7 @@ import { supabase } from "../utils/supabase";
 import { resolveParentLine } from "../utils/productLines";
 import { resolveCommissionRates } from "../utils/commissionRates";
 import { calculateOfficeRenewalRevenue, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../utils/revenueEngine";
+import { num } from "../utils/officeFields";
 import { enrichCustomTargets, type CustomTargetRow } from "../utils/customTargets";
 import { useDashboardTab } from "./dashboard/DashboardShellContext";
 import YtdTab from "./YtdTab";
@@ -287,18 +288,33 @@ export default function AgentDashboardTab() {
 
       const teamSumTargets = team.reduce((acc, curr: any) => { acc.lifeApps += (curr.annual_target_life_apps || 0); acc.totalPremium += (curr.monthly_target_premium || 0) * 12; return acc; }, { lifeApps: 0, totalPremium: 0 });
 
+      // Lapse/cancellation rates (ytd_lapse_cancel_rate/_auto/_fire/_commercial/_health)
+      // live ONLY on `offices` (Settings -> Office Goals writes them there via
+      // handleSaveOfficeGoals in app/dashboard/page.tsx) — there's no UI that
+      // ever writes them onto `agencies`, so agencySettings?.ytd_lapse_cancel_*
+      // is always undefined. That made the "All Locations" / Enterprise view
+      // (specificOffice === null) permanently show 0% no matter what an owner
+      // entered per-office. For a single office we still read that office's own
+      // value directly; for "All Locations" we average every office's value —
+      // same convention already used for avgLapseAuto/avgLapseFire in
+      // app/dashboard/cockpit/page.tsx.
+      const avgOfficeLapseRate = (field: string): number => {
+        if (!offices.length) return num(agencySettings?.[field]);
+        return offices.reduce((sum: number, o: any) => sum + num(o?.[field], num(agencySettings?.[field])), 0) / offices.length;
+      };
+
       const agencyTargets = {
         lifeApps: targetLifeApps || teamSumTargets.lifeApps,
         totalPremium: targetPremium || teamSumTargets.totalPremium,
-        lapseRateGlobal: specificOffice?.ytd_lapse_cancel_rate ?? agencySettings?.ytd_lapse_cancel_rate ?? 0,
+        lapseRateGlobal: specificOffice ? num(specificOffice?.ytd_lapse_cancel_rate, num(agencySettings?.ytd_lapse_cancel_rate)) : avgOfficeLapseRate('ytd_lapse_cancel_rate'),
         autoApps: targetAuto,
-        lapseAuto: specificOffice?.ytd_lapse_cancel_auto ?? agencySettings?.ytd_lapse_cancel_auto ?? 0,
+        lapseAuto: specificOffice ? num(specificOffice?.ytd_lapse_cancel_auto, num(agencySettings?.ytd_lapse_cancel_auto)) : avgOfficeLapseRate('ytd_lapse_cancel_auto'),
         fireApps: targetFire,
-        lapseFire: specificOffice?.ytd_lapse_cancel_fire ?? agencySettings?.ytd_lapse_cancel_fire ?? 0,
+        lapseFire: specificOffice ? num(specificOffice?.ytd_lapse_cancel_fire, num(agencySettings?.ytd_lapse_cancel_fire)) : avgOfficeLapseRate('ytd_lapse_cancel_fire'),
         commercialApps: targetCommercial,
-        lapseCommercial: specificOffice?.ytd_lapse_cancel_commercial ?? agencySettings?.ytd_lapse_cancel_commercial ?? 0,
+        lapseCommercial: specificOffice ? num(specificOffice?.ytd_lapse_cancel_commercial, num(agencySettings?.ytd_lapse_cancel_commercial)) : avgOfficeLapseRate('ytd_lapse_cancel_commercial'),
         healthApps: targetHealth,
-        lapseHealth: specificOffice?.ytd_lapse_cancel_health ?? agencySettings?.ytd_lapse_cancel_health ?? 0,
+        lapseHealth: specificOffice ? num(specificOffice?.ytd_lapse_cancel_health, num(agencySettings?.ytd_lapse_cancel_health)) : avgOfficeLapseRate('ytd_lapse_cancel_health'),
       };
 
       const ytdTimeFraction = daysPassed / daysInYear;
