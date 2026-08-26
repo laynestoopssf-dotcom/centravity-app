@@ -114,6 +114,7 @@ export default function SettingsTab({
   agencySettings, setAgencySettings, handleSaveTeamTargets, handleUpdateRole, showToast,
   handleSaveOfficeGoals, 
   customTargets, handleSaveCustomTarget, handleDeleteCustomTarget,
+  conversionMetricsData,
   
   bulkProducerId, setBulkProducerId, bulkMonth, setBulkMonth,
   bulkTouches, setBulkTouches, bulkData, setBulkData,
@@ -2182,28 +2183,31 @@ export default function SettingsTab({
 
       {/* --- SECTION: CONVERSION METRICS (Executive Cockpit's "Activity Pacing Engine") --- */}
       {activeSettingsSection === 'conversion_metrics' && (
-        <div className="space-y-6 animate-in fade-in duration-200 max-w-4xl">
+        <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl">
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
             <AlertCircle size={18} className="text-blue-600 mt-0.5 shrink-0" />
             <p className="text-sm text-blue-900">
               These close rates (quotes → bound apps) power the Executive Cockpit&apos;s &quot;Activity Pacing
               Engine&quot; — it reverse-engineers required apps into a daily quoting target, globally and per
-              producer. Any producer without an override below uses the Global Agency Close Rate.
+              producer. The YTD and 30-Day figures below are calculated live from logged activity; the Agency
+              Target is the assumption the Cockpit falls back on for anyone without enough history yet.
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
-              <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><Target size={20} /></div>
-              <div>
-                <h3 className="font-bold text-gray-900">Global Agency Close Rate</h3>
-                <p className="text-xs text-gray-500">Fallback conversion rate used for any producer without an individual override</p>
-              </div>
+          {/* AGENCY-WIDE COMPUTED CLOSE RATE */}
+          <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl shadow-lg p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+            <div>
+              <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider mb-1 flex items-center gap-1">
+                Agency Close Rate (YTD)
+                <InfoTooltip text="Whole-team quotes-to-bound-apps ratio, year to date. Bound apps ÷ quotes across every producer, calculated live from logged activity - not a manual input." />
+              </p>
+              <p className="text-5xl font-black text-white">{conversionMetricsData?.agencyYtdCloseRate?.toFixed(1) ?? '0.0'}%</p>
+              <p className="text-xs text-indigo-200 mt-1 font-semibold">{conversionMetricsData?.agencyYtdBound ?? 0} bound / {conversionMetricsData?.agencyYtdQuotes ?? 0} quotes this year</p>
             </div>
-            <div className="p-6">
-              <label className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                Close Rate (%)
-                <InfoTooltip text="What % of logged quotes typically turn into a bound app. E.g. a 25% close rate means roughly 1 in 4 quotes closes - the Cockpit uses this to translate a required number of apps into a daily quoting target." />
+            <div className="bg-white/10 rounded-xl p-4 min-w-[200px]">
+              <label className="flex items-center gap-1 text-[10px] font-bold text-indigo-200 uppercase tracking-wider mb-2">
+                Agency Target (%)
+                <InfoTooltip text="The pacing assumption the Cockpit uses for any producer without enough quote history yet to compute a live rate. Set this to whatever close rate your agency plans around." />
               </label>
               <input
                 type="number"
@@ -2222,54 +2226,65 @@ export default function SettingsTab({
                   }
                   setGlobalCloseRateDraft(parsed);
                 }}
-                className="w-40 p-3 bg-gray-50 border border-gray-200 rounded-lg text-lg font-bold text-gray-900"
+                className="w-full p-3 bg-white/90 border border-white/20 rounded-lg text-lg font-bold text-gray-900 outline-none"
               />
             </div>
           </div>
 
+          {/* PER-PRODUCER: YTD / 30-DAY / TARGET SIDE BY SIDE */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
               <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><Users size={20} /></div>
               <div>
-                <h3 className="font-bold text-gray-900">Individual Close Rates</h3>
-                <p className="text-xs text-gray-500">Optional per-producer overrides — leave blank to use the global rate</p>
+                <h3 className="font-bold text-gray-900">Team Member Close Rates</h3>
+                <p className="text-xs text-gray-500">Personal YTD average vs. 30-day rolling trend vs. the agency target, for quick comparison</p>
               </div>
             </div>
-            <div className="p-6 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    <th className="pb-3 pr-4">Team Member</th>
-                    <th className="pb-3 pr-4">Role</th>
-                    <th className="pb-3 pr-4">Close Rate (%)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {team.map((m: any) => (
-                    <tr key={m.id}>
-                      <td className="py-3 pr-4 font-bold text-gray-900 whitespace-nowrap">{m.first_name} {m.last_name}</td>
-                      <td className="py-3 pr-4 text-gray-500 capitalize">{ROLE_LABELS[m.role] || m.role}</td>
-                      <td className="py-3 pr-4">
-                        <input
-                          type="number"
-                          step="0.1"
-                          placeholder={`${globalCloseRateDraft} (global)`}
-                          value={individualCloseRatesDraft[m.id] ?? ''}
-                          onChange={(e) => updateIndividualCloseRate(m.id, e.target.value)}
-                          className="w-36 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                  {team.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-gray-400 text-sm">
-                        No active team members yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="divide-y divide-gray-100">
+              {team.map((m: any) => {
+                const rates = conversionMetricsData?.memberRates?.[m.id];
+                return (
+                  <div key={m.id} className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-bold text-gray-900">{m.first_name} {m.last_name}</p>
+                        <p className="text-xs text-gray-400 capitalize">{ROLE_LABELS[m.role] || m.role}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                      <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Personal YTD Avg</p>
+                        <p className="text-2xl font-black text-gray-900">{(rates?.ytd ?? 0).toFixed(1)}%</p>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">30-Day Rolling Avg</p>
+                        <p className="text-2xl font-black text-blue-700">{(rates?.r30 ?? 0).toFixed(1)}%</p>
+                      </div>
+                      <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
+                        <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">Agency Target</p>
+                        <p className="text-2xl font-black text-purple-700">{globalCloseRateDraft}%</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap flex items-center gap-1">
+                        Manual Override
+                        <InfoTooltip text="Optional. Only needed if you want the Cockpit to use a fixed rate for this person instead of their live computed YTD rate - e.g. a brand-new hire with no quote history yet. Leave blank to use their live rate." />
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="Use live rate"
+                        value={individualCloseRatesDraft[m.id] ?? ''}
+                        onChange={(e) => updateIndividualCloseRate(m.id, e.target.value)}
+                        className="w-32 p-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              {team.length === 0 && (
+                <p className="py-6 text-center text-gray-400 text-sm">No active team members yet.</p>
+              )}
             </div>
           </div>
 

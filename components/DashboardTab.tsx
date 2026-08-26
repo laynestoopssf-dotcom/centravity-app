@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react';
+import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MapPin } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
@@ -435,6 +435,31 @@ export default function DashboardTab({
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-12">
+      {/* LOCATION FILTER — pinned above everything else on the Scoreboard so a
+          multi-location owner's very first decision is "which office am I
+          looking at". Defaults to All Locations (combined agency-wide), same
+          `selectedOffice` state that already drives the stats/pipeline fetch
+          in app/dashboard/page.tsx - this bar is just a more prominent home
+          for that control than the button cluster it used to share with the
+          Daily/Weekly/Monthly toggle. */}
+      {isManagerLevelRole(profile?.role) && offices && offices.length > 1 && (
+        <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm">
+          <MapPin size={16} className="text-blue-500 shrink-0" />
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Viewing Location:</span>
+          <select
+            value={activeOfficeVal}
+            onChange={(e) => {
+              updateOffice(e.target.value);
+              if (e.target.value !== 'all') setSelectedProducer('all');
+            }}
+            className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-bold text-gray-900 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Locations (Combined)</option>
+            {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+      )}
+
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">{isManagerLevelRole(profile?.role) ? scoreboardName : 'My Scoreboard'}</h2>
@@ -460,24 +485,6 @@ export default function DashboardTab({
 
           {isManagerLevelRole(profile?.role) && (
             <div className="flex gap-2">
-              {/* NEW OFFICE FILTER UI */}
-              {offices && offices.length > 0 && (
-                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">OFFICE:</span>
-                  <select 
-                    value={activeOfficeVal} 
-                    onChange={(e) => {
-                      updateOffice(e.target.value);
-                      if (e.target.value !== 'all') setSelectedProducer('all');
-                    }}
-                    className="bg-transparent text-sm font-bold text-gray-900 outline-none cursor-pointer"
-                  >
-                    <option value="all">All Locations</option>
-                    {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                </div>
-              )}
-
               {/* UPDATED TEAM FILTER UI */}
               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TEAM:</span>

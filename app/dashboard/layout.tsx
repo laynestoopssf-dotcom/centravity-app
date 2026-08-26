@@ -7,6 +7,7 @@ import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { DashboardShellContext, type DashboardTabId } from "../../components/dashboard/DashboardShellContext";
 import DashboardSidebar, { type DashboardSidebarPermissions } from "../../components/dashboard/DashboardSidebar";
 import DashboardTopHeader, { type DashboardShellUser } from "../../components/dashboard/DashboardTopHeader";
+import AiSupportChat from "../../components/dashboard/AiSupportChat";
 
 // =============================================================================
 // Persistent App Shell for everything under /dashboard.
@@ -76,19 +77,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const user = sessionData.session?.user;
     if (!user?.id) return;
 
-    const { data: profileRow } = await supabase
+    // Explicit column list (unlike app/dashboard/page.tsx's fetchProfile, which uses
+    // select('*') and so never errors on a missing column) means a schema drift on
+    // `avatar_url` - e.g. the 20260826010000_add_profile_avatars.sql migration not
+    // yet applied against this database - turns into a hard PostgREST error here
+    // instead of just an empty field. Left unhandled, that silently left `profileRow`
+    // null forever, which in turn left `shellData` null forever, which hid the ENTIRE
+    // sidebar/top header (both gated on `shellData` below) even though the rest of the
+    // dashboard kept working fine off its own separate select('*') fetch - exactly the
+    // "sidebar and log out button vanished" regression this comment is here to prevent
+    // from happening silently again. Falls back to a request without avatar_url so a
+    // missing migration degrades to "no photo" instead of "no shell at all".
+    let { data: profileRow, error: profileError } = await supabase
       .from("profiles")
       .select("first_name, last_name, role, agency_id, avatar_url")
       .eq("id", user.id)
       .maybeSingle();
 
+    if (profileError) {
+      console.error("[DashboardLayout] profiles select with avatar_url failed, retrying without it", profileError);
+      const fallback = await supabase
+        .from("profiles")
+        .select("first_name, last_name, role, agency_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (fallback.error) {
+        console.error("[DashboardLayout] fallback profiles select also failed - shell will stay hidden", fallback.error);
+        return;
+      }
+      profileRow = fallback.data ? { ...fallback.data, avatar_url: null } : null;
+    }
+
     if (!profileRow?.agency_id) return;
 
-    const { data: agencyRow } = await supabase
+    const { data: agencyRow, error: agencyError } = await supabase
       .from("agencies")
       .select("name, custom_roles")
       .eq("id", profileRow.agency_id)
       .maybeSingle();
+
+    if (agencyError) {
+      console.error("[DashboardLayout] agencies select failed - shell will stay hidden", agencyError);
+      return;
+    }
 
     // Mirrors app/dashboard/page.tsx's own permission derivation exactly
     // (userRoleConfig lookup + fallbacks) — see that file if this ever
@@ -165,8 +196,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     [activeTab, loadShellData]
   );
 
+  // Mounted once here (not per-tab in app/dashboard/page.tsx, not per-route)
+  // so it persists across every /dashboard/* route without losing its local
+  // conversation state — proxy.ts already gates the entire /dashboard/*
+  // prefix behind authentication, so no extra session check is needed here.
+  // Excluded only from the one-time post-onboarding "/dashboard/reveal"
+  // celebration screen, which wants to stay a clean, chrome-free moment.
+  const showAiChat = pathname !== "/dashboard/reveal";
+
   if (!isShellRoute || !shellData) {
-    return <DashboardShellContext.Provider value={contextValue}>{children}</DashboardShellContext.Provider>;
+    return (
+      <DashboardShellContext.Provider value={contextValue}>
+        {children}
+        {showAiChat && <AiSupportChat />}
+      </DashboardShellContext.Provider>
+    );
   }
 
   return (
@@ -178,6 +222,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex-1">{children}</div>
         </div>
       </div>
+      {showAiChat && <AiSupportChat />}
     </DashboardShellContext.Provider>
   );
 }

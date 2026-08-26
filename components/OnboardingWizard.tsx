@@ -83,6 +83,19 @@ const YTD_LINES: { label: string; apps: YtdAppsField; premium: YtdPremiumField }
   { label: "Health", apps: "ytdHealthApps", premium: "ytdHealthPremium" },
 ];
 
+// A location beyond the primary office collected on Step 1. `id` is null until
+// this row has a real `offices` row on the server (mirrors the TeamMember
+// `authUserId` pattern above) - once set, saving this row updates in place
+// instead of inserting a duplicate.
+interface AdditionalOffice {
+  id: string | null;
+  name: string;
+  city: string;
+  state: string;
+}
+
+const emptyAdditionalOffice = (): AdditionalOffice => ({ id: null, name: "", city: "", state: "" });
+
 interface OnboardingFormData {
   agencyId: string | null;
   officeId: string | null;
@@ -90,6 +103,12 @@ interface OnboardingFormData {
   primaryOfficeLocation: string;
   city: string;
   state: string;
+  // Any offices beyond the primary one, added via "Add Another Location".
+  // Saved directly to Supabase (same client-side `offices` insert/update/
+  // delete pattern Settings -> Office Locations already uses) rather than
+  // threading a whole new array through the Step1Payload server action -
+  // it's the identical table or client already has RLS access to.
+  additionalOffices: AdditionalOffice[];
   ownerName: string;
   ownerYtdAutoApps: number | "";
   ownerYtdAutoPremium: number | "";
@@ -221,6 +240,7 @@ const initialFormData: OnboardingFormData = {
   primaryOfficeLocation: "",
   city: "",
   state: "",
+  additionalOffices: [],
   ownerName: "",
   ownerYtdAutoApps: "",
   ownerYtdAutoPremium: "",
@@ -361,6 +381,7 @@ export default function OnboardingWizard({
             primaryOfficeLocation: s.primaryOfficeLocation,
             city: s.city || "",
             state: s.state || "",
+            additionalOffices: [],
             ownerName: s.ownerName || initialOwnerName || s.ownerName,
             ownerYtdAutoApps: s.ownerYtd.ytdAutoApps ?? "",
             ownerYtdAutoPremium: s.ownerYtd.ytdAutoPremium ?? "",
@@ -411,6 +432,26 @@ export default function OnboardingWizard({
             agencyVcTotal: s.agencyVcTotal,
           });
           setStep(s.resumeStep);
+
+          // Re-hydrate any locations added beyond the primary one on a prior
+          // visit. Client-side query (not part of fetchOnboardingState) since
+          // this is the exact same `offices` table Settings already reads
+          // client-side — no new server action needed.
+          if (s.agencyId) {
+            const { data: allOffices } = await supabase
+              .from("offices")
+              .select("id, name, city, state")
+              .eq("agency_id", s.agencyId)
+              .order("created_at", { ascending: true });
+            if (mounted && allOffices) {
+              const extras = allOffices
+                .filter((o: any) => o.id !== s.officeId)
+                .map((o: any) => ({ id: o.id, name: o.name || "", city: o.city || "", state: o.state || "" }));
+              if (extras.length > 0) {
+                setFormData((prev) => ({ ...prev, additionalOffices: extras }));
+              }
+            }
+          }
         } else if (!result.success) {
           console.error("[OnboardingWizard] fetchOnboardingState failed", result.error);
           setHydrationNotice("We couldn't load your saved progress, so we're starting fresh.");
@@ -453,6 +494,33 @@ export default function OnboardingWizard({
     value: string
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const addOfficeRow = () => {
+    setFormData((prev) => ({ ...prev, additionalOffices: [...prev.additionalOffices, emptyAdditionalOffice()] }));
+  };
+
+  const updateOfficeRow = (index: number, field: "name" | "city" | "state", value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      additionalOffices: prev.additionalOffices.map((o, i) => (i === index ? { ...o, [field]: value } : o)),
+    }));
+  };
+
+  const removeOfficeRow = async (index: number) => {
+    const office = formData.additionalOffices[index];
+    // Already persisted (saved on a previous "Next"/"Save Progress") — delete
+    // it server-side too, not just from local state, or it would silently
+    // reappear on the next hydration.
+    if (office?.id) {
+      const { error } = await supabase.from("offices").delete().eq("id", office.id);
+      if (error) {
+        console.error("[OnboardingWizard] failed to delete office", error);
+        setSubmitError("Failed to remove that location. Please try again.");
+        return;
+      }
+    }
+    setFormData((prev) => ({ ...prev, additionalOffices: prev.additionalOffices.filter((_, i) => i !== index) }));
   };
 
   const updateOwnerYtdField = (field: OwnerYtdField, value: number | "") => {
@@ -536,10 +604,49 @@ export default function OnboardingWizard({
         return false;
       }
 
+      const agencyId = res.agencyId || formData.agencyId;
+
+      // Persist any "Add Another Location" rows. Client-side insert/update
+      // against `offices` — identical table + RLS path Settings -> Office
+      // Locations already uses (see handleAddLocation in app/dashboard/page.tsx) —
+      // so no new server action is needed just to let onboarding create more
+      // than one office. Blank rows (name never filled in) are skipped rather
+      // than saved as an empty-named office.
+      let savedOffices = formData.additionalOffices;
+      if (agencyId) {
+        try {
+          savedOffices = await Promise.all(
+            formData.additionalOffices.map(async (office) => {
+              if (!office.name.trim()) return office;
+              if (office.id) {
+                await supabase
+                  .from("offices")
+                  .update({ name: office.name.trim(), city: office.city.trim() || null, state: office.state.trim() || null })
+                  .eq("id", office.id);
+                return office;
+              }
+              const { data, error } = await supabase
+                .from("offices")
+                .insert([{ agency_id: agencyId, name: office.name.trim(), city: office.city.trim() || null, state: office.state.trim() || null }])
+                .select()
+                .single();
+              if (error) {
+                console.error("[OnboardingWizard] failed to save additional office", error);
+                return office;
+              }
+              return { ...office, id: data.id as string };
+            })
+          );
+        } catch (err) {
+          console.error("[OnboardingWizard] failed to save additional offices", err);
+        }
+      }
+
       setFormData((prev) => ({
         ...prev,
         agencyId: res.agencyId || prev.agencyId,
         officeId: res.officeId || prev.officeId,
+        additionalOffices: savedOffices,
       }));
       return true;
     }
@@ -863,6 +970,66 @@ export default function OnboardingWizard({
                         className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                       />
                     </div>
+                  </div>
+
+                  {/* Multi-location support — the primary office above always exists;
+                      this list is purely additional branches, each saved as its own
+                      `offices` row (see removeOfficeRow/the Step 1 save block below). */}
+                  <div className="border-t border-gray-100 pt-5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-sm font-semibold text-gray-700">
+                        Additional Locations
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addOfficeRow}
+                        className="flex items-center gap-1.5 text-xs font-bold text-purple-600 hover:text-purple-800 transition-colors"
+                      >
+                        <UserPlus size={14} /> Add Another Location
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-3">Have more than one branch? Add each additional office here — your team members will pick their home base in the next step.</p>
+
+                    {formData.additionalOffices.length > 0 && (
+                      <div className="space-y-3">
+                        {formData.additionalOffices.map((office, idx) => (
+                          <div key={idx} className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-xl p-3">
+                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-2">
+                              <input
+                                type="text"
+                                value={office.name}
+                                onChange={(e) => updateOfficeRow(idx, "name", e.target.value)}
+                                placeholder="South Branch"
+                                className="sm:col-span-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                              />
+                              <input
+                                type="text"
+                                value={office.city}
+                                onChange={(e) => updateOfficeRow(idx, "city", e.target.value)}
+                                placeholder="City"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                              />
+                              <input
+                                type="text"
+                                value={office.state}
+                                onChange={(e) => updateOfficeRow(idx, "state", e.target.value)}
+                                placeholder="State"
+                                maxLength={32}
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeOfficeRow(idx)}
+                              title="Remove location"
+                              className="mt-1 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>

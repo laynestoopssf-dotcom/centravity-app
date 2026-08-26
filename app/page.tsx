@@ -21,7 +21,10 @@ export default function LoginPage() {
   // Every redirect on this page is a hard `window.location.href` navigation,
   // never next/navigation's router — see the mount effect below for why. No
   // Next router instance is needed as a result.
-  const [mode, setMode] = useState<"signin" | "signup" | "join">("signin");
+  // "forgot" is intentionally not one of the 3 visible tabs below — it's only
+  // reachable via the "Forgot your password?" link inside the sign-in form,
+  // same way it's a link rather than a tab in most consumer auth UIs.
+  const [mode, setMode] = useState<"signin" | "signup" | "join" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -29,6 +32,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [forgotSent, setForgotSent] = useState(false);
   // supabase.auth.signUp() fires its own SIGNED_IN event once the session is
   // established — same as signInWithPassword. Without this flag, that event
   // would race the explicit window.location.href navigation in handleSubmit's
@@ -194,6 +198,30 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+    try {
+      // redirectTo points at the standalone /reset-password catcher (NOT this
+      // page or /dashboard) — see that route's header comment for why it has
+      // to be its own unauthenticated route rather than reusing this page's
+      // own onAuthStateChange listener, which would otherwise race the
+      // recovery session straight into a hard redirect to /dashboard before
+      // the user ever gets to set a new password.
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (resetError) throw resetError;
+      setForgotSent(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unable to send reset email. Please try again.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
@@ -204,10 +232,12 @@ export default function LoginPage() {
 
   const isSignup = mode === "signup";
   const isJoin = mode === "join";
+  const isForgot = mode === "forgot";
 
-  const switchMode = (next: "signin" | "signup" | "join") => {
+  const switchMode = (next: "signin" | "signup" | "join" | "forgot") => {
     setMode(next);
     setError("");
+    setForgotSent(false);
   };
 
   const tabs: { id: "signin" | "signup" | "join"; label: string }[] = [
@@ -222,7 +252,9 @@ export default function LoginPage() {
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-white">Centravity</h1>
           <p className="mt-2 text-sm text-slate-400">
-            {isSignup
+            {isForgot
+              ? "Reset your password"
+              : isSignup
               ? "Create your agency's account"
               : isJoin
               ? "Join your agency's existing scoreboard"
@@ -230,6 +262,7 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {!isForgot && (
         <div className="mb-6 grid grid-cols-3 gap-1 rounded-lg bg-slate-900/80 p-1">
           {tabs.map((tab) => (
             <button
@@ -247,6 +280,7 @@ export default function LoginPage() {
             </button>
           ))}
         </div>
+        )}
 
         {error && (
           <div
@@ -257,7 +291,65 @@ export default function LoginPage() {
           </div>
         )}
 
-        {isJoin ? (
+        {isForgot ? (
+          forgotSent ? (
+            <div className="text-center">
+              <p className="text-sm text-slate-300">
+                If an account exists for <span className="font-semibold text-white">{email}</span>, a password reset link is on its way. Check your inbox.
+              </p>
+              <button
+                type="button"
+                onClick={() => switchMode("signin")}
+                className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleForgotPassword} className="space-y-5">
+              <div>
+                <label htmlFor="forgot-email" className="mb-1.5 block text-sm font-medium text-slate-300">
+                  Email
+                </label>
+                <input
+                  id="forgot-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                  placeholder="you@agency.com"
+                />
+                <p className="mt-1.5 text-xs text-slate-500">We&apos;ll email you a link to reset your password.</p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Sending…
+                  </>
+                ) : (
+                  "Send Reset Link"
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchMode("signin")}
+                className="w-full text-center text-xs font-medium text-slate-400 hover:text-slate-200 transition"
+              >
+                Back to Sign In
+              </button>
+            </form>
+          )
+        ) : isJoin ? (
           <form onSubmit={handleJoinSubmit} className="space-y-5">
             <div>
               <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-slate-300">
@@ -380,6 +472,17 @@ export default function LoginPage() {
                 className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
                 placeholder="••••••••"
               />
+              {!isSignup && (
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => switchMode("forgot")}
+                    className="text-xs font-medium text-blue-400 hover:text-blue-300 transition"
+                  >
+                    Forgot your password?
+                  </button>
+                </div>
+              )}
             </div>
 
             <button

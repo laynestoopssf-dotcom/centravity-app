@@ -2450,6 +2450,66 @@ export default function Home() {
   const canViewLifeModule = userRoleConfig?.permissions?.view_life_module ?? canViewAgencyDash;
   const canViewReports = userRoleConfig?.permissions?.view_reports ?? isManagerLevelRole(profile?.role);
 
+  // Powers Settings -> Conversion Metrics (see SettingsTab.tsx). Reuses the same
+  // agency-wide YTD `agencyActivities`/`agencyPolicies` fetch that feeds Agency MTD
+  // (fetchAgencyOverview) instead of issuing a dedicated query - same trade-off as
+  // that tab: if an owner has browsed Agency MTD to a past month right before opening
+  // Settings, this reflects that month's fetch window rather than a hard "now" YTD,
+  // which self-corrects the next time fetchAgencyOverview() runs (e.g. tab reload,
+  // any write action). Quotes = 'quote'/'complex_res' activities; bound = policies
+  // with status in ('bound','issued'), dated by bound_at (falling back to
+  // written_at/logged_at) - identical definitions to the Agency Overview engine
+  // below, so this number always agrees with what "Agency MTD" would show for the
+  // full year.
+  const conversionMetricsData = useMemo(() => {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const r30Start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+
+    let agencyYtdQuotes = 0, agencyYtdBound = 0;
+    const byMember: Record<string, { ytdQuotes: number; ytdBound: number; r30Quotes: number; r30Bound: number }> = {};
+    team.forEach((m) => { byMember[m.id] = { ytdQuotes: 0, ytdBound: 0, r30Quotes: 0, r30Bound: 0 }; });
+
+    agencyActivities.forEach((act: any) => {
+      if (act.activity_type !== 'quote' && act.activity_type !== 'complex_res') return;
+      const d = new Date(act.logged_at);
+      if (d < startOfYear) return;
+      agencyYtdQuotes++;
+      const entry = byMember[act.user_id];
+      if (entry) {
+        entry.ytdQuotes++;
+        if (d >= r30Start) entry.r30Quotes++;
+      }
+    });
+
+    agencyPolicies.forEach((pol: any) => {
+      if (pol.status !== 'bound' && pol.status !== 'issued') return;
+      const d = new Date(pol.bound_at || pol.written_at || pol.logged_at);
+      if (d < startOfYear) return;
+      agencyYtdBound++;
+      const entry = byMember[pol.user_id];
+      if (entry) {
+        entry.ytdBound++;
+        if (d >= r30Start) entry.r30Bound++;
+      }
+    });
+
+    const memberRates: Record<string, { ytd: number; r30: number }> = {};
+    Object.entries(byMember).forEach(([id, v]) => {
+      memberRates[id] = {
+        ytd: v.ytdQuotes > 0 ? (v.ytdBound / v.ytdQuotes) * 100 : 0,
+        r30: v.r30Quotes > 0 ? (v.r30Bound / v.r30Quotes) * 100 : 0,
+      };
+    });
+
+    return {
+      agencyYtdCloseRate: agencyYtdQuotes > 0 ? (agencyYtdBound / agencyYtdQuotes) * 100 : 0,
+      agencyYtdQuotes,
+      agencyYtdBound,
+      memberRates,
+    };
+  }, [team, agencyActivities, agencyPolicies]);
+
   // --- USE MEMO DATA ENGINES ---
   const filteredActivities = useMemo(() => {
     return globalOfficeFilter === 'all' ? agencyActivities : agencyActivities.filter(a => a.office_id === globalOfficeFilter);
@@ -3354,6 +3414,7 @@ export default function Home() {
             archivedTeam={archivedTeam} handleArchiveTeamMember={handleArchiveTeamMember} handleReactivateTeamMember={handleReactivateTeamMember}
             teamInvites={teamInvites} fetchTeamInvites={fetchTeamInvites} handleRevokeInvite={handleRevokeInvite}
             customTargets={customTargets} handleSaveCustomTarget={handleSaveCustomTarget} handleDeleteCustomTarget={handleDeleteCustomTarget}
+            conversionMetricsData={conversionMetricsData}
             
             bulkProducerId={bulkProducerId} setBulkProducerId={setBulkProducerId}
             bulkMonth={bulkMonth} setBulkMonth={setBulkMonth}
