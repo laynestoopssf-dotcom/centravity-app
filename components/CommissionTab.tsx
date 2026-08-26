@@ -3,6 +3,9 @@ import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, Trending
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
 import { getCachedIdentifier } from '../utils/identifierCache';
+import IdentifierChip from './ui/IdentifierChip';
+import ProfileAvatar from './ui/ProfileAvatar';
+import { formatDollars } from '../utils/formatNumber';
 
 /** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
 const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
@@ -213,9 +216,12 @@ export default function CommissionTab({
                return (
                  <div key={member.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden">
                     <div className="p-5 border-b border-gray-100 flex justify-between items-start bg-gray-50">
-                      <div>
-                        <h4 className="font-bold text-gray-900 text-lg leading-tight">{member.first_name} {member.last_name}</h4>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">{member.role}</p>
+                      <div className="flex items-center gap-3">
+                        <ProfileAvatar src={member.avatar_url} name={`${member.first_name} ${member.last_name}`} size="md" />
+                        <div>
+                          <h4 className="font-bold text-gray-900 text-lg leading-tight">{member.first_name} {member.last_name}</h4>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">{member.role}</p>
+                        </div>
                       </div>
                       <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md shadow-sm border ${comm.isLocked ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
                         {comm.isLocked ? <Lock size={12}/> : <CheckCircle2 size={12}/>}
@@ -360,7 +366,7 @@ export default function CommissionTab({
                        {Object.entries(commissionData.acceleratorBreakdown || {}).map(([key, val]: [string, any]) => val > 0 && (
                          <div key={key} className="flex justify-between items-center bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
                            <span className="font-bold text-gray-700 text-sm capitalize">{key.replace('_', ' ')} Bonus</span>
-                           <span className="font-black text-emerald-600">+${val}</span>
+                           <span className="font-black text-emerald-600">+{formatDollars(val)}</span>
                          </div>
                        ))}
                      </div>
@@ -388,7 +394,7 @@ export default function CommissionTab({
                         >
                           <div>
                             <p className="font-bold text-gray-900 text-xs leading-tight">{bonus.name}</p>
-                            <p className="font-black text-purple-600 text-sm mt-0.5">${bonus.amount}</p>
+                            <p className="font-black text-purple-600 text-sm mt-0.5">{formatDollars(bonus.amount)}</p>
                           </div>
                           <div className="bg-purple-50 text-purple-400 rounded-md p-1 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                             <Plus size={16} />
@@ -413,7 +419,7 @@ export default function CommissionTab({
                             <div>
                               <p className="font-bold text-gray-800 text-xs">
                                 {bonus.bonus_name}
-                                {bonus.policy_id && <span className="text-gray-400 font-medium"> — {displayIdentifier(bonus.policy_id)}</span>}
+                                {bonus.policy_id && <span className="text-gray-400 font-medium"> — <IdentifierChip policyId={bonus.policy_id} /></span>}
                               </p>
                               <p className="text-[10px] text-gray-400">{new Date(bonus.logged_at).toLocaleDateString()}</p>
                             </div>
@@ -515,7 +521,7 @@ export default function CommissionTab({
                      return (
                        <tr key={pol.id || idx} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                          <td className="p-4 text-sm font-medium text-gray-500">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
+                         <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="p-4">
                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
                              {pol.product_line} {isGhost && <span className="ml-1 opacity-50 text-[10px]">(0%)</span>}
@@ -555,7 +561,7 @@ export default function CommissionTab({
                 <div className="bg-purple-50 text-purple-600 p-2.5 rounded-xl"><Gift size={20} /></div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">{pendingBonus.name}</h3>
-                  <p className="text-sm font-black text-purple-600">${pendingBonus.amount}</p>
+                  <p className="text-sm font-black text-purple-600">{formatDollars(pendingBonus.amount)}</p>
                 </div>
               </div>
               <button type="button" onClick={closeBonusModal} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -582,7 +588,7 @@ export default function CommissionTab({
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={closeBonusModal} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
                 <button type="submit" disabled={isSubmittingBonus || !bonusPolicyId} className="flex-1 py-3 px-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                  {isSubmittingBonus ? 'Awarding...' : `Confirm & Award $${pendingBonus.amount}`}
+                  {isSubmittingBonus ? 'Awarding...' : `Confirm & Award ${formatDollars(pendingBonus.amount)}`}
                 </button>
               </div>
             </form>

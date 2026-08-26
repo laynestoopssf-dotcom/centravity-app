@@ -1,9 +1,7 @@
 import React from 'react';
 import { HeartPulse, CheckCircle2, Clock, FileText, Target, TrendingUp, DollarSign } from 'lucide-react';
-import { getCachedIdentifier } from '../utils/identifierCache';
-
-/** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
-const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
+import IdentifierChip from './ui/IdentifierChip';
+import ProfileAvatar from './ui/ProfileAvatar';
 
 export default function LifeTab({ 
   lifeOverviewData, team, updatePolicyStatus, 
@@ -92,8 +90,11 @@ export default function LifeTab({
                 {leaderboard.map((member: any) => (
                   <tr key={member.id} className="hover:bg-gray-50 transition-colors">
                     <td className="p-4">
-                       <p className="font-bold text-gray-900 text-base">{member.first_name} {member.last_name}</p>
-                       
+                       <div className="flex items-center gap-2.5 mb-1">
+                         <ProfileAvatar src={member.avatar_url} name={`${member.first_name} ${member.last_name}`} size="sm" />
+                         <p className="font-bold text-gray-900 text-base">{member.first_name} {member.last_name}</p>
+                       </div>
+
                        {/* ANNUAL TRACKER BARS */}
                        <div className="mt-3 w-48 space-y-2.5">
                           <div>
@@ -142,7 +143,7 @@ export default function LifeTab({
                 <div key={pol.id} className="p-4 border border-gray-200 rounded-xl bg-gray-50 hover:border-amber-300 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-bold text-gray-900">{displayIdentifier(pol.id, pol.client_identifier_hash)}</p>
+                      <p className="font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{producer?.first_name} {producer?.last_name}</p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${pol.status === 'bound' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`}>

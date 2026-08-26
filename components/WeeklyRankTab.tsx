@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Trophy, PhoneCall, FileText, ShieldCheck, Calendar, Users } from "lucide-react";
+import ProfileAvatar from "./ui/ProfileAvatar";
 
 const getPacingColor = (pacing: number) => {
   if (pacing >= 100) return "bg-green-500";
@@ -186,7 +187,12 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
                 return (
                   <tr key={member.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-center font-black text-gray-400">#{idx + 1}</td>
-                    <td className="px-6 py-4 font-bold text-gray-900">{displayName}</td>
+                    <td className="px-6 py-4 font-bold text-gray-900">
+                      <div className="flex items-center gap-2.5">
+                        <ProfileAvatar src={member.avatar_url} name={displayName} stealth={isStealth} size="xs" />
+                        {displayName}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-xl font-black text-blue-600">{member.wTouches}</td>
                     <td className="px-6 py-4 text-center">{renderWoW(member.wTouches, member.prevTouches)}</td>
                     <td className="px-6 py-4">
@@ -231,7 +237,12 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
                 return (
                   <tr key={member.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-center font-black text-gray-400">#{idx + 1}</td>
-                    <td className="px-6 py-4 font-bold text-gray-900">{displayName}</td>
+                    <td className="px-6 py-4 font-bold text-gray-900">
+                      <div className="flex items-center gap-2.5">
+                        <ProfileAvatar src={member.avatar_url} name={displayName} stealth={isStealth} size="xs" />
+                        {displayName}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-xl font-black text-purple-600">{member.wQuotes}</td>
                     <td className="px-6 py-4 text-center">{renderWoW(member.wQuotes, member.prevQuotes)}</td>
                     <td className="px-6 py-4 text-center font-medium text-gray-600">{member.quotesByLine?.Auto || 0}</td>
@@ -297,7 +308,12 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
                 return (
                   <tr key={member.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-center font-black text-gray-400">#{idx + 1}</td>
-                    <td className="px-6 py-4 font-bold text-gray-900">{displayName}</td>
+                    <td className="px-6 py-4 font-bold text-gray-900">
+                      <div className="flex items-center gap-2.5">
+                        <ProfileAvatar src={member.avatar_url} name={displayName} stealth={isStealth} size="xs" />
+                        {displayName}
+                      </div>
+                    </td>
                     
                     <td className={`px-6 py-4 text-xl font-black ${defaultMetric === 'total_apps' ? 'text-emerald-700 bg-emerald-50/70 border-x border-emerald-100/50' : 'text-emerald-600'}`}>
                       {member.wBoundApps}

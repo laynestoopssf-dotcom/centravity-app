@@ -10,6 +10,7 @@ import { generateCoachingInsight as generateCoachingInsightAction } from "../act
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
 import InfoTooltip from "../../components/ui/InfoTooltip";
+import FormattedNumberInput from "../../components/ui/FormattedNumberInput";
 import { isLoggerMessage } from "../../utils/loggerBridge";
 import { hashIdentifier, hashIdentifiers } from "../../utils/crypto";
 import { cacheIdentifier, getCachedIdentifierForAny, forgetCachedIdentifier } from "../../utils/identifierCache";
@@ -38,6 +39,7 @@ import LedgerTab from '../../components/LedgerTab';
 import ReportsTab from '../../components/ReportsTab';
 import SettingsTab from '../../components/SettingsTab';
 import FeedbackTab from '../../components/FeedbackTab';
+import MyProfileTab from '../../components/MyProfileTab';
 import { useDashboardTab } from '../../components/dashboard/DashboardShellContext';
 
 const GlobalStyles = () => (
@@ -53,7 +55,7 @@ const GlobalStyles = () => (
   `}} />
 );
 
-type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; };
+type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; avatar_url?: string | null; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; };
 type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates; global_close_rate?: number; stripe_customer_id?: string | null; stripe_subscription_id?: string | null; subscription_status?: string | null; plan_id?: string | null; target_vc_active?: boolean; target_travel_active?: boolean;};
 // `client_identifier_hash` is a one-way SHA-256 blind index (see utils/crypto.ts)
 // - there is no plaintext name on this object, by design. Any "readable label"
@@ -96,7 +98,7 @@ export default function Home() {
   // sets this lives there) — see components/dashboard/DashboardShellContext.tsx
   // for why this moved out of a local useState. This page only ever reads
   // it now; every setActiveTab() call moved to DashboardSidebar.
-  const { activeTab } = useDashboardTab();
+  const { activeTab, refreshShellUser } = useDashboardTab();
   
   const [offices, setOffices] = useState<any[]>([]);
   const [compPlans, setCompPlans] = useState<CompPlan[]>([]);
@@ -3363,6 +3365,16 @@ export default function Home() {
           />
         )}
         {activeTab === 'feedback' && <FeedbackTab profile={profile} showToast={showToast} />}
+        {activeTab === 'profile' && profile && (
+          <MyProfileTab
+            profile={profile}
+            onProfileSaved={(updated: Partial<Profile>) => {
+              setProfile((prev) => (prev ? { ...prev, ...updated } : prev));
+              refreshShellUser?.();
+            }}
+            showToast={showToast}
+          />
+        )}
       </main>
 
       {/* MODALS */}
@@ -3567,7 +3579,7 @@ export default function Home() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Term Premium</label><div className="relative"><span className="absolute left-3 top-2.5 text-gray-500 font-medium">$</span><input type="number" required step="0.01" placeholder="0.00" value={item.premiumAmount} onChange={e => updateLineItem(item.id, 'premiumAmount', e.target.value)} className="w-full pl-7 p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm" /></div></div>
+                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Term Premium</label><FormattedNumberInput allowDecimal placeholder="$0.00" value={item.premiumAmount === "" ? "" : Number(item.premiumAmount)} onChange={v => updateLineItem(item.id, 'premiumAmount', v === '' ? '' : String(v))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm" /></div>
                           <div>
                             <label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                               Renewal Cycle

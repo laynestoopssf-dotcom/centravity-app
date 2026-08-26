@@ -3,12 +3,14 @@
 import React, { useState } from "react";
 import { Building2, LogOut, Loader2 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
+import ProfileAvatar from "../ui/ProfileAvatar";
 
 export interface DashboardShellUser {
   firstName: string;
   lastName: string;
   email: string;
   agencyName: string;
+  avatarUrl?: string | null;
 }
 
 // Persistent top bar for the /dashboard app shell — shows who's signed in and
@@ -42,9 +44,12 @@ export default function DashboardTopHeader({ user }: { user: DashboardShellUser 
       </div>
 
       <div className="flex items-center gap-4 shrink-0">
-        <div className="text-right leading-tight hidden sm:block">
-          <p className="text-sm font-semibold text-white truncate max-w-[220px]">{fullName || "—"}</p>
-          <p className="text-xs text-slate-500 truncate max-w-[220px]">{user.email}</p>
+        <div className="flex items-center gap-2.5">
+          <div className="text-right leading-tight hidden sm:block">
+            <p className="text-sm font-semibold text-white truncate max-w-[220px]">{fullName || "—"}</p>
+            <p className="text-xs text-slate-500 truncate max-w-[220px]">{user.email}</p>
+          </div>
+          <ProfileAvatar src={user.avatarUrl} name={fullName || user.email} size="sm" />
         </div>
         <button
           onClick={handleLogout}

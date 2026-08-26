@@ -6,8 +6,11 @@ import { isManagerLevelRole } from '../utils/roles';
 import DashboardMetrics from './dashboard/DashboardMetrics';
 import { hashIdentifier } from '../utils/crypto';
 import { getCachedIdentifier } from '../utils/identifierCache';
+import IdentifierChip from './ui/IdentifierChip';
+import FormattedNumberInput from './ui/FormattedNumberInput';
+import ProfileAvatar from './ui/ProfileAvatar';
 
-/** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
+/** Sort-key helper only now - actual on-screen rendering goes through <IdentifierChip> instead, which keeps the plaintext out of the DOM by default (see components/ui/IdentifierChip.tsx). */
 const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
 
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
@@ -140,6 +143,7 @@ export default function DashboardTab({
         byUser.set(uid, {
           userId: uid,
           name: member ? `${member.first_name} ${member.last_name}` : 'Unknown Producer',
+          avatarUrl: member?.avatar_url || null,
           apps: 0,
           premium: 0,
           counts: { Auto: 0, Fire: 0, Life: 0, Health: 0, Commercial: 0 },
@@ -885,7 +889,12 @@ export default function DashboardTab({
                       <td className="px-6 py-3 text-gray-400">
                         {expandedRosterUserId === row.userId ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </td>
-                      <td className="px-6 py-3 font-bold text-gray-900">{row.name}</td>
+                      <td className="px-6 py-3 font-bold text-gray-900">
+                        <div className="flex items-center gap-2.5">
+                          <ProfileAvatar src={row.avatarUrl} name={row.name} size="xs" />
+                          {row.name}
+                        </div>
+                      </td>
                       <td className="px-6 py-3 text-center font-black text-emerald-600">{row.apps}</td>
                       <td className="px-6 py-3 text-right font-bold text-gray-700">${Math.round(row.premium).toLocaleString()}</td>
                       <td className="px-6 py-3 text-center font-medium text-gray-600">{row.counts.Auto}</td>
@@ -908,7 +917,7 @@ export default function DashboardTab({
                             <tbody className="divide-y divide-gray-100">
                               {row.policies.map((p: any) => (
                                 <tr key={p.id}>
-                                  <td className="py-1.5 font-semibold text-gray-700">{displayIdentifier(p.id, p.client_identifier_hash)}</td>
+                                  <td className="py-1.5 font-semibold text-gray-700"><IdentifierChip policyId={p.id} hash={p.client_identifier_hash} /></td>
                                   <td className="py-1.5 text-gray-500">{p.product_line}</td>
                                   <td className="py-1.5 text-right font-bold text-gray-700">${Math.round(Number(p.premium_amount) || 0).toLocaleString()}</td>
                                 </tr>
@@ -967,7 +976,7 @@ export default function DashboardTab({
                 paginatedPipelineRows.map((pol: any) => (
                   <tr key={pol.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="p-4 text-sm font-semibold text-gray-500 whitespace-nowrap">{new Date(pol.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td className="p-4 text-sm font-bold text-gray-900">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
+                    <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                     <td className="p-4 text-sm font-bold text-gray-600">
                        {pol.product_line === 'Complex Resolution' ? <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">Complex Res.</span> : pol.product_line}
                     </td>
@@ -982,7 +991,7 @@ export default function DashboardTab({
                         </div>
                       ) : editingPolicyId === pol.id ? (
                         <div className="flex items-center justify-end gap-2">
-                           <input type="number" value={editPremium} onChange={e => setEditPremium(e.target.value)} className="w-24 p-1.5 border border-gray-300 rounded text-sm font-bold outline-none" placeholder="Final Prem" />
+                           <FormattedNumberInput allowDecimal value={editPremium === "" ? "" : Number(editPremium)} onChange={v => setEditPremium(v === '' ? '' : String(v))} className="w-24 p-1.5 border border-gray-300 rounded text-sm font-bold outline-none" placeholder="$ Final Prem" />
                            <button onClick={() => submitStatusUpdate(pol.id, 'bound')} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">Save Bound</button>
                            <button onClick={() => submitStatusUpdate(pol.id, 'issued')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded">Save Issued</button>
                            <button onClick={() => setEditingPolicyId(null)} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded">Cancel</button>

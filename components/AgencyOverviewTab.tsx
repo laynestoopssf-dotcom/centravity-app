@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Calculator, Sparkles, CalendarDays, ShieldCheck, LineChart, Gauge, FileSignature, FileCheck2 } from "lucide-react";
+import FormattedNumberInput from "./ui/FormattedNumberInput";
+import ProfileAvatar from "./ui/ProfileAvatar";
 
 const getPacingColor = (pacing: number) => {
   if (pacing >= 100) return "bg-green-500";
@@ -320,8 +322,13 @@ export default function AgencyOverviewTab({ agencyOverviewData, expandedProducer
                   <React.Fragment key={member.id}>
                     <tr onClick={() => setExpandedProducerId(isExpanded ? null : member.id)} className={`transition-colors cursor-pointer ${isExpanded ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
                       <td className="px-6 py-5">
-                        <div className="font-bold text-gray-900">{displayName}</div>
-                        {!isStealth && <div className="text-xs text-gray-400 capitalize">{member.role}</div>}
+                        <div className="flex items-center gap-2.5">
+                          <ProfileAvatar src={member.avatar_url} name={displayName} stealth={isStealth} size="sm" />
+                          <div>
+                            <div className="font-bold text-gray-900">{displayName}</div>
+                            {!isStealth && <div className="text-xs text-gray-400 capitalize">{member.role}</div>}
+                          </div>
+                        </div>
                       </td>
                       
                       <td className="px-6 py-5"><div className="flex items-center gap-3"><span className="font-semibold text-gray-900 w-8">{member.monthTouches}</span><div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${getPacingColor(tPacing)}`} style={{ width: `${Math.min(100, tPacing)}%` }} /></div></div></td>
@@ -355,9 +362,8 @@ export default function AgencyOverviewTab({ agencyOverviewData, expandedProducer
                                   <span className="text-sm font-bold text-gray-800 flex items-center gap-2"><Calculator size={16}/> 1-on-1 Coaching: What-If</span>
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs text-gray-500 font-semibold">Goal Commission:</span>
-                                    <div className="relative">
-                                      <span className="absolute left-2 top-1.5 text-gray-500 font-medium text-sm">$</span>
-                                      <input type="number" value={whatIfCommission} onChange={(e) => setWhatIfCommission(Number(e.target.value))} onClick={e => e.stopPropagation()} className="w-24 pl-5 p-1.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
+                                    <div onClick={e => e.stopPropagation()}>
+                                      <FormattedNumberInput value={whatIfCommission} onChange={(v) => setWhatIfCommission(v === '' ? 0 : v)} className="w-24 p-1.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
                                     </div>
                                   </div>
                                 </div>

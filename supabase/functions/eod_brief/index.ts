@@ -49,6 +49,12 @@ serve(async (req) => {
     if (polError) throw polError;
 
     const results = [];
+    // Surfaced in the response alongside `results` so a manual test call (or anyone reading
+    // function logs) can tell "ran fine, just nobody's report hour matched right now" apart
+    // from "found zero owners at all" - `results` alone stays empty in BOTH cases otherwise,
+    // which is exactly why this looked like a silent no-op failure from the outside.
+    const ownerCount = owners?.length ?? 0;
+    let usedFallbackSender = false;
 
     // 3. The Timezone-Aware Multi-Tenant Loop
     for (const owner of (owners || [])) {
@@ -147,10 +153,15 @@ serve(async (req) => {
         `;
 
         // NOTE: `onboarding@resend.dev` is Resend's shared test sender, which only delivers to the
-        // email on file for the Resend account itself - sends to any other owner's inbox fail
-        // silently on Resend's side. Set RESEND_FROM_EMAIL to a verified domain sender once one is
-        // configured in Resend; falls back to the test address so this still runs without it.
-        const fromAddress = Deno.env.get('RESEND_FROM_EMAIL') || 'Centravity HQ <onboarding@resend.dev>';
+        // email on file for the Resend account itself - Resend now REJECTS (not just silently
+        // drops) a send to any other address from this sender, which is exactly what makes EOD
+        // look "broken" end-to-end even though the query/calc logic above is fine. Setting
+        // RESEND_FROM_EMAIL is a SEPARATE secret from the one already configured for the Next.js
+        // app (Vercel env vars never reach this Supabase Edge Function) - it must be set here too,
+        // e.g. `supabase secrets set RESEND_FROM_EMAIL="Centravity HQ <hq@yourdomain.com>"`.
+        const configuredFromAddress = Deno.env.get('RESEND_FROM_EMAIL');
+        if (!configuredFromAddress) usedFallbackSender = true;
+        const fromAddress = configuredFromAddress || 'Centravity HQ <onboarding@resend.dev>';
 
         const emailRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -179,7 +190,12 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ message: "Hourly multi-tenant check complete", results }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({
+      message: "Hourly multi-tenant check complete",
+      ownerCount,
+      usedFallbackSender,
+      results,
+    }), { headers: { "Content-Type": "application/json" } });
   } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { "Content-Type": "application/json" } });
   }

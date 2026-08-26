@@ -17,6 +17,7 @@ import {
   MessageSquare,
   LifeBuoy,
   Crown,
+  UserCircle,
 } from "lucide-react";
 import { useDashboardTab, type DashboardTabId } from "./DashboardShellContext";
 
@@ -183,6 +184,16 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
       )}
 
       <div className="mt-auto pt-6 border-t border-slate-800 space-y-1">
+        {/* Ungated - every role gets a self-service profile, unlike Settings below which
+            stays owner/admin-only. */}
+        <button
+          onClick={() => setActiveTab("profile")}
+          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+            activeTab === "profile" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+          }`}
+        >
+          <UserCircle size={18} /> My Profile
+        </button>
         <button
           onClick={() => setActiveTab("feedback")}
           className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${

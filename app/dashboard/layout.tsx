@@ -64,78 +64,86 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // deliberately switched to something else.
   const hasSetDefaultTabRef = React.useRef(false);
 
+  // Extracted from the mount effect below so the "My Profile" tab (a CHILD of this
+  // layout, via app/dashboard/page.tsx) can trigger a targeted re-fetch after saving a
+  // new name/avatar — otherwise the header (owned up here) would keep showing the
+  // stale photo/name until a full reload. Exposed through DashboardShellContext as
+  // `refreshShellUser`. Takes no "mounted" guard of its own since callers (the mount
+  // effect, and the profile tab's post-save call) are each responsible for only
+  // invoking this while still mounted.
+  const loadShellData = React.useCallback(async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData.session?.user;
+    if (!user?.id) return;
+
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, role, agency_id, avatar_url")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profileRow?.agency_id) return;
+
+    const { data: agencyRow } = await supabase
+      .from("agencies")
+      .select("name, custom_roles")
+      .eq("id", profileRow.agency_id)
+      .maybeSingle();
+
+    // Mirrors app/dashboard/page.tsx's own permission derivation exactly
+    // (userRoleConfig lookup + fallbacks) — see that file if this ever
+    // needs to change, and change both together.
+    const roleConfig = (agencyRow?.custom_roles as { id: string; permissions?: Record<string, boolean> }[] | null)?.find(
+      (r) => r.id === profileRow.role
+    );
+    const isOwnerOrManager = isManagerLevelRole(profileRow.role);
+    const isOwnerLevel = isOwnerLevelRole(profileRow.role);
+    const canViewAgencyDash = roleConfig?.permissions?.view_agency_dash ?? isOwnerOrManager;
+    const canViewTeamComm = roleConfig?.permissions?.view_team_comm ?? isOwnerOrManager;
+    const canManageSettings = roleConfig?.permissions?.manage_settings ?? isOwnerLevel;
+
+    // Owners land on their Agent Dashboard master command center by
+    // default; everyone else (Team Members, Managers, etc.) lands on the
+    // Team Scoreboard, same as before this tab existed.
+    if (!hasSetDefaultTabRef.current) {
+      hasSetDefaultTabRef.current = true;
+      setActiveTab(profileRow.role === "owner" ? "agent" : "dashboard");
+    }
+
+    setShellData({
+      user: {
+        firstName: profileRow.first_name || "",
+        lastName: profileRow.last_name || "",
+        email: user.email || "",
+        agencyName: (agencyRow?.name as string) || "",
+        avatarUrl: (profileRow as { avatar_url?: string | null }).avatar_url || null,
+      },
+      permissions: {
+        canViewAgencyDash,
+        canViewTeamComm,
+        canManageSettings,
+        canViewWeeklyRank: roleConfig?.permissions?.view_weekly_rank ?? canViewAgencyDash,
+        canViewAgencyMtd: roleConfig?.permissions?.view_agency_mtd ?? canViewAgencyDash,
+        canViewLifeModule: roleConfig?.permissions?.view_life_module ?? canViewAgencyDash,
+        canViewReports: roleConfig?.permissions?.view_reports ?? isOwnerOrManager,
+        // Strictly the literal agency owner — no custom_roles override, no
+        // 'admin' inclusion. See DashboardSidebarPermissions.isOwner and
+        // components/AgentDashboardTab.tsx's header comment for why.
+        isOwner: profileRow.role === "owner",
+      },
+    });
+  }, []);
+
   useEffect(() => {
     if (!isShellRoute) return;
     let mounted = true;
-
     (async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      if (!mounted || !user?.id) return;
-
-      const { data: profileRow } = await supabase
-        .from("profiles")
-        .select("first_name, last_name, role, agency_id")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!mounted || !profileRow?.agency_id) return;
-
-      const { data: agencyRow } = await supabase
-        .from("agencies")
-        .select("name, custom_roles")
-        .eq("id", profileRow.agency_id)
-        .maybeSingle();
-
-      if (!mounted) return;
-
-      // Mirrors app/dashboard/page.tsx's own permission derivation exactly
-      // (userRoleConfig lookup + fallbacks) — see that file if this ever
-      // needs to change, and change both together.
-      const roleConfig = (agencyRow?.custom_roles as { id: string; permissions?: Record<string, boolean> }[] | null)?.find(
-        (r) => r.id === profileRow.role
-      );
-      const isOwnerOrManager = isManagerLevelRole(profileRow.role);
-      const isOwnerLevel = isOwnerLevelRole(profileRow.role);
-      const canViewAgencyDash = roleConfig?.permissions?.view_agency_dash ?? isOwnerOrManager;
-      const canViewTeamComm = roleConfig?.permissions?.view_team_comm ?? isOwnerOrManager;
-      const canManageSettings = roleConfig?.permissions?.manage_settings ?? isOwnerLevel;
-
-      // Owners land on their Agent Dashboard master command center by
-      // default; everyone else (Team Members, Managers, etc.) lands on the
-      // Team Scoreboard, same as before this tab existed.
-      if (!hasSetDefaultTabRef.current) {
-        hasSetDefaultTabRef.current = true;
-        setActiveTab(profileRow.role === "owner" ? "agent" : "dashboard");
-      }
-
-      setShellData({
-        user: {
-          firstName: profileRow.first_name || "",
-          lastName: profileRow.last_name || "",
-          email: user.email || "",
-          agencyName: (agencyRow?.name as string) || "",
-        },
-        permissions: {
-          canViewAgencyDash,
-          canViewTeamComm,
-          canManageSettings,
-          canViewWeeklyRank: roleConfig?.permissions?.view_weekly_rank ?? canViewAgencyDash,
-          canViewAgencyMtd: roleConfig?.permissions?.view_agency_mtd ?? canViewAgencyDash,
-          canViewLifeModule: roleConfig?.permissions?.view_life_module ?? canViewAgencyDash,
-          canViewReports: roleConfig?.permissions?.view_reports ?? isOwnerOrManager,
-          // Strictly the literal agency owner — no custom_roles override, no
-          // 'admin' inclusion. See DashboardSidebarPermissions.isOwner and
-          // components/AgentDashboardTab.tsx's header comment for why.
-          isOwner: profileRow.role === "owner",
-        },
-      });
+      if (mounted) await loadShellData();
     })();
-
     return () => {
       mounted = false;
     };
-  }, [isShellRoute]);
+  }, [isShellRoute, loadShellData]);
 
   // Re-resolve shell data on sign-out/sign-in so this doesn't keep showing a
   // stale agency/name (or the chrome at all) after app/dashboard/page.tsx's
@@ -152,7 +160,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => subscription.unsubscribe();
   }, []);
 
-  const contextValue = useMemo(() => ({ activeTab, setActiveTab }), [activeTab]);
+  const contextValue = useMemo(
+    () => ({ activeTab, setActiveTab, refreshShellUser: loadShellData }),
+    [activeTab, loadShellData]
+  );
 
   if (!isShellRoute || !shellData) {
     return <DashboardShellContext.Provider value={contextValue}>{children}</DashboardShellContext.Provider>;

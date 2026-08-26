@@ -26,6 +26,7 @@ import { getWorkingDaysRemainingInYear } from "../../../utils/pacing";
 import { sumOfficeBookSizes, totalBookPremiumOf } from "../../../utils/officeFields";
 import { resolveOfficeRates, calculateEnterpriseRenewalRevenue, calculateNewBusinessRevenue } from "../../../utils/revenueEngine";
 import InfoTooltip from "../../../components/ui/InfoTooltip";
+import FormattedNumberInput from "../../../components/ui/FormattedNumberInput";
 
 // =============================================================================
 // Protected route: /dashboard/cockpit — the "Executive Cockpit" What-If Engine.
@@ -1099,17 +1100,15 @@ export default function CockpitPage() {
               Target Annual Gross Revenue
               <InfoTooltip text="The total agency revenue (commission dollars, not premium) you want to hit by year-end. Everything below - the sliders, required apps, and daily quote targets - reverse-engineers from this one number." />
             </label>
-            <div className="relative mb-5">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
-              <input
-                type="number"
-                step="1000"
-                value={targetRevenueInput}
-                onChange={(e) => {
-                  setTargetRevenueInput(e.target.value);
-                  distributeSliders(num(e.target.value, model.projectedAnnualRevenue));
+            <div className="mb-5">
+              <FormattedNumberInput
+                value={targetRevenueInput === "" ? "" : Number(targetRevenueInput)}
+                onChange={(v) => {
+                  const nextStr = v === '' ? '' : String(v);
+                  setTargetRevenueInput(nextStr);
+                  distributeSliders(num(nextStr, model.projectedAnnualRevenue));
                 }}
-                className="w-full pl-8 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-lg font-bold text-white outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-lg font-bold text-white outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 

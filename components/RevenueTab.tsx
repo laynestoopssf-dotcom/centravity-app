@@ -1,6 +1,7 @@
 import React from "react";
 import { DollarSign, RefreshCw, TrendingUp, Target } from "lucide-react";
 import InfoTooltip from "./ui/InfoTooltip";
+import { formatDollars } from "../utils/formatNumber";
 
 export default function RevenueTab({ revenueOverviewData, agencySettings, primaryOffice, customTargets }: any) {
   const money = (n: any) => {
@@ -160,7 +161,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
                           <div className="w-full bg-gray-100 h-2 rounded-full mb-3 overflow-hidden">
                             <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000" style={{width: `${(locData.fsVc / 2.0) * 100}%`}}></div>
                           </div>
-                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: ${rate('vc_min_fs_comm')}</span><span className="text-gray-900">YTD: ${Math.round(locData.ytdFsComm).toLocaleString()}</span><span>Max: ${rate('vc_max_fs_comm', 10000)}</span></div>
+                          <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-4"><span>Min: {formatDollars(rate('vc_min_fs_comm'))}</span><span className="text-gray-900">YTD: {formatDollars(locData.ytdFsComm)}</span><span>Max: {formatDollars(rate('vc_max_fs_comm', 10000))}</span></div>
                         </div>
                         <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
                           <span className="text-[10px] font-bold text-emerald-700 uppercase">Pacing: ${Math.round(locData.runRateFsComm).toLocaleString()} <span className="font-black opacity-70">(+{locData.runRateFsVc.toFixed(2)}%)</span></span>

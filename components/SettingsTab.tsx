@@ -7,6 +7,8 @@ import { createTeamInvite, resendTeamInviteEmail } from '../app/actions/teamInvi
 import type { TeamInviteRole } from '../app/actions/teamInvites.types';
 import { CUSTOM_TARGET_METRICS, CUSTOM_TARGET_PERIODS, getMetricDef, type CustomTargetRow } from '../utils/customTargets';
 import InfoTooltip from './ui/InfoTooltip';
+import FormattedNumberInput from './ui/FormattedNumberInput';
+import ProfileAvatar from './ui/ProfileAvatar';
 
 // Mirrors Stripe's own Subscription.status enum (see
 // app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
@@ -636,7 +638,7 @@ export default function SettingsTab({
                      <option value="19:00">7:00 PM</option>
                      <option value="20:00">8:00 PM</option>
                    </select>
-                   <p className="text-[10px] text-gray-400 mt-1">When the automated daily production email fires to your team.</p>
+                   <p className="text-[10px] text-gray-400 mt-1">When the automated daily production brief email fires to you (the agency owner), summarizing the whole team's activity for the day.</p>
                  </div>
                  <div>
                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Auto-Archive Stale Quotes</label>
@@ -666,11 +668,10 @@ export default function SettingsTab({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                  <div>
                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Confetti Threshold ($)</label>
-                   <input 
-                     type="number" 
-                     value={agencySettings.celebration_threshold || 0} 
-                     onChange={e => setAgencySettings({...agencySettings, celebration_threshold: Number(e.target.value)})} 
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900" 
+                   <FormattedNumberInput
+                     value={agencySettings.celebration_threshold || 0}
+                     onChange={v => setAgencySettings({...agencySettings, celebration_threshold: v === '' ? 0 : v})}
+                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900"
                    />
                    <p className="text-[10px] text-gray-400 mt-1">Minimum premium required to trigger the "Policy Bound" floor celebration popup.</p>
                  </div>
@@ -877,32 +878,32 @@ export default function SettingsTab({
                    <div className="grid grid-cols-4 gap-4 items-center">
                       <div className="font-bold text-white text-sm">Level 1</div>
                       <div><input type="number" placeholder="0" value={agencySettings.travel_lvl1_apps || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl1_apps: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_lvl1_life_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl1_life_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_lvl1_total_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl1_total_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_lvl1_life_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_lvl1_life_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_lvl1_total_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_lvl1_total_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
                    </div>
                    <div className="grid grid-cols-4 gap-4 items-center">
                       <div className="font-bold text-white text-sm">Level 2</div>
                       <div><input type="number" placeholder="0" value={agencySettings.travel_lvl2_apps || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl2_apps: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_lvl2_life_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl2_life_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_lvl2_total_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl2_total_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_lvl2_life_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_lvl2_life_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_lvl2_total_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_lvl2_total_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
                    </div>
                    <div className="grid grid-cols-4 gap-4 items-center">
                       <div className="font-bold text-white text-sm">Level 3</div>
                       <div><input type="number" placeholder="0" value={agencySettings.travel_lvl3_apps || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl3_apps: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_lvl3_life_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl3_life_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_lvl3_total_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_lvl3_total_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_lvl3_life_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_lvl3_life_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_lvl3_total_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_lvl3_total_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
                    </div>
                    <div className="grid grid-cols-4 gap-4 items-center">
                       <div className="font-bold text-amber-400 text-sm">Exotic</div>
                       <div><input type="number" placeholder="0" value={agencySettings.travel_exotic_apps || ''} onChange={e => setAgencySettings({...agencySettings, travel_exotic_apps: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_exotic_life_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_exotic_life_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_exotic_total_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_exotic_total_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_exotic_life_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_exotic_life_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_exotic_total_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_exotic_total_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
                    </div>
                    <div className="grid grid-cols-4 gap-4 items-center">
                       <div className="font-bold text-amber-400 text-sm">Exotic Plus</div>
                       <div><input type="number" placeholder="0" value={agencySettings.travel_exotic_plus_apps || ''} onChange={e => setAgencySettings({...agencySettings, travel_exotic_plus_apps: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_exotic_plus_life_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_exotic_plus_life_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
-                      <div><input type="number" placeholder="0" value={agencySettings.travel_exotic_plus_total_cred || ''} onChange={e => setAgencySettings({...agencySettings, travel_exotic_plus_total_cred: Number(e.target.value)})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_exotic_plus_life_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_exotic_plus_life_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
+                      <div><FormattedNumberInput placeholder="$0" value={agencySettings.travel_exotic_plus_total_cred || ''} onChange={v => setAgencySettings({...agencySettings, travel_exotic_plus_total_cred: v === '' ? 0 : v})} className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white text-sm font-bold outline-none focus:border-blue-500" /></div>
                    </div>
                 </div>
              </div>
@@ -1072,11 +1073,10 @@ export default function SettingsTab({
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Target Value</label>
-                    <input
-                      type="number"
-                      min="0"
+                    <FormattedNumberInput
+                      prefix={getMetricDef(editingCustomTarget.metric_type || '')?.aggregate === 'premium_sum' ? '$' : ''}
                       value={editingCustomTarget.target_value ?? 0}
-                      onChange={e => setEditingCustomTarget({ ...editingCustomTarget, target_value: Number(e.target.value) })}
+                      onChange={v => setEditingCustomTarget({ ...editingCustomTarget, target_value: v === '' ? 0 : v })}
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900"
                     />
                   </div>
@@ -1151,13 +1151,13 @@ export default function SettingsTab({
                             className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                           <div>
-                            <input
-                              type="number"
+                            <FormattedNumberInput
                               placeholder="Threshold"
+                              prefix={getMetricDef(editingCustomTarget.metric_type || '')?.aggregate === 'premium_sum' ? '$' : ''}
                               value={tier.threshold_metric ?? 0}
-                              onChange={e => {
+                              onChange={v => {
                                 const tiers = [...(editingCustomTarget.tiers || [])];
-                                tiers[idx] = { ...tiers[idx], threshold_metric: Number(e.target.value) };
+                                tiers[idx] = { ...tiers[idx], threshold_metric: v === '' ? 0 : v };
                                 setEditingCustomTarget({ ...editingCustomTarget, tiers });
                               }}
                               className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
@@ -1165,13 +1165,13 @@ export default function SettingsTab({
                             <p className="text-[9px] text-gray-400 mt-0.5">Threshold to hit</p>
                           </div>
                           <div>
-                            <input
-                              type="number"
+                            <FormattedNumberInput
                               placeholder="Reward credits"
+                              prefix=""
                               value={tier.reward_credit_value ?? 0}
-                              onChange={e => {
+                              onChange={v => {
                                 const tiers = [...(editingCustomTarget.tiers || [])];
-                                tiers[idx] = { ...tiers[idx], reward_credit_value: Number(e.target.value) };
+                                tiers[idx] = { ...tiers[idx], reward_credit_value: v === '' ? 0 : v };
                                 setEditingCustomTarget({ ...editingCustomTarget, tiers });
                               }}
                               className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
@@ -1320,7 +1320,7 @@ export default function SettingsTab({
                        {/* PRODUCTION TARGETS */}
                        <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">1. Annual Production Targets</h4>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Annual Target Premium ($)</label><input type="number" value={localOfficeData[office.id]?.annual_target_premium || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_premium', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" /></div>
+                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Annual Target Premium ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.annual_target_premium || 0} onChange={v => updateLocalOffice(office.id, 'annual_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" /></div>
                           <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Annual Target Life Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_life_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_life_apps', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" /></div>
                        </div>
                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -1339,11 +1339,11 @@ export default function SettingsTab({
                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Health Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_health ?? 20} onChange={e => updateLocalOffice(office.id, 'base_comm_health', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
                        </div>
                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Auto Book ($)</label><input type="number" value={localOfficeData[office.id]?.book_size_auto || 0} onChange={e => updateLocalOffice(office.id, 'book_size_auto', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Fire Book ($)</label><input type="number" value={localOfficeData[office.id]?.book_size_fire || 0} onChange={e => updateLocalOffice(office.id, 'book_size_fire', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Comm. Book ($)</label><input type="number" value={localOfficeData[office.id]?.book_size_commercial || 0} onChange={e => updateLocalOffice(office.id, 'book_size_commercial', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Life Book ($)</label><input type="number" value={localOfficeData[office.id]?.book_size_life || 0} onChange={e => updateLocalOffice(office.id, 'book_size_life', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Health Book ($)</label><input type="number" value={localOfficeData[office.id]?.book_size_health || 0} onChange={e => updateLocalOffice(office.id, 'book_size_health', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Auto Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_auto || 0} onChange={v => updateLocalOffice(office.id, 'book_size_auto', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Fire Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_fire || 0} onChange={v => updateLocalOffice(office.id, 'book_size_fire', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Comm. Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_commercial || 0} onChange={v => updateLocalOffice(office.id, 'book_size_commercial', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Life Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_life || 0} onChange={v => updateLocalOffice(office.id, 'book_size_life', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Health Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_health || 0} onChange={v => updateLocalOffice(office.id, 'book_size_health', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
                        </div>
 
                        {/* PRIOR PIF & LAPSE RATES */}
@@ -1395,8 +1395,8 @@ export default function SettingsTab({
                               <InfoTooltip text="The Min/Max dollar range of Life + Health (+ IPS) commission that maps to the 0-2% Financial Services portion of the Variable Compensation rate above." />
                             </label>
                             <div className="flex gap-4">
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Min</label><input type="number" value={localOfficeData[office.id]?.vc_min_fs_comm || 0} onChange={e => updateLocalOffice(office.id, 'vc_min_fs_comm', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Max</label><input type="number" value={localOfficeData[office.id]?.vc_max_fs_comm ?? 10000} onChange={e => updateLocalOffice(office.id, 'vc_max_fs_comm', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Min</label><FormattedNumberInput value={localOfficeData[office.id]?.vc_min_fs_comm || 0} onChange={v => updateLocalOffice(office.id, 'vc_min_fs_comm', v === '' ? 0 : v)} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Max</label><FormattedNumberInput value={localOfficeData[office.id]?.vc_max_fs_comm ?? 10000} onChange={v => updateLocalOffice(office.id, 'vc_max_fs_comm', v === '' ? 0 : v)} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
                             </div>
                          </div>
                        </div>
@@ -1436,11 +1436,11 @@ export default function SettingsTab({
                             </div>
                             <div>
                               <label className="block text-[10px] font-bold text-indigo-800 uppercase tracking-wider mb-2">Goal Target</label>
-                              <input 
-                                type="number" 
-                                value={localOfficeData[office.id]?.team_bonus_target || 0} 
-                                onChange={e => updateLocalOffice(office.id, 'team_bonus_target', Number(e.target.value))} 
-                                className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900" 
+                              <FormattedNumberInput
+                                prefix={localOfficeData[office.id]?.team_bonus_metric === 'total_premium' ? '$' : ''}
+                                value={localOfficeData[office.id]?.team_bonus_target || 0}
+                                onChange={v => updateLocalOffice(office.id, 'team_bonus_target', v === '' ? 0 : v)}
+                                className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900"
                               />
                             </div>
                             <div>
@@ -1556,9 +1556,12 @@ export default function SettingsTab({
                   className="text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-blue-300 hover:shadow-md transition-all"
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-bold text-gray-900 text-base">{member.first_name} {member.last_name}</h3>
-                      <span className={`inline-block mt-1.5 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${ROLE_BADGE_CLASSES[member.role] || 'bg-gray-100 text-gray-700'}`}>{ROLE_LABELS[member.role] || member.role}</span>
+                    <div className="flex items-center gap-3">
+                      <ProfileAvatar src={member.avatar_url} name={`${member.first_name} ${member.last_name}`} size="md" />
+                      <div>
+                        <h3 className="font-bold text-gray-900 text-base">{member.first_name} {member.last_name}</h3>
+                        <span className={`inline-block mt-1.5 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${ROLE_BADGE_CLASSES[member.role] || 'bg-gray-100 text-gray-700'}`}>{ROLE_LABELS[member.role] || member.role}</span>
+                      </div>
                     </div>
                     {member.on_vacation && <span title="On Vacation / OOO" className="text-indigo-500 shrink-0"><Plane size={16}/></span>}
                   </div>
@@ -1784,8 +1787,8 @@ export default function SettingsTab({
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2">Monthly Goals & Pay</h4>
                   <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Total Apps</label><input type="number" value={member.monthly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Total Prem ($)</label><input type="number" value={member.monthly_target_premium ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_premium', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><input type="number" value={member.monthly_base_salary ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_base_salary', Number(e.target.value))} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Total Prem ($)</label><FormattedNumberInput value={member.monthly_target_premium ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><FormattedNumberInput value={member.monthly_base_salary ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_base_salary', v === '' ? 0 : v)} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
                 </div>
 
                 <div className="space-y-4">
@@ -1798,7 +1801,7 @@ export default function SettingsTab({
                       actually needed — see MyPerformanceTab's monthlyAppTarget calc. */}
                   <h4 className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-2">Life / Annual</h4>
                   <div><label className="block text-[10px] font-bold text-red-600 uppercase mb-1">Yr Life Apps</label><input type="number" value={member.annual_target_life_apps ?? 0} onChange={e => updateTeamMember(member.id, 'annual_target_life_apps', Number(e.target.value))} className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-red-400" /></div>
-                  <div><label className="block text-[10px] font-bold text-red-600 uppercase mb-1">Yr Life Prem ($)</label><input type="number" value={member.annual_target_life_premium ?? 0} onChange={e => updateTeamMember(member.id, 'annual_target_life_premium', Number(e.target.value))} className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-red-400" /></div>
+                  <div><label className="block text-[10px] font-bold text-red-600 uppercase mb-1">Yr Life Prem ($)</label><FormattedNumberInput value={member.annual_target_life_premium ?? 0} onChange={v => updateTeamMember(member.id, 'annual_target_life_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-red-400" /></div>
                   <p className="text-[10px] text-gray-400 leading-snug pt-1">Monthly pacing is calculated automatically as Annual ÷ 12 wherever needed — no separate monthly input required.</p>
                 </div>
               </div>
@@ -1917,7 +1920,7 @@ export default function SettingsTab({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Required Premium ($)</label>
-                    <input type="number" value={editingPlan.rules?.thresholds?.required_premium_to_unlock || 0} onChange={e => updateRule('thresholds', 'required_premium_to_unlock', Number(e.target.value))} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" />
+                    <FormattedNumberInput value={editingPlan.rules?.thresholds?.required_premium_to_unlock || 0} onChange={v => updateRule('thresholds', 'required_premium_to_unlock', v === '' ? 0 : v)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Required Apps (Total)</label>
@@ -1955,7 +1958,12 @@ export default function SettingsTab({
                         <option value="total_apps">Total Apps</option>
                       </select>
                       <span className="text-xs font-bold text-gray-400">≥</span>
-                      <input type="number" value={acc.threshold} onChange={e => updateAccelerator(idx, 'threshold', Number(e.target.value))} className="w-24 p-2 border border-gray-200 rounded-md text-xs font-bold" />
+                      <FormattedNumberInput
+                        prefix={['life_premium', 'pnc_premium', 'total_premium'].includes(acc.metric) ? '$' : ''}
+                        value={acc.threshold}
+                        onChange={v => updateAccelerator(idx, 'threshold', v === '' ? 0 : v)}
+                        className="w-24 p-2 border border-gray-200 rounded-md text-xs font-bold"
+                      />
                       <span className="text-xs font-bold text-gray-400">then</span>
                       
                       <select value={acc.reward_type || 'rate_bump'} onChange={e => updateAccelerator(idx, 'reward_type', e.target.value)} className="p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700 outline-none">
@@ -1966,10 +1974,11 @@ export default function SettingsTab({
                       {acc.reward_type === 'flat_bonus' ? (
                         <>
                           <span className="text-xs font-bold text-gray-400">of</span>
-                          <div className="relative">
-                            <span className="absolute left-2 top-2 text-xs font-bold text-emerald-700">$</span>
-                            <input type="number" value={acc.bonus_amount || 0} onChange={e => updateAccelerator(idx, 'bonus_amount', Number(e.target.value))} className="w-24 pl-5 pr-2 p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700" />
-                          </div>
+                          <FormattedNumberInput
+                            value={acc.bonus_amount || 0}
+                            onChange={v => updateAccelerator(idx, 'bonus_amount', v === '' ? 0 : v)}
+                            className="w-24 p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700"
+                          />
                         </>
                       ) : (
                         <>
@@ -2009,9 +2018,8 @@ export default function SettingsTab({
                       <div className="flex-1">
                         <input type="text" placeholder="Rule Name (e.g. Google Review)" value={bonus.name} onChange={e => updateCustomBonus(idx, 'name', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-sm font-bold text-gray-900" />
                       </div>
-                      <div className="relative w-32">
-                        <span className="absolute left-3 top-2.5 text-gray-500 font-bold">$</span>
-                        <input type="number" placeholder="0" value={bonus.amount} onChange={e => updateCustomBonus(idx, 'amount', Number(e.target.value))} className="w-full pl-7 p-2 border border-gray-300 rounded-md text-sm font-black text-emerald-700" />
+                      <div className="w-32">
+                        <FormattedNumberInput placeholder="$0" value={bonus.amount} onChange={v => updateCustomBonus(idx, 'amount', v === '' ? 0 : v)} className="w-full p-2 border border-gray-300 rounded-md text-sm font-black text-emerald-700" />
                       </div>
                       <button onClick={() => removeCustomBonus(idx)} className="text-red-400 hover:text-red-600 p-2"><X size={16}/></button>
                     </div>
@@ -2352,9 +2360,14 @@ export default function SettingsTab({
                               <div className="px-2">
                                 <input type="number" min="0" placeholder="0" value={bulkData[line]?.issued || ""} onChange={e => updateBulkData(line, 'issued', e.target.value)} className="w-full p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold text-center outline-none focus:border-emerald-500 text-emerald-900 placeholder-emerald-300" />
                               </div>
-                              <div className="px-2 relative">
-                                <span className="absolute left-4 top-2.5 text-gray-400 font-bold">$</span>
-                                <input type="number" min="0" step="0.01" placeholder="0.00" value={bulkData[line]?.prem || ""} onChange={e => updateBulkData(line, 'prem', e.target.value)} className="w-full pl-6 p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-right outline-none focus:border-purple-500" />
+                              <div className="px-2">
+                                <FormattedNumberInput
+                                  allowDecimal
+                                  placeholder="$0.00"
+                                  value={bulkData[line]?.prem === "" || bulkData[line]?.prem == null ? "" : Number(bulkData[line].prem)}
+                                  onChange={v => updateBulkData(line, 'prem', v === '' ? '' : String(v))}
+                                  className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-right outline-none focus:border-purple-500"
+                                />
                               </div>
                            </div>
                          );

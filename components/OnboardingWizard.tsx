@@ -19,6 +19,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { supabase } from "../utils/supabase";
+import FormattedNumberInput from "./ui/FormattedNumberInput";
 import {
   saveStep1Foundation,
   saveStep2Roster,
@@ -259,50 +260,6 @@ const initialFormData: OnboardingFormData = {
 // string while focused, so typing isn't fighting comma insertion moving the caret around.
 // Non-digit paste noise ($, commas, spaces) is stripped on every change so pasting an
 // already-formatted number ("$10,000") still works.
-function FormattedNumberInput({
-  value,
-  onChange,
-  placeholder,
-  className,
-}: {
-  value: number | "";
-  onChange: (value: number | "") => void;
-  placeholder?: string;
-  className?: string;
-}) {
-  const [isFocused, setIsFocused] = useState(false);
-  const [rawText, setRawText] = useState<string>(value === "" ? "" : String(value));
-
-  // Keeps the edit buffer in sync with externally-driven changes (e.g. hydrating saved
-  // onboarding state) as long as the user isn't actively typing in this exact field.
-  useEffect(() => {
-    if (!isFocused) setRawText(value === "" ? "" : String(value));
-  }, [value, isFocused]);
-
-  const displayValue = isFocused
-    ? rawText
-    : value === ""
-      ? ""
-      : Number(value).toLocaleString("en-US");
-
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={displayValue}
-      placeholder={placeholder}
-      className={className}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      onChange={(e) => {
-        const cleaned = e.target.value.replace(/[^0-9.]/g, "");
-        setRawText(cleaned);
-        onChange(cleaned === "" ? "" : Number(cleaned));
-      }}
-    />
-  );
-}
-
 const STEPS = [
   { id: 1, label: "Agency Setup", icon: Building2 },
   { id: 2, label: "The Roster", icon: Users },
@@ -1237,6 +1194,7 @@ export default function OnboardingWizard({
                             value={formData[line.count]}
                             onChange={(v) => updateBaselineField(line.count, v)}
                             placeholder="0"
+                            prefix=""
                             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                           />
                         </div>

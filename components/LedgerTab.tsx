@@ -2,10 +2,9 @@ import React, { useState } from "react";
 import { Filter, ShieldCheck, Trash2, FileText, PhoneCall, RefreshCw, RefreshCcw, Pencil, X } from "lucide-react";
 import { isManagerLevelRole } from "../utils/roles";
 import { hashIdentifier } from "../utils/crypto";
-import { cacheIdentifier, getCachedIdentifier } from "../utils/identifierCache";
-
-/** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
-const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || "—";
+import { cacheIdentifier } from "../utils/identifierCache";
+import IdentifierChip from "./ui/IdentifierChip";
+import FormattedNumberInput from "./ui/FormattedNumberInput";
 
 // Converts an ISO timestamp into the "YYYY-MM-DDTHH:mm" shape <input type="datetime-local">
 // expects, in the browser's local timezone (so the value the user sees/edits matches what
@@ -39,8 +38,13 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   // row's own id (most specific) and, if this row already carries a hash, that hash too (covers a
   // row whose identifier was originally cached under a different row's id - see
   // utils/identifierCache.ts's byHash store for why that happens).
-  const openEditResolution = (pol: any) => setEditingEntry({ kind: "resolution", id: pol.id, identifier: getCachedIdentifier(pol.id, pol.client_identifier_hash) || "", status: pol.status === 'positive' ? 'positive' : 'negative', loggedAt: pol.logged_at });
-  const openEditPolicy = (pol: any) => setEditingEntry({ kind: "policyPremium", id: pol.id, identifier: getCachedIdentifier(pol.id, pol.client_identifier_hash) || "", productLine: pol.product_line || "", premiumAmount: Number(pol.premium_amount) || 0, paymentCycle: pol.payment_cycle || "monthly", loggedAt: pol.logged_at });
+  // Deliberately NOT prefilled from the cache anymore - `saveEdit` below already treats a blank
+  // field as "didn't touch it" (only a non-empty value gets hashed/saved/re-cached), so leaving
+  // this blank costs nothing functionally and actually matches what the placeholder text has
+  // always claimed ("the current (hidden) identifier") instead of contradicting it by quietly
+  // populating the real plaintext into the form every time.
+  const openEditResolution = (pol: any) => setEditingEntry({ kind: "resolution", id: pol.id, identifier: "", status: pol.status === 'positive' ? 'positive' : 'negative', loggedAt: pol.logged_at });
+  const openEditPolicy = (pol: any) => setEditingEntry({ kind: "policyPremium", id: pol.id, identifier: "", productLine: pol.product_line || "", premiumAmount: Number(pol.premium_amount) || 0, paymentCycle: pol.payment_cycle || "monthly", loggedAt: pol.logged_at });
 
   const saveEdit = async () => {
     if (!editingEntry) return;
@@ -196,7 +200,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                      serviceResolutions.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-amber-50/50 transition-colors">
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="px-6 py-4">
                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'positive' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                              {pol.status.toUpperCase()}
@@ -226,7 +230,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                      servicePolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold 
@@ -268,7 +272,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>{pol.status.toUpperCase()}</span></td>
                          <td className="px-6 py-4 text-right">
@@ -296,7 +300,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                        <tr key={pol.id} className="hover:bg-purple-50/50 transition-colors">
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-purple-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4 text-right">
                            <button onClick={() => openEditPolicy(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
@@ -329,7 +333,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                        <tr key={pol.id} className="hover:bg-amber-50/50 transition-colors">
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700">{displayIdentifier(pol.id, pol.client_identifier_hash)}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="px-6 py-4">
                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'positive' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                              {pol.status.toUpperCase()}
@@ -412,7 +416,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Premium Amount</label>
-                      <div className="relative"><span className="absolute left-3 top-2.5 text-gray-500 font-medium">$</span><input type="number" step="0.01" value={editingEntry.premiumAmount} onChange={e => setEditingEntry({ ...editingEntry, premiumAmount: Number(e.target.value) })} className="w-full pl-7 p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" /></div>
+                      <FormattedNumberInput allowDecimal value={editingEntry.premiumAmount} onChange={v => setEditingEntry({ ...editingEntry, premiumAmount: v === '' ? 0 : v })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Renewal Cycle</label>

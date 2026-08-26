@@ -41,11 +41,19 @@ export type DashboardTabId =
   | "ledger"
   | "reports"
   | "settings"
-  | "feedback";
+  | "feedback"
+  | "profile";
 
 export interface DashboardShellContextValue {
   activeTab: DashboardTabId;
   setActiveTab: (tab: DashboardTabId) => void;
+  // Lets a child of this layout (namely MyProfileTab, rendered inside
+  // app/dashboard/page.tsx) ask the layout to re-fetch the header's name/avatar right
+  // after a save — the alternative (a full page reload) would also blow away whatever
+  // tab the user was on. Optional because routes that mount this context without ever
+  // rendering the shell chrome (see app/dashboard/layout.tsx's isShellRoute check)
+  // have nothing meaningful to refresh.
+  refreshShellUser?: () => void;
 }
 
 export const DashboardShellContext = createContext<DashboardShellContextValue | null>(null);
