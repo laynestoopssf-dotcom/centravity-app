@@ -10,7 +10,8 @@
     "seed:demo": "tsx --env-file=.env.local scripts/seed_demo_agency.ts",
     "backfill:demo-lines": "tsx --env-file=.env.local scripts/backfill_demo_product_lines.ts",
     "backfill:demo-identifiers": "tsx --env-file=.env.local scripts/backfill_demo_identifiers.ts",
-    "normalize:demo-metrics": "tsx --env-file=.env.local scripts/normalize_demo_metrics.ts"
+    "normalize:demo-metrics": "tsx --env-file=.env.local scripts/normalize_demo_metrics.ts",
+    "boost:demo-volume": "tsx --env-file=.env.local scripts/boost_demo_volume.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.47",
