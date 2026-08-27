@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:demo": "tsx --env-file=.env.local scripts/seed_demo_agency.ts"
+    "seed:demo": "tsx --env-file=.env.local scripts/seed_demo_agency.ts",
+    "backfill:demo-lines": "tsx --env-file=.env.local scripts/backfill_demo_product_lines.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.47",

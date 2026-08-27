@@ -36,6 +36,7 @@ import {
   generateDayOfProduction,
   generateOpenPipeline,
 } from "../utils/demoSimulator";
+import { DEFAULT_STATE_FARM_PRODUCT_LINES } from "../utils/defaultProductLines";
 
 // -----------------------------------------------------------------------------
 // Env / admin client
@@ -194,6 +195,13 @@ const AGENCY_FIELDS = {
   production_days_per_week: 5,
   target_vc_active: true,
   target_travel_active: true,
+
+  // Same catalog real new agencies get on first creation (see
+  // app/actions/onboarding.ts's saveStep1Foundation + utils/defaultProductLines.ts) -
+  // without this, the demo's Scoreboard logging dropdowns fell back to the generic
+  // 5-line placeholder set instead of showing the real State Farm sub-lines a
+  // prospect touring the demo would actually expect to see.
+  custom_product_lines: DEFAULT_STATE_FARM_PRODUCT_LINES,
 
   current_vc_rate: 1.8,
   ytd_lapse_cancel_rate: 10,
