@@ -7,7 +7,8 @@ import {
   Target,
   DollarSign,
   Percent,
-  Gauge,
+  Activity,
+  CalendarRange,
   NotebookPen,
   History,
   Loader2,
@@ -35,8 +36,12 @@ import SparringRing from "./coaching/SparringRing";
 //
 // Three inner sections:
 //   1. 1-on-1 Snapshot  — MANAGER-LEVEL ONLY (owner/admin/manager). Producer
-//      picker + live YTD/AEC/lapse/quoting numbers + Trend Alerts (Feature 4)
-//      + the notes/commitments form that writes coaching_sessions.
+//      picker + this producer's own controllable numbers only (YTD premium by
+//      line, daily/weekly activity vs. their targets, individual close rate,
+//      pipeline potential — see utils/coachingMetrics.ts's header comment for
+//      why office/agency-blended AEC & lapse rate were deliberately dropped)
+//      + Trend Alerts (Feature 4) + the notes/commitments form that writes
+//      coaching_sessions.
 //   2. Deal Autopsies   — everyone. Producers fill in objections on deals
 //      they tagged "Send to Coaching" from the Active Pipeline; managers get
 //      a read-only feed of the whole team's. See coaching/DealAutopsyPanel.tsx.
@@ -55,7 +60,7 @@ interface CoachingSession {
   created_at: string;
 }
 
-export default function CoachingTab({ profile, team, offices, agencySettings, pipeline, showToast }: any) {
+export default function CoachingTab({ profile, team, agencySettings, pipeline, showToast }: any) {
   const isManagerLevel = isManagerLevelRole(profile?.role);
   const [innerTab, setInnerTab] = useState<InnerTab>(isManagerLevel ? "snapshot" : "autopsies");
 
@@ -110,16 +115,44 @@ export default function CoachingTab({ profile, team, offices, agencySettings, pi
     fetchSessions();
   }, [fetchSessions]);
 
-  const office = useMemo(
-    () => (offices || []).find((o: any) => o.id === selectedProducer?.office_id) || null,
-    [offices, selectedProducer]
-  );
-
   const customProductLines = agencySettings?.custom_product_lines || [];
 
+  // Individual daily/weekly activity (touchpoints + quotes) for the Daily/Weekly Activity
+  // cards below - fetched fresh per selected producer, same self-contained pattern as
+  // fetchSessions above, since this tab doesn't otherwise receive `activities` as a prop.
+  // Scoped to "since the start of this week" so a single fetch covers both the "today" and
+  // "this week" buckets computeCoachingSnapshot derives from it.
+  const [activities, setActivities] = useState<any[]>([]);
+  const fetchActivities = useCallback(async () => {
+    if (!selectedProducerId || !profile?.agency_id) return;
+    const now = new Date();
+    const day = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + (day === 0 ? -6 : 1 - day));
+    monday.setHours(0, 0, 0, 0);
+    const { data, error } = await supabase
+      .from("activities")
+      .select("activity_type, logged_at, user_id")
+      .eq("agency_id", profile.agency_id)
+      .eq("user_id", selectedProducerId)
+      .gte("logged_at", monday.toISOString())
+      .limit(2000);
+
+    if (error) {
+      console.error("[CoachingTab] fetchActivities failed", error);
+      setActivities([]);
+      return;
+    }
+    setActivities((data as any) || []);
+  }, [selectedProducerId, profile?.agency_id]);
+
+  useEffect(() => {
+    fetchActivities();
+  }, [fetchActivities]);
+
   const snapshot = useMemo(
-    () => (selectedProducer ? computeCoachingSnapshot(selectedProducer, pipeline || [], office, agencySettings, customProductLines) : null),
-    [selectedProducer, pipeline, office, agencySettings, customProductLines]
+    () => (selectedProducer ? computeCoachingSnapshot(selectedProducer, pipeline || [], activities, customProductLines) : null),
+    [selectedProducer, pipeline, activities, customProductLines]
   );
 
   const alerts = useMemo(
@@ -243,40 +276,79 @@ export default function CoachingTab({ profile, team, offices, agencySettings, pi
           )}
 
           {snapshot && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-4">
+              {/* Individual YTD Premium — split by product line, no office/agency blend */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                  <DollarSign size={14} className="text-emerald-500" /> YTD Premium
-                </p>
-                <p className="text-2xl font-black text-gray-900">
-                  ${Math.round(snapshot.ytdPremium).toLocaleString()}
-                </p>
-                <p className="text-[10px] font-semibold text-gray-400 mt-1">{snapshot.ytdApps} bound apps</p>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <DollarSign size={14} className="text-emerald-500" /> Individual YTD Premium
+                  </p>
+                  <p className="text-sm font-black text-gray-900">
+                    ${Math.round(snapshot.ytdPremiumTotal).toLocaleString()}{" "}
+                    <span className="text-[10px] font-semibold text-gray-400">({snapshot.ytdAppsTotal} bound apps)</span>
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-blue-50 rounded-xl p-3">
+                    <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Auto</p>
+                    <p className="text-lg font-black text-blue-900">${Math.round(snapshot.ytdPremiumByLine.auto).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-orange-50 rounded-xl p-3">
+                    <p className="text-[9px] font-bold text-orange-500 uppercase tracking-wider">Fire</p>
+                    <p className="text-lg font-black text-orange-900">${Math.round(snapshot.ytdPremiumByLine.fire).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3">
+                    <p className="text-[9px] font-bold text-purple-500 uppercase tracking-wider">Life</p>
+                    <p className="text-lg font-black text-purple-900">${Math.round(snapshot.ytdPremiumByLine.life).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-teal-50 rounded-xl p-3">
+                    <p className="text-[9px] font-bold text-teal-500 uppercase tracking-wider">Health</p>
+                    <p className="text-lg font-black text-teal-900">${Math.round(snapshot.ytdPremiumByLine.health).toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                  <Percent size={14} className="text-indigo-500" /> AEC Pacing
-                </p>
-                <p className="text-2xl font-black text-gray-900">{snapshot.aecRate}%</p>
-                <p className="text-[10px] font-semibold text-gray-400 mt-1">
-                  Contributed {snapshot.aecContributionApps} Auto/Fire apps, ${Math.round(snapshot.aecContributionFsCommission).toLocaleString()} FS premium YTD
-                </p>
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                  <Gauge size={14} className="text-red-500" /> Net Lapse Rate
-                </p>
-                <p className="text-2xl font-black text-gray-900">{snapshot.netLapseRate}%</p>
-                <p className="text-[10px] font-semibold text-gray-400 mt-1">{office ? office.name : "Agency"}-level rate</p>
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                  <Target size={14} className="text-blue-500" /> Daily Quote Target
-                </p>
-                <p className="text-2xl font-black text-gray-900">{snapshot.dailyQuoteTarget}</p>
-                <p className="text-[10px] font-semibold text-gray-400 mt-1">
-                  {snapshot.closeRateRecent.toFixed(0)}% close rate (7d) · {snapshot.closeRate30.toFixed(0)}% (30d)
-                </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <Percent size={14} className="text-indigo-500" /> Close Rate
+                  </p>
+                  <p className="text-2xl font-black text-gray-900">{snapshot.closeRate30.toFixed(0)}%</p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-1">
+                    {snapshot.closeRateRecent.toFixed(0)}% last 7 days · 30-day quote-to-bind
+                  </p>
+                </div>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <Target size={14} className="text-amber-500" /> Pipeline Potential
+                  </p>
+                  <p className="text-2xl font-black text-gray-900">${Math.round(snapshot.pipelinePotential).toLocaleString()}</p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-1">{snapshot.pipelineCount} open quoted/bound policies</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <Activity size={14} className="text-blue-500" /> Today&apos;s Activity
+                  </p>
+                  <p className="text-2xl font-black text-gray-900">
+                    {snapshot.dailyQuotes}
+                    <span className="text-sm text-gray-400 font-bold">/{snapshot.dailyQuoteTarget}</span>
+                  </p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-1">
+                    quotes · {snapshot.dailyTouchpoints}/{snapshot.dailyTouchpointTarget} touchpoints
+                  </p>
+                </div>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <CalendarRange size={14} className="text-violet-500" /> Weekly Activity
+                  </p>
+                  <p className="text-2xl font-black text-gray-900">
+                    {snapshot.weeklyQuotes}
+                    <span className="text-sm text-gray-400 font-bold">/{snapshot.weeklyQuoteTarget}</span>
+                  </p>
+                  <p className="text-[10px] font-semibold text-gray-400 mt-1">
+                    quotes · {snapshot.weeklyTouchpoints}/{snapshot.weeklyTouchpointTarget} touchpoints
+                  </p>
+                </div>
               </div>
             </div>
           )}
