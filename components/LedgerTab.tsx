@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Filter, ShieldCheck, Trash2, FileText, PhoneCall, RefreshCw, RefreshCcw, Pencil, X } from "lucide-react";
 import { isManagerLevelRole } from "../utils/roles";
 import { hashIdentifierFull } from "../utils/crypto";
+import { encryptIdentifierForAgency } from "../utils/e2ee";
 import { cacheIdentifier } from "../utils/identifierCache";
 import IdentifierChip from "./ui/IdentifierChip";
 import FormattedNumberInput from "./ui/FormattedNumberInput";
@@ -136,8 +137,12 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         // partial/"contains" search index (client_identifier_trigrams), not just the exact-match
         // hash - see utils/crypto.ts and 20260827030000_add_blind_trigram_search.sql.
         const { hash: newHash, trigrams: newTrigrams } = trimmed ? await hashIdentifierFull(trimmed) : { hash: null, trigrams: null };
+        // Encrypted alongside the hash/trigrams (never instead of - see utils/e2ee.ts) so an
+        // Owner/Manager viewing this row cross-team can later decrypt the real name instead of
+        // seeing a placeholder.
+        const { ciphertext: newCiphertext, iv: newIv } = trimmed ? await encryptIdentifierForAgency(trimmed, profile?.agency_id) : { ciphertext: null, iv: null };
         await updateLedgerPolicy(editingEntry.id, {
-          ...(trimmed ? { client_identifier_hash: newHash, client_identifier_trigrams: newTrigrams } : {}),
+          ...(trimmed ? { client_identifier_hash: newHash, client_identifier_trigrams: newTrigrams, client_identifier_ciphertext: newCiphertext, client_identifier_iv: newIv } : {}),
           status: editingEntry.status,
           logged_at: new Date(editingEntry.loggedAt).toISOString(),
         });
@@ -145,8 +150,9 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
       } else {
         const trimmed = editingEntry.identifier.trim();
         const { hash: newHash, trigrams: newTrigrams } = trimmed ? await hashIdentifierFull(trimmed) : { hash: null, trigrams: null };
+        const { ciphertext: newCiphertext, iv: newIv } = trimmed ? await encryptIdentifierForAgency(trimmed, profile?.agency_id) : { ciphertext: null, iv: null };
         await updateLedgerPolicy(editingEntry.id, {
-          ...(trimmed ? { client_identifier_hash: newHash, client_identifier_trigrams: newTrigrams } : {}),
+          ...(trimmed ? { client_identifier_hash: newHash, client_identifier_trigrams: newTrigrams, client_identifier_ciphertext: newCiphertext, client_identifier_iv: newIv } : {}),
           premium_amount: Number(editingEntry.premiumAmount) || 0,
           payment_cycle: editingEntry.paymentCycle,
           logged_at: new Date(editingEntry.loggedAt).toISOString(),
@@ -296,7 +302,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                        <tr key={pol.id} className="hover:bg-amber-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={serviceResolutionSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
+                         <td className="px-6 py-4 font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="px-6 py-4">
                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'positive' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                              {pol.status.toUpperCase()}
@@ -333,7 +339,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={servicePolicySelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold 
@@ -382,7 +388,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={boundSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>{pol.status.toUpperCase()}</span></td>
                          <td className="px-6 py-4 text-right">
@@ -417,7 +423,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={quoteSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-purple-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4 text-right">
                            <button onClick={() => openEditPolicy(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
@@ -458,7 +464,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={resolutionSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
+                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="px-6 py-4">
                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'positive' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                              {pol.status.toUpperCase()}

@@ -1126,7 +1126,7 @@ export default function DashboardTab({
                             <tbody className="divide-y divide-gray-100">
                               {row.policies.map((p: any) => (
                                 <tr key={p.id}>
-                                  <td className="py-1.5 font-semibold text-gray-700"><IdentifierChip policyId={p.id} hash={p.client_identifier_hash} /></td>
+                                  <td className="py-1.5 font-semibold text-gray-700"><IdentifierChip policyId={p.id} hash={p.client_identifier_hash} ciphertext={p.client_identifier_ciphertext} iv={p.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                                   <td className="py-1.5 text-gray-500">{p.product_line}</td>
                                   <td className="py-1.5 text-right font-bold text-gray-700">${Math.round(Number(p.premium_amount) || 0).toLocaleString()}</td>
                                 </tr>
@@ -1212,7 +1212,7 @@ export default function DashboardTab({
                         {nameForUser(pol.user_id)}
                       </div>
                     </td>
-                    <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
+                    <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                     <td className="p-4 text-sm font-bold text-gray-600">
                        {pol.product_line === 'Complex Resolution' ? <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">Complex Res.</span> : pol.product_line}
                     </td>

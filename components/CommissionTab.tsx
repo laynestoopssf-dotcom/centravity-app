@@ -521,7 +521,7 @@ export default function CommissionTab({
                      return (
                        <tr key={pol.id || idx} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                          <td className="p-4 text-sm font-medium text-gray-500">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
+                         <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="p-4">
                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
                              {pol.product_line} {isGhost && <span className="ml-1 opacity-50 text-[10px]">(0%)</span>}

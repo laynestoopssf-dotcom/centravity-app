@@ -25,7 +25,7 @@ interface DealAutopsyRow {
   ai_talk_path: string | null;
   status: "open" | "reviewed";
   created_at: string;
-  policies?: { client_identifier_hash?: string | null; product_line?: string; premium_amount?: number } | null;
+  policies?: { client_identifier_hash?: string | null; client_identifier_ciphertext?: string | null; client_identifier_iv?: string | null; product_line?: string; premium_amount?: number } | null;
 }
 
 export default function DealAutopsyPanel({ profile, team, isManagerLevel, showToast }: any) {
@@ -46,7 +46,7 @@ export default function DealAutopsyPanel({ profile, team, isManagerLevel, showTo
     setLoading(true);
     let query = supabase
       .from("deal_autopsies")
-      .select("id, producer_id, policy_id, objection_text, ai_talk_path, status, created_at, policies(client_identifier_hash, product_line, premium_amount)")
+      .select("id, producer_id, policy_id, objection_text, ai_talk_path, status, created_at, policies(client_identifier_hash, client_identifier_ciphertext, client_identifier_iv, product_line, premium_amount)")
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -141,7 +141,7 @@ export default function DealAutopsyPanel({ profile, team, isManagerLevel, showTo
             <div key={row.id} className="p-4 border border-gray-200 rounded-xl bg-gray-50/60">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
-                  <IdentifierChip policyId={row.policy_id} hash={row.policies?.client_identifier_hash} />
+                  <IdentifierChip policyId={row.policy_id} hash={row.policies?.client_identifier_hash} ciphertext={row.policies?.client_identifier_ciphertext} iv={row.policies?.client_identifier_iv} agencyId={profile?.agency_id} />
                   <span className="text-gray-400 font-medium">·</span>
                   <span>{row.policies?.product_line || "Policy"}</span>
                   {isManagerLevel && (

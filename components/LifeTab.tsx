@@ -143,7 +143,7 @@ export default function LifeTab({
                 <div key={pol.id} className="p-4 border border-gray-200 rounded-xl bg-gray-50 hover:border-amber-300 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></p>
+                      <p className="font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{producer?.first_name} {producer?.last_name}</p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${pol.status === 'bound' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`}>
