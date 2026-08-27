@@ -1,11 +1,19 @@
 // PERMANENT (but manual-only, never auto-run) utility: rebalances the Demo Agency's
-// (DEMO_AGENCY_ID - see scripts/seed_demo_agency.ts) quote-to-close ratio down to a realistic
-// industry-average range. The demo simulator (utils/demoSimulator.ts) and daily cron
+// (DEMO_AGENCY_ID - see scripts/seed_demo_agency.ts) quote-to-close ratio to whatever target
+// band is configured below, by reassigning a portion of each producer's already-logged `status`
+// values - never touching premiums, product lines, dates, or the encrypted/hashed identifier
+// columns. The demo simulator (utils/demoSimulator.ts) and daily cron
 // (app/api/cron/simulate-demo) both bias heavily toward "bound"/"issued" outcomes (great for
 // showing YTD Premium/AEC pacing numbers going up every day, terrible for a live pitch where a
-// ~95%+ close rate reads as obviously fake) - this script fixes ONLY that, by reassigning a
-// portion of each producer's already-logged `status` values, never touching premiums, product
-// lines, dates, or the encrypted/hashed identifier columns.
+// ~95%+ close rate reads as obviously fake) - hence this utility.
+//
+// BIDIRECTIONAL BY DESIGN: works whichever way the current close rate sits relative to the
+// target band - it will shift won rows OUT to {quoted, not_taken} to bring an inflated rate
+// down, or pull rows back IN from {quoted, not_taken} to bring a too-low rate up (e.g. going
+// from a conservative 25% band to an aggressive "top-performing" 40% band, without needing a
+// different script). Every run re-solves from whatever the current live state actually is, so
+// re-running this after new won-heavy rows accumulate (e.g. after the daily simulate-demo cron
+// runs a few more times), or after changing the target band, is always safe.
 //
 // STATUS VOCABULARY NOTE: this schema's `policies.status` only ever takes one of
 // 'quoted' | 'bound' | 'issued' | 'not_taken' (see the Policy type in app/dashboard/page.tsx and
@@ -17,20 +25,21 @@
 //                                     not just Life/Health - see components/LedgerTab.tsx /
 //                                     components/DashboardTab.tsx's activePipeline filter)
 //   - "Pending"      -> already covered: this app's own UI literally labels status='bound' as
-//                       "Bound (Pending)" (see the status <select> in DashboardTab.tsx) - so the
-//                       rows this script leaves as 'bound'/'issued' at the final, healthy target
-//                       rate already read as "Pending"/"Bound" in the product, no 3rd status
-//                       needed.
+//                       "Bound (Pending)" (see the status <select> in DashboardTab.tsx).
+//   - Rows PROMOTED into won (target band raised above the current rate) are written as
+//     'issued' - the fully-closed terminal state, and already the overwhelming majority status
+//     among this demo agency's real won rows, so newly-promoted rows read as "closed business",
+//     not a pile of new mid-process 'bound' rows.
 // Every "close rate" calculation in this codebase (utils/coachingMetrics.ts,
 // app/dashboard/cockpit/page.tsx, utils/commissionMath.ts, etc.) treats 'bound' AND 'issued'
 // together as "won" - so this script's target close rate is won := count(bound|issued) over
 // N := count(quoted|bound|issued|not_taken) per producer, matching that convention exactly.
 //
-// ONE-WAY BY DESIGN: this only ever moves rows OUT of {bound, issued} and into {quoted,
-// not_taken} - it never promotes an already-quoted/not_taken row INTO bound/issued. Re-running
-// this after new won-heavy rows accumulate (e.g. after the daily simulate-demo cron runs a few
-// more times) is safe and idempotent in spirit - it will just re-normalize whatever the current
-// mix is down to a fresh random target in the same realistic band.
+// THE ONE HARD INVARIANT: bound+issued (won) must be STRICTLY LESS than quoted, for every
+// producer, no matter which direction the target band pushes things. When raising the close
+// rate, wonTarget is capped below the producer's available quoted pool specifically to guarantee
+// this holds - see solveProducerPlan below - rather than ever letting quoted shrink to (or below)
+// wonTarget just to hit the nominal target exactly.
 //
 // SANDBOXING (same posture as scripts/backfill_demo_identifiers.ts):
 //   - NOT wired into "dev"/"build"/"start", any Vercel/CI step, or imported by any app code -
@@ -57,19 +66,18 @@ if (process.env.VERCEL || process.env.CI) {
 const DRY_RUN = process.argv.includes("--dry-run");
 const DEMO_AGENCY_ID = process.env.DEMO_AGENCY_ID;
 
-// Per-producer target close rate is randomized within this band on every run - comfortably
-// under the 35% hard cap the request asked for, centered on the "roughly 25-30%" industry
-// average, with a little spread so every producer doesn't land on the exact same number (which
-// itself would look as fake as a flat 91.8% did).
-const TARGET_CLOSE_RATE_MIN = 0.22;
-const TARGET_CLOSE_RATE_MAX = 0.3;
-const HARD_CAP_CLOSE_RATE = 0.35;
+// Per-producer target close rate is randomized within this band on every run, so every producer
+// doesn't land on the exact same number (which itself would look as fake as a flat 91.8% - or a
+// flat 96.3% - did). Currently: "highly successful, top-performing agency" without tripping the
+// obviously-fake ~90%+ threshold.
+const TARGET_CLOSE_RATE_MIN = 0.38;
+const TARGET_CLOSE_RATE_MAX = 0.45;
 
-// Default split of the rows being moved OUT of won: most of a shrinking close rate should still
-// look like live, working pipeline (still 'quoted') rather than a graveyard of declines - bumped
-// up per-producer below (never down) only as far as needed to guarantee the strict bound<quoted
-// invariant the request asked for.
-const QUOTED_SHARE_OF_FLIPPED = 0.6;
+// Default split, when LOWERING a producer's close rate, of the rows being moved OUT of won:
+// most of a shrinking close rate should still look like live, working pipeline (still 'quoted')
+// rather than a graveyard of declines - bumped up per-producer below (never down) only as far as
+// needed to guarantee the strict won<quoted invariant.
+const QUOTED_SHARE_OF_DEMOTED = 0.6;
 
 const UPDATE_CHUNK_SIZE = 300;
 
@@ -96,9 +104,100 @@ interface ProducerPlan {
   totalPipelineRows: number;
   before: { won: number; quoted: number; notTaken: number };
   after: { won: number; quoted: number; notTaken: number };
-  targetCloseRate: number;
+  finalCloseRate: number;
   idsToQuoted: string[];
   idsToNotTaken: string[];
+  idsToIssued: string[];
+}
+
+// Solves one producer's plan against whatever their CURRENT live status mix is - handles both
+// "close rate needs to come down" (won -> quoted/not_taken) and "close rate needs to go up"
+// (quoted/not_taken -> won) from a single code path, so this keeps working correctly no matter
+// which direction a future target-band change pushes things.
+function solveProducerPlan(userId: string, name: string, wonRows: PolicyRow[], quotedRows: PolicyRow[], notTakenRows: PolicyRow[]): ProducerPlan {
+  const N = wonRows.length + quotedRows.length + notTakenRows.length;
+  const before = { won: wonRows.length, quoted: quotedRows.length, notTaken: notTakenRows.length };
+
+  const rawTargetCloseRate = TARGET_CLOSE_RATE_MIN + Math.random() * (TARGET_CLOSE_RATE_MAX - TARGET_CLOSE_RATE_MIN);
+  const rawWonTarget = Math.round(N * rawTargetCloseRate);
+
+  if (rawWonTarget === wonRows.length) {
+    // Already exactly on target (or N is tiny enough that rounding landed here) - nothing to do.
+    return { userId, name, totalPipelineRows: N, before, after: before, finalCloseRate: N > 0 ? wonRows.length / N : 0, idsToQuoted: [], idsToNotTaken: [], idsToIssued: [] };
+  }
+
+  if (rawWonTarget > wonRows.length) {
+    // RAISING the close rate: pull rows IN from {not_taken, quoted} up into won ('issued').
+    // Hard cap: won must stay STRICTLY below quoted after this - since promoting rows can only
+    // ever hold quoted steady or shrink it (never grow it), the safe ceiling for wonTarget is
+    // one less than whatever quoted will end up as. Preferring to source every promoted row from
+    // not_taken first (quoted stays untouched, at its full original size) makes that ceiling as
+    // generous as possible: quotedRows.length - 1.
+    const wonTarget = Math.min(rawWonTarget, quotedRows.length - 1, N);
+    const delta = wonTarget - wonRows.length;
+
+    const shuffledNotTaken = shuffle(notTakenRows);
+    const fromNotTaken = shuffledNotTaken.slice(0, Math.min(delta, notTakenRows.length));
+    const stillNeeded = delta - fromNotTaken.length;
+    // Only reached if not_taken alone can't cover the promotion - falls back to pulling the rest
+    // from quoted. Every row pulled from quoted simultaneously raises won by 1 AND lowers quoted
+    // by 1 (a 2-unit swing in the won<quoted margin per row, not 1), so the safe cap has to
+    // account for that, not just "however many keep quoted above wonTarget" in isolation - it's
+    // fine if this undershoots wonTarget itself; the invariant always wins over hitting the
+    // nominal target exactly.
+    const shuffledQuoted = shuffle(quotedRows);
+    const marginBeforeQuotedPull = quotedRows.length - (wonRows.length + fromNotTaken.length);
+    const maxSafeFromQuoted = Math.max(0, Math.floor((marginBeforeQuotedPull - 1) / 2));
+    const fromQuoted = stillNeeded > 0 ? shuffledQuoted.slice(0, Math.min(stillNeeded, maxSafeFromQuoted)) : [];
+
+    const finalWon = wonRows.length + fromNotTaken.length + fromQuoted.length;
+    const finalQuoted = quotedRows.length - fromQuoted.length;
+    const finalNotTaken = notTakenRows.length - fromNotTaken.length;
+
+    if (finalQuoted <= finalWon) {
+      throw new Error(`Invariant violated for ${name}: finalQuoted (${finalQuoted}) would not exceed finalWon (${finalWon}). Aborting before any writes.`);
+    }
+
+    return {
+      userId,
+      name,
+      totalPipelineRows: N,
+      before,
+      after: { won: finalWon, quoted: finalQuoted, notTaken: finalNotTaken },
+      finalCloseRate: N > 0 ? finalWon / N : 0,
+      idsToQuoted: [],
+      idsToNotTaken: [],
+      idsToIssued: [...fromNotTaken, ...fromQuoted].map((r) => r.id),
+    };
+  }
+
+  // LOWERING the close rate: push rows OUT of won into {quoted, not_taken} - same approach as
+  // the original 25-30% recalibration.
+  const wonTarget = rawWonTarget;
+  const numToDemote = wonRows.length - wonTarget;
+  const demoteCandidates = shuffle(wonRows).slice(0, numToDemote);
+
+  const requiredNewlyQuoted = Math.max(0, wonTarget - quotedRows.length + 1);
+  const newlyQuotedCount = Math.min(numToDemote, Math.max(requiredNewlyQuoted, Math.round(numToDemote * QUOTED_SHARE_OF_DEMOTED)));
+  const newlyQuoted = demoteCandidates.slice(0, newlyQuotedCount);
+  const newlyNotTaken = demoteCandidates.slice(newlyQuotedCount);
+
+  const finalQuoted = quotedRows.length + newlyQuoted.length;
+  if (finalQuoted <= wonTarget) {
+    throw new Error(`Invariant violated for ${name}: finalQuoted (${finalQuoted}) would not exceed wonTarget (${wonTarget}). Aborting before any writes.`);
+  }
+
+  return {
+    userId,
+    name,
+    totalPipelineRows: N,
+    before,
+    after: { won: wonTarget, quoted: finalQuoted, notTaken: notTakenRows.length + newlyNotTaken.length },
+    finalCloseRate: N > 0 ? wonTarget / N : 0,
+    idsToQuoted: newlyQuoted.map((r) => r.id),
+    idsToNotTaken: newlyNotTaken.map((r) => r.id),
+    idsToIssued: [],
+  };
 }
 
 async function main() {
@@ -137,75 +236,14 @@ async function main() {
   }
 
   const plans: ProducerPlan[] = [];
-
   for (const [userId, producerRows] of byProducer.entries()) {
     const wonRows = producerRows.filter((p) => p.status === "bound" || p.status === "issued");
-    const existingQuoted = producerRows.filter((p) => p.status === "quoted");
-    const existingNotTaken = producerRows.filter((p) => p.status === "not_taken");
-    const N = producerRows.length;
-
-    const beforeCloseRate = N > 0 ? wonRows.length / N : 0;
-
-    // Nothing to normalize (already low, or no won rows at all) - leave this producer alone
-    // entirely rather than ever moving a row the wrong direction.
-    if (wonRows.length === 0 || beforeCloseRate <= TARGET_CLOSE_RATE_MAX) {
-      plans.push({
-        userId,
-        name: nameFor(userId),
-        totalPipelineRows: N,
-        before: { won: wonRows.length, quoted: existingQuoted.length, notTaken: existingNotTaken.length },
-        after: { won: wonRows.length, quoted: existingQuoted.length, notTaken: existingNotTaken.length },
-        targetCloseRate: beforeCloseRate,
-        idsToQuoted: [],
-        idsToNotTaken: [],
-      });
-      continue;
-    }
-
-    const targetCloseRate = TARGET_CLOSE_RATE_MIN + Math.random() * (TARGET_CLOSE_RATE_MAX - TARGET_CLOSE_RATE_MIN);
-    // Never asked to promote a row INTO won - only clamp downward, so wonTarget can't exceed
-    // what's already there.
-    const wonTarget = Math.min(wonRows.length, Math.round(N * targetCloseRate));
-    const numToFlip = wonRows.length - wonTarget;
-
-    const flipCandidates = shuffle(wonRows).slice(0, numToFlip);
-
-    // Strictly guarantee bound < quoted per producer (the request's explicit "mathematically
-    // guarantee" ask): quoted after this run must exceed wonTarget by at least 1, no matter what
-    // the default 60/40 split alone would have produced.
-    const requiredNewlyQuoted = Math.max(0, wonTarget - existingQuoted.length + 1);
-    const newlyQuotedCount = Math.min(numToFlip, Math.max(requiredNewlyQuoted, Math.round(numToFlip * QUOTED_SHARE_OF_FLIPPED)));
-    const newlyQuoted = flipCandidates.slice(0, newlyQuotedCount);
-    const newlyNotTaken = flipCandidates.slice(newlyQuotedCount);
-
-    const finalQuoted = existingQuoted.length + newlyQuoted.length;
-    const finalCloseRate = wonTarget / N;
-
-    if (finalQuoted <= wonTarget) {
-      // Should be unreachable given the requiredNewlyQuoted floor above - fail loudly instead of
-      // silently shipping a producer that violates the one hard invariant this script exists to
-      // guarantee.
-      throw new Error(
-        `Invariant violated for ${nameFor(userId)}: finalQuoted (${finalQuoted}) would not exceed wonTarget (${wonTarget}). Aborting before any writes.`
-      );
-    }
-    if (finalCloseRate > HARD_CAP_CLOSE_RATE + 1e-9) {
-      throw new Error(`Invariant violated for ${nameFor(userId)}: finalCloseRate (${pct(finalCloseRate)}) exceeds the ${pct(HARD_CAP_CLOSE_RATE)} hard cap. Aborting before any writes.`);
-    }
-
-    plans.push({
-      userId,
-      name: nameFor(userId),
-      totalPipelineRows: N,
-      before: { won: wonRows.length, quoted: existingQuoted.length, notTaken: existingNotTaken.length },
-      after: { won: wonTarget, quoted: finalQuoted, notTaken: existingNotTaken.length + newlyNotTaken.length },
-      targetCloseRate: finalCloseRate,
-      idsToQuoted: newlyQuoted.map((r) => r.id),
-      idsToNotTaken: newlyNotTaken.map((r) => r.id),
-    });
+    const quotedRows = producerRows.filter((p) => p.status === "quoted");
+    const notTakenRows = producerRows.filter((p) => p.status === "not_taken");
+    plans.push(solveProducerPlan(userId, nameFor(userId), wonRows, quotedRows, notTakenRows));
   }
 
-  console.log("Per-producer plan:\n");
+  console.log(`Per-producer plan (target band: ${pct(TARGET_CLOSE_RATE_MIN)}-${pct(TARGET_CLOSE_RATE_MAX)}):\n`);
   let agencyBeforeWon = 0;
   let agencyAfterWon = 0;
   let agencyTotal = 0;
@@ -214,11 +252,12 @@ async function main() {
     agencyAfterWon += plan.after.won;
     agencyTotal += plan.totalPipelineRows;
     const beforeRate = plan.totalPipelineRows > 0 ? plan.before.won / plan.totalPipelineRows : 0;
+    const movedCount = plan.idsToQuoted.length + plan.idsToNotTaken.length + plan.idsToIssued.length;
     console.log(
       `  ${plan.name.padEnd(20)} N=${String(plan.totalPipelineRows).padEnd(5)} ` +
         `before: won=${plan.before.won} quoted=${plan.before.quoted} notTaken=${plan.before.notTaken} (${pct(beforeRate)})  ` +
-        `-> after: won=${plan.after.won} quoted=${plan.after.quoted} notTaken=${plan.after.notTaken} (${pct(plan.targetCloseRate)})` +
-        `  [flip ${plan.idsToQuoted.length + plan.idsToNotTaken.length} rows: +${plan.idsToQuoted.length} quoted, +${plan.idsToNotTaken.length} not_taken]`
+        `-> after: won=${plan.after.won} quoted=${plan.after.quoted} notTaken=${plan.after.notTaken} (${pct(plan.finalCloseRate)})` +
+        `  [moved ${movedCount} rows: +${plan.idsToIssued.length} issued, +${plan.idsToQuoted.length} quoted, +${plan.idsToNotTaken.length} not_taken]`
     );
   }
   console.log(
@@ -228,20 +267,25 @@ async function main() {
 
   const allQuotedIds = plans.flatMap((p) => p.idsToQuoted);
   const allNotTakenIds = plans.flatMap((p) => p.idsToNotTaken);
+  const allIssuedIds = plans.flatMap((p) => p.idsToIssued);
 
   if (DRY_RUN) {
-    console.log(`--dry-run: would update ${allQuotedIds.length} rows to 'quoted' and ${allNotTakenIds.length} rows to 'not_taken'. No writes performed.`);
+    console.log(
+      `--dry-run: would update ${allIssuedIds.length} rows to 'issued', ${allQuotedIds.length} rows to 'quoted', and ${allNotTakenIds.length} rows to 'not_taken'. No writes performed.`
+    );
     return;
   }
 
-  if (allQuotedIds.length === 0 && allNotTakenIds.length === 0) {
+  if (allQuotedIds.length === 0 && allNotTakenIds.length === 0 && allIssuedIds.length === 0) {
     console.log("Nothing to normalize - every producer is already within the target range.");
     return;
   }
 
   console.log("Applying updates...");
+  const totalToWrite = allIssuedIds.length + allQuotedIds.length + allNotTakenIds.length;
   let written = 0;
   for (const [targetStatus, ids] of [
+    ["issued", allIssuedIds],
     ["quoted", allQuotedIds],
     ["not_taken", allNotTakenIds],
   ] as const) {
@@ -251,11 +295,13 @@ async function main() {
       const { error } = await admin.from("policies").update({ status: targetStatus }).in("id", chunk);
       if (error) throw new Error(`Update to '${targetStatus}' failed on chunk starting at ${i}: ${error.message}`);
       written += chunk.length;
-      console.log(`  [${written}/${allQuotedIds.length + allNotTakenIds.length}] updated...`);
+      console.log(`  [${written}/${totalToWrite}] updated...`);
     }
   }
 
-  console.log(`\n✅ Done. ${allQuotedIds.length} rows moved to 'quoted', ${allNotTakenIds.length} rows moved to 'not_taken'. Premiums, dates, product lines, and identifiers were never touched.`);
+  console.log(
+    `\n✅ Done. ${allIssuedIds.length} rows moved to 'issued', ${allQuotedIds.length} rows moved to 'quoted', ${allNotTakenIds.length} rows moved to 'not_taken'. Premiums, dates, product lines, and identifiers were never touched.`
+  );
 }
 
 main().catch((err) => {
