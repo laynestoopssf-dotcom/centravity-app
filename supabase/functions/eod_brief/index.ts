@@ -2,6 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 serve(async (req) => {
+  // Logged unconditionally, before anything else can throw, specifically so a real invocation
+  // (by pg_cron on schedule, or a manual test) is ALWAYS visible in Supabase Dashboard -> Edge
+  // Functions -> eod_brief -> Logs, independent of the JSON response body below - pg_cron's
+  // net.http_post call is fire-and-forget from the DB's side, so these logs are the only
+  // reliable way to tell "pg_cron never actually called this" apart from "it ran and just had
+  // nothing to send" from outside a manual curl test.
+  console.log(`[eod_brief] invoked at ${new Date().toISOString()}`);
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -10,6 +17,26 @@ serve(async (req) => {
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (!resendApiKey) throw new Error("Missing Resend API Key.");
+
+    // MANUAL TEST OVERRIDE - lets a real send be forced for one specific agency right now,
+    // instead of waiting for that agency's configured local report hour to tick over (which
+    // could be up to 23 hours away) and having real activity already logged today (step F
+    // below skips silently otherwise). Gated behind EOD_BRIEF_DEBUG_SECRET (a separate secret
+    // from everything else here - `supabase secrets set EOD_BRIEF_DEBUG_SECRET="<random value>"`)
+    // so this endpoint - which has NO other auth check at all, by design, since pg_cron calls it
+    // with no credentials - can't be used by an anonymous caller to force a real send to every
+    // owner in the database on demand. Still only ever emails the REAL owner on file for that
+    // agency, same recipient the real scheduled run would use - it cannot redirect the send
+    // anywhere else.
+    const debugSecret = Deno.env.get('EOD_BRIEF_DEBUG_SECRET');
+    const requestBody = await req.json().catch(() => ({} as Record<string, unknown>));
+    const debugForceAgencyId =
+      debugSecret && requestBody?.debugSecret === debugSecret && typeof requestBody?.agencyId === 'string'
+        ? requestBody.agencyId
+        : undefined;
+    if (requestBody?.debugSecret && !debugForceAgencyId) {
+      console.error('[eod_brief] debug override rejected - missing/invalid debugSecret or agencyId');
+    }
 
     const now = new Date();
 
@@ -58,6 +85,10 @@ serve(async (req) => {
 
     // 3. The Timezone-Aware Multi-Tenant Loop
     for (const owner of (owners || [])) {
+      // Declared outside the try below (not `const` inside it) so the catch block - a sibling
+      // scope to the try, not a child of it - can still read it when tagging a failed forced
+      // test in the results array.
+      const isDebugTarget = !!debugForceAgencyId && owner.agency_id === debugForceAgencyId;
       try {
         // Fallback to Pacific Time if they haven't set one
         // @ts-ignore - Supabase join typing
@@ -75,8 +106,9 @@ serve(async (req) => {
         const localDate = new Date(now.toLocaleString('en-US', { timeZone: agencyTimezone }));
         const localHour = localDate.getHours();
 
-        // If it's not their configured report hour locally, skip this agency!
-        if (localHour !== targetHour) continue; 
+        // If it's not their configured report hour locally, skip this agency! (unless this is
+        // the one agency a manual debug-test call is forcing through, per the override above)
+        if (!isDebugTarget && localHour !== targetHour) continue; 
 
         // B. Grab this owner's email
         const { data: authData, error: authError } = await supabase.auth.admin.getUserById(owner.id);
@@ -116,8 +148,9 @@ serve(async (req) => {
           }
         });
 
-        // F. Skip sending an email if they did zero work today
-        if (totalTouches === 0 && totalQuotes === 0 && totalBoundApps === 0) {
+        // F. Skip sending an email if they did zero work today (a forced debug test still wants
+        // to see a real send attempt even with no activity logged yet today, so it's exempt too)
+        if (!isDebugTarget && totalTouches === 0 && totalQuotes === 0 && totalBoundApps === 0) {
            results.push({ agency: owner.agency_id, status: 'skipped_zero_activity' });
            continue;
         }
@@ -176,17 +209,20 @@ serve(async (req) => {
 
         // Previously never checked - Resend returning a 4xx/5xx (bad API key, unverified sender,
         // invalid recipient, etc.) was still recorded as `status: 'success'`, making failures
-        // invisible in the function's own results log.
+        // invisible in the function's own results log. Logged HERE (not just re-thrown to the
+        // catch below) so the exact provider rejection reason is unmissable in Edge Function
+        // logs even if the error-propagation below ever changes.
         if (!emailRes.ok) {
           const errBody = await emailRes.text();
+          console.error(`[eod_brief] Resend rejected the payload for agency ${owner.agency_id} (HTTP ${emailRes.status}):`, errBody);
           throw new Error(`Resend API error (${emailRes.status}): ${errBody}`);
         }
 
-        results.push({ agency: owner.agency_id, status: 'success', email: targetEmail });
+        results.push({ agency: owner.agency_id, status: 'success', email: targetEmail, ...(isDebugTarget ? { debug: true } : {}) });
 
       } catch (agencyError: any) {
-        console.error(`Failed EOD for agency ${owner.agency_id}:`, agencyError);
-        results.push({ agency: owner.agency_id, status: 'error', error: agencyError.message });
+        console.error(`[eod_brief] Failed EOD for agency ${owner.agency_id}:`, agencyError);
+        results.push({ agency: owner.agency_id, status: 'error', error: agencyError.message, ...(isDebugTarget ? { debug: true } : {}) });
       }
     }
 
