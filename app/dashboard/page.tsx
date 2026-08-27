@@ -12,7 +12,7 @@ import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
 import InfoTooltip from "../../components/ui/InfoTooltip";
 import FormattedNumberInput from "../../components/ui/FormattedNumberInput";
 import { isLoggerMessage } from "../../utils/loggerBridge";
-import { hashIdentifier, hashIdentifiers } from "../../utils/crypto";
+import { hashIdentifier, hashIdentifiers, hashIdentifierFull, hashIdentifiersFull } from "../../utils/crypto";
 import { cacheIdentifier, getCachedIdentifierForAny, forgetCachedIdentifier } from "../../utils/identifierCache";
 import { 
   Target, 
@@ -1733,7 +1733,10 @@ export default function Home() {
       // generic "Historical Import" fallback isn't a real identifier, so it's passed through as
       // "" (the batch RPC returns null for blanks) rather than hashing a meaningless placeholder
       // shared by every unmatched row. One round trip for the whole file, not one per row.
-      const identifierHashes = await hashIdentifiers(
+      // hashIdentifiersFull (not the plain hashIdentifiers) so bulk-imported identifiers also get
+      // a partial/"contains" search index (client_identifier_trigrams) - not just the exact-match
+      // hash. See utils/crypto.ts and supabase/migrations/20260827030000_add_blind_trigram_search.sql.
+      const identifierHashes = await hashIdentifiersFull(
         policiesArray.map((data) => (data.finalCustomerName && data.finalCustomerName !== 'Historical Import') ? data.finalCustomerName : '')
       );
 
@@ -1742,7 +1745,8 @@ export default function Home() {
             agency_id: profile.agency_id,
             office_id: data.mappedOfficeId,
             user_id: data.mappedUserId,
-            client_identifier_hash: identifierHashes[idx],
+            client_identifier_hash: identifierHashes[idx]?.hash ?? null,
+            client_identifier_trigrams: identifierHashes[idx]?.trigrams ?? null,
             product_line: data.productLine, 
             premium_amount: data.premium,
             payment_cycle: 'monthly', 
@@ -2057,11 +2061,13 @@ export default function Home() {
 
     try {
       // Deliberately INSIDE the try block (unlike the very first version of this line) -
-      // hashIdentifier() itself never throws (see utils/crypto.ts), but keeping this call here
-      // rather than before the try means a bind/quote can never be silently stuck "submitting
-      // forever" (finally below resets isSubmittingActivity) or fail with no visible toast if
-      // that ever changes.
-      const identifierHash = await hashIdentifier(custIdentifier);
+      // hashIdentifierFull() itself never throws (see utils/crypto.ts), but keeping this call
+      // here rather than before the try means a bind/quote can never be silently stuck
+      // "submitting forever" (finally below resets isSubmittingActivity) or fail with no visible
+      // toast if that ever changes. hashIdentifierFull (not the plain hashIdentifier) also
+      // returns padded trigram hashes so this identifier becomes partial-searchable for
+      // Owners/Managers later, not just exact-match - see 20260827030000_add_blind_trigram_search.sql.
+      const { hash: identifierHash, trigrams: identifierTrigrams } = await hashIdentifierFull(custIdentifier);
 
       // Builds the effective timestamp from the (possibly backdated) `logDate` combined with the
       // actual current time-of-day, so same-day submissions are byte-for-byte identical to before
@@ -2088,7 +2094,7 @@ export default function Home() {
         if (actErr) { console.error('[submitLogActivity] complex_res activity insert failed:', actErr); throw new Error(`Activity Error: ${actErr.message}${actErr.details ? ` (${actErr.details})` : ''}`); }
 
         const resolutionPolicyId = makeRowId();
-        const { error: polErr } = await supabase.from('policies').insert([{ id: resolutionPolicyId, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
+        const { error: polErr } = await supabase.from('policies').insert([{ id: resolutionPolicyId, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
         if (polErr) { console.error('[submitLogActivity] complex_res policy insert failed:', polErr); throw new Error(`Policy Error: ${polErr.message}${polErr.details ? ` (${polErr.details})` : ''}`); }
         // This branch used to skip caching entirely - Resolution rows in the Ledger's Recent
         // Resolutions list (and its edit modal's prefill) would always show "—" no matter what
@@ -2152,7 +2158,7 @@ export default function Home() {
         // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
         // entry books $100/unit instead of multiplying the household's premium by 3. Same
         // sequential-insert bypass as activities above.
-        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
+        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
         // Local-only convenience cache (never sent to Supabase) so the "Bind from existing
         // Household Quote?" picker can still show this identifier back to this same browser
         // later, since the DB will only ever have the hash - see utils/identifierCache.ts.
@@ -2188,7 +2194,7 @@ export default function Home() {
               // sequential inserts) so this conversion-from-quote is credited to the day it's ACTUALLY
               // bound. Previously this update never touched any timestamp, so a quote logged on one
               // day and bound days/weeks later kept counting as bound on its original quote date.
-              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in('id', idsToUpdate);
+              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in('id', idsToUpdate);
               if (updErr) { console.error('[submitLogActivity] bind existing-quote update failed:', updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
               // Refresh (or clear) the local picker cache to match whatever the producer just
               // re-typed here - it may differ from what was cached when this was first quoted.
@@ -2196,13 +2202,13 @@ export default function Home() {
             }
             if (item.count > idsToUpdate.length) {
                const extraCount = item.count - idsToUpdate.length;
-               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
                if (trimmedIdentifier) extraPolicies.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
                const { error: extraErr } = await supabase.from('policies').insert(extraPolicies);
                if (extraErr) { console.error('[submitLogActivity] bind extra-policies insert failed:', extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
-            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
             if (trimmedIdentifier) policiesToLog.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
             const { error: bndErr } = await supabase.from('policies').insert(policiesToLog);
             if (bndErr) { console.error('[submitLogActivity] bound policies insert failed:', bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }

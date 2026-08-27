@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Filter, ShieldCheck, Trash2, FileText, PhoneCall, RefreshCw, RefreshCcw, Pencil, X } from "lucide-react";
 import { isManagerLevelRole } from "../utils/roles";
-import { hashIdentifier } from "../utils/crypto";
+import { hashIdentifierFull } from "../utils/crypto";
 import { cacheIdentifier } from "../utils/identifierCache";
 import IdentifierChip from "./ui/IdentifierChip";
 import FormattedNumberInput from "./ui/FormattedNumberInput";
@@ -132,18 +132,21 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         // unrelated edit (e.g. just the sentiment) would silently wipe out an existing hash every
         // time. Only a non-empty value actually gets hashed, written, and (re-)cached.
         const trimmed = editingEntry.identifier.trim();
-        const newHash = trimmed ? await hashIdentifier(trimmed) : null;
+        // hashIdentifierFull (not the plain hashIdentifier) so an edited identifier also gets a
+        // partial/"contains" search index (client_identifier_trigrams), not just the exact-match
+        // hash - see utils/crypto.ts and 20260827030000_add_blind_trigram_search.sql.
+        const { hash: newHash, trigrams: newTrigrams } = trimmed ? await hashIdentifierFull(trimmed) : { hash: null, trigrams: null };
         await updateLedgerPolicy(editingEntry.id, {
-          ...(trimmed ? { client_identifier_hash: newHash } : {}),
+          ...(trimmed ? { client_identifier_hash: newHash, client_identifier_trigrams: newTrigrams } : {}),
           status: editingEntry.status,
           logged_at: new Date(editingEntry.loggedAt).toISOString(),
         });
         if (trimmed) cacheIdentifier(editingEntry.id, trimmed, newHash);
       } else {
         const trimmed = editingEntry.identifier.trim();
-        const newHash = trimmed ? await hashIdentifier(trimmed) : null;
+        const { hash: newHash, trigrams: newTrigrams } = trimmed ? await hashIdentifierFull(trimmed) : { hash: null, trigrams: null };
         await updateLedgerPolicy(editingEntry.id, {
-          ...(trimmed ? { client_identifier_hash: newHash } : {}),
+          ...(trimmed ? { client_identifier_hash: newHash, client_identifier_trigrams: newTrigrams } : {}),
           premium_amount: Number(editingEntry.premiumAmount) || 0,
           payment_cycle: editingEntry.paymentCycle,
           logged_at: new Date(editingEntry.loggedAt).toISOString(),

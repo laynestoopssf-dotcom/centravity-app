@@ -5,7 +5,7 @@ import { supabase } from '../utils/supabase';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
 import DashboardMetrics from './dashboard/DashboardMetrics';
-import { hashIdentifier } from '../utils/crypto';
+import { hashSearchIdentifier } from '../utils/crypto';
 import { getCachedIdentifier, cacheIdentifier } from '../utils/identifierCache';
 import IdentifierChip from './ui/IdentifierChip';
 import FormattedNumberInput from './ui/FormattedNumberInput';
@@ -95,44 +95,61 @@ export default function DashboardTab({
     setCoachingFlaggedIds((prev) => new Set(prev).add(pol.id));
   };
 
-  // Identifiers are blind-indexed server-side, so there's no way to ask the DB for a substring
-  // match against every OTHER producer's identifiers - only an exact-match hash comparison,
-  // computed server-side (see utils/crypto.ts - the pepper never reaches this browser). The
-  // search term is re-hashed on a short debounce rather than on every keystroke, both to avoid
-  // firing an RPC per character and because a half-typed term can't match anything server-side
-  // anyway. To keep the common case (searching your own recently-logged pipeline) feeling like
-  // real substring search, the filters below ALSO substring-match against this browser's local
-  // identifierCache label (see utils/identifierCache.ts) wherever one exists, falling back to
-  // the exact-hash comparison only for rows this browser never typed an identifier for itself.
+  // Identifiers are blind-indexed server-side (see utils/crypto.ts - the pepper never reaches
+  // this browser), so there's no way to ask the DB for a raw substring match. Two blind indexes
+  // back this instead: an exact whole-string hash (client_identifier_hash) AND a set of hashed
+  // 3-character "trigrams" (client_identifier_trigrams - see
+  // supabase/migrations/20260827030000_add_blind_trigram_search.sql) that DOES support real
+  // partial/"contains" matching via array-subset comparison, for rows logged after that
+  // migration shipped. hashSearchIdentifier() returns both in one round trip. The search term is
+  // re-hashed on a short debounce rather than on every keystroke, both to avoid firing an RPC per
+  // character and because a half-typed term can't match anything server-side anyway. To keep the
+  // common case (searching your own recently-logged pipeline) feeling instant, the filters below
+  // ALSO substring-match against this browser's local identifierCache label (see
+  // utils/identifierCache.ts) wherever one exists, before ever needing a server round trip.
   const [activeSearchHash, setActiveSearchHash] = useState<string | null>(null);
   const [archiveSearchHash, setArchiveSearchHash] = useState<string | null>(null);
+  const [activeSearchTrigrams, setActiveSearchTrigrams] = useState<string[] | null>(null);
+  const [archiveSearchTrigrams, setArchiveSearchTrigrams] = useState<string[] | null>(null);
   useEffect(() => {
     const term = showArchive ? archiveSearch : activeSearch;
     const setHash = showArchive ? setArchiveSearchHash : setActiveSearchHash;
+    const setTrigrams = showArchive ? setArchiveSearchTrigrams : setActiveSearchTrigrams;
     // Reset immediately (not just when the term goes blank) so a hash resolved for the PREVIOUS
     // keystroke's term can never linger and get compared against the NEW term during the 200ms
     // debounce window below - that stale-hash race could otherwise flash in a match that has
     // nothing to do with what's currently typed.
     setHash(null);
+    setTrigrams(null);
     if (!term) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       // Hashing is now a network round trip (RPC), so a slower-to-resolve call for an earlier
       // keystroke could otherwise land AFTER a faster one for a later keystroke and clobber it
       // with stale results - `cancelled` guards against that out-of-order resolution.
-      hashIdentifier(term).then(hash => { if (!cancelled) setHash(hash); });
+      hashSearchIdentifier(term).then(({ hash, trigrams }) => {
+        if (cancelled) return;
+        setHash(hash);
+        setTrigrams(trigrams);
+      });
     }, 200);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [activeSearch, archiveSearch, showArchive]);
 
-  // "Enable View Action": once a search term resolves to an exact server-side hash match, this
-  // browser now KNOWS the plaintext for every row sharing that hash - including a team member's
-  // policy this browser never typed the identifier for itself (e.g. an owner searching a
+  // "Enable View Action": once a search term resolves to an EXACT whole-string hash match, this
+  // browser now KNOWS the complete plaintext for every row sharing that hash - including a team
+  // member's policy this browser never typed the identifier for itself (e.g. an owner searching a
   // teammate's customer). Without this, <IdentifierChip> would keep rendering a bare, iconless
   // "-" for those rows forever (its reveal/eye button only appears once something is cached - see
   // components/ui/IdentifierChip.tsx), even though the searcher just proved they know exactly who
   // that row belongs to. Caching it here is what makes the eye icon (and the reveal it unlocks)
   // actually show up on matched search results.
+  //
+  // Deliberately NOT done for a TRIGRAM-only match (see matchesIdentifierSearch below) - a
+  // trigram match only proves the typed term is a SUBSTRING of the real identifier, not the whole
+  // thing, so caching the typed term itself as "the" plaintext would show a truncated/wrong label
+  // instead of the real one. Those rows still show up in the filtered results (proving the match
+  // exists), just without a reveal button until someone types/knows the exact full identifier.
   useEffect(() => {
     const term = activeSearch.trim();
     if (!activeSearchHash || !term) return;
@@ -332,11 +349,14 @@ export default function DashboardTab({
     return member ? `${member.first_name} ${member.last_name}` : 'Unknown Producer';
   };
 
-  // Shared by both filters below: matches if the exact server-computed hash lines up, OR this
-  // browser's own local cache resolves a plaintext label for the row that substring-matches the
-  // typed term (see the identifierCache note above), OR the term substring-matches the product
-  // line or the assigned team member's name.
-  const matchesIdentifierSearch = (p: any, rawTerm: string, hash: string | null) => {
+  // Shared by both filters below: matches if the exact server-computed hash lines up, OR every
+  // one of the search term's own trigram hashes is present in the row's client_identifier_trigrams
+  // (a real partial/"contains" match, for rows logged since the trigram migration - see
+  // supabase/migrations/20260827030000_add_blind_trigram_search.sql), OR this browser's own local
+  // cache resolves a plaintext label for the row that substring-matches the typed term (see the
+  // identifierCache note above), OR the term substring-matches the product line or the assigned
+  // team member's name.
+  const matchesIdentifierSearch = (p: any, rawTerm: string, hash: string | null, trigrams: string[] | null) => {
     // Trimmed so a stray leading/trailing space (the RPC already trims server-side before
     // hashing - see utils/crypto.ts - but the client-side cachedLabel/product_line/name
     // fallbacks below never went through that normalization) doesn't silently break every
@@ -344,6 +364,10 @@ export default function DashboardTab({
     const term = rawTerm.trim();
     if (!term) return true;
     if (hash !== null && p.client_identifier_hash === hash) return true;
+    if (trigrams && trigrams.length > 0 && Array.isArray(p.client_identifier_trigrams) && p.client_identifier_trigrams.length > 0) {
+      const rowTrigrams = new Set<string>(p.client_identifier_trigrams);
+      if (trigrams.every((t) => rowTrigrams.has(t))) return true;
+    }
     const cachedLabel = getCachedIdentifier(p.id, p.client_identifier_hash);
     if (cachedLabel && cachedLabel.toLowerCase().includes(term)) return true;
     if ((p.product_line || '').toLowerCase().includes(term)) return true;
@@ -360,7 +384,7 @@ export default function DashboardTab({
        if (logDate.toDateString() !== today.toDateString()) return false;
     }
     if (activeSearch) {
-      return matchesIdentifierSearch(p, activeSearch.toLowerCase(), activeSearchHash);
+      return matchesIdentifierSearch(p, activeSearch.toLowerCase(), activeSearchHash, activeSearchTrigrams);
     }
     return true;
   });
@@ -375,7 +399,7 @@ export default function DashboardTab({
     }
 
     if (archiveSearch) {
-      return matchesIdentifierSearch(p, archiveSearch.toLowerCase(), archiveSearchHash);
+      return matchesIdentifierSearch(p, archiveSearch.toLowerCase(), archiveSearchHash, archiveSearchTrigrams);
     }
     return true;
   });
@@ -1137,7 +1161,7 @@ export default function DashboardTab({
                  placeholder="Search Identifier, Line, or Team Member..."
                  value={showArchive ? archiveSearch : activeSearch}
                  onChange={(e) => { setCurrentPage(1); if (showArchive) setArchiveSearch(e.target.value); else setActiveSearch(e.target.value); }}
-                 title="Identifier matches must be the exact text as originally logged (case-insensitive) unless you've already revealed that customer's identifier in this browser before - see the note below the table when a search comes up empty."
+                 title="Partial text matches any identifier logged/edited recently. Older identifiers (logged before partial search was added) still need the exact text as originally entered - see the note below the table when a search comes up empty."
                  className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400"
                />
              </div>
@@ -1163,15 +1187,16 @@ export default function DashboardTab({
               {sortedPipelineRows.length === 0 ? (
                 <tr><td colSpan={6} className="p-8 text-center text-sm font-medium">
                   {(showArchive ? archiveSearch : activeSearch).trim() ? (
-                    // A non-empty search came up empty. This is NOT necessarily a permissions/RLS
-                    // problem - identifiers are one-way hashed (see utils/crypto.ts), so an exact
-                    // string match against the ORIGINAL text as logged is required for any row this
-                    // browser hasn't already revealed itself (see identifierCache.ts). Owners/managers
-                    // already search the full agency/office pipeline here, not just their own rows -
-                    // spelling this out so a partial/fuzzy term for a teammate's customer doesn't read
-                    // as "search is broken" or "I can't see my team's policies."
+                    // A non-empty search came up empty. This is NOT a permissions/RLS problem -
+                    // Owners/Managers already search the full agency/office pipeline here, not
+                    // just their own rows. Partial/"contains" text now DOES match (see
+                    // client_identifier_trigrams - 20260827030000_add_blind_trigram_search.sql),
+                    // but ONLY for identifiers logged/edited after that migration shipped - there's
+                    // no way to retroactively compute trigrams from an already one-way-hashed
+                    // older row (see utils/crypto.ts). Spelling that out so a teammate's OLDER
+                    // customer not turning up doesn't read as "search is broken."
                     <span className="text-gray-400">
-                      No exact match for &ldquo;{(showArchive ? archiveSearch : activeSearch).trim()}&rdquo;. Identifier search needs the <span className="font-bold text-gray-500">exact text</span> as originally logged (case-insensitive) - partial text only matches identifiers already revealed in this browser. Try the full identifier, or search by product line/team member name instead.
+                      No match for &ldquo;{(showArchive ? archiveSearch : activeSearch).trim()}&rdquo;. Partial text matches any identifier logged or edited recently - older identifiers (logged before partial search was added) still need the <span className="font-bold text-gray-500">exact text</span> as originally entered (case-insensitive). Try the full identifier, or search by product line/team member name instead.
                     </span>
                   ) : (
                     <span className="text-gray-400">{showArchive ? 'No issued policies match your search.' : 'Pipeline is empty. Time to hit the phones!'}</span>

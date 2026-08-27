@@ -51,7 +51,7 @@ function logRpcError(label: string, error: { message?: string; code?: string; de
   } else if (error?.code === "42501" || error?.message?.toLowerCase().includes("permission denied")) {
     console.error(`[${label}] code 42501/permission denied. Check the RPC's GRANT EXECUTE ... TO authenticated statement in the migration actually ran.`);
   } else if (error?.code === "PGRST202" || error?.message?.toLowerCase().includes("could not find function")) {
-    console.error(`[${label}] PostgREST can't find this function at all. Confirm supabase/migrations/20260805010000_secure_pepper_hash_rpc.sql was actually run against this project (not just saved locally).`);
+    console.error(`[${label}] PostgREST can't find this function at all. Confirm supabase/migrations/20260805010000_secure_pepper_hash_rpc.sql was actually run against this project (not just saved locally) - and, for anything trigram-related (hashIdentifierFull/hashIdentifiersFull/hashSearchIdentifier), also confirm 20260827030000_add_blind_trigram_search.sql has been run.`);
   } else if (error?.message?.includes("client_identifier_pepper")) {
     console.error(`[${label}] The Vault secret itself is missing/unreadable. Re-run the "generate the pepper" DO block in 20260805010000_secure_pepper_hash_rpc.sql (it's idempotent - only inserts if the named secret doesn't already exist).`);
   } else if (error?.message?.toLowerCase().includes("no agency found")) {
@@ -105,5 +105,95 @@ export async function hashIdentifiers(rawList: string[]): Promise<(string | null
   } catch (err) {
     console.error("[hashIdentifiers] Unexpected exception calling the RPC (network-level, not a DB error) - every client_identifier_hash in this batch will be NULL:", err);
     return rawList.map(() => null);
+  }
+}
+
+// =============================================================================
+// Blind TRIGRAM index (2026-08-27) - see supabase/migrations/
+// 20260827030000_add_blind_trigram_search.sql for the full design/trade-off
+// writeup. `client_identifier_hash` above can only ever answer "is this
+// EXACTLY the string that was typed?" - fine for a producer re-finding their
+// own recently-logged household (already cached locally - see
+// identifierCache.ts), but useless for an Owner/Manager who never personally
+// typed a teammate's customer identifier and doesn't know its exact spelling.
+// These hash EVERY overlapping 3-character window of the (still never-
+// plaintext) identifier instead of just the whole string, so a partial term
+// can still prove a real substring match server-side via Postgres array
+// containment (`@>`) - see components/DashboardTab.tsx's matchesIdentifierSearch.
+//
+// IMPORTANT: these RPCs (hash_client_identifier_full / hash_client_identifiers_full
+// / hash_search_identifier) only exist once the migration above has actually
+// been run against this Supabase project - same PGRST202 "could not find
+// function" failure mode as the original hashing RPCs when they were first
+// added. Every function below degrades to "no trigrams, exact-hash-only"
+// rather than throwing if that migration hasn't landed yet, so search still
+// works exactly as before in the meantime.
+// =============================================================================
+
+type FullHashResult = { hash: string | null; trigrams: string[] | null };
+const EMPTY_FULL_HASH: FullHashResult = { hash: null, trigrams: null };
+
+/**
+ * WRITE-time: hashes an identifier both ways in one round trip - the existing
+ * whole-string exact hash (for client_identifier_hash) AND its padded
+ * trigram hashes (for the new client_identifier_trigrams). Use this instead
+ * of hashIdentifier() at every call site that actually LOGS/EDITS an
+ * identifier, so newly-written rows become partial-searchable going forward.
+ */
+export async function hashIdentifierFull(raw: string): Promise<FullHashResult> {
+  if (!raw || !raw.trim()) return EMPTY_FULL_HASH;
+
+  try {
+    const { data, error } = await supabase.rpc("hash_client_identifier_full", { p_identifier: raw });
+    if (error) {
+      logRpcError("hashIdentifierFull", error);
+      return EMPTY_FULL_HASH;
+    }
+    return (data as FullHashResult) ?? EMPTY_FULL_HASH;
+  } catch (err) {
+    console.error("[hashIdentifierFull] Unexpected exception calling the RPC (network-level, not a DB error) - this row will have NO hash or trigrams:", err);
+    return EMPTY_FULL_HASH;
+  }
+}
+
+/** Batch variant of hashIdentifierFull, for CSV/"Historical Logger" import. */
+export async function hashIdentifiersFull(rawList: string[]): Promise<FullHashResult[]> {
+  if (rawList.length === 0) return [];
+
+  try {
+    const { data, error } = await supabase.rpc("hash_client_identifiers_full", { p_identifiers: rawList });
+    if (error) {
+      logRpcError("hashIdentifiersFull", error);
+      return rawList.map(() => EMPTY_FULL_HASH);
+    }
+    return ((data as FullHashResult[]) ?? rawList.map(() => EMPTY_FULL_HASH));
+  } catch (err) {
+    console.error("[hashIdentifiersFull] Unexpected exception calling the RPC (network-level, not a DB error) - every row in this batch will have NO hash or trigrams:", err);
+    return rawList.map(() => EMPTY_FULL_HASH);
+  }
+}
+
+/**
+ * SEARCH-time: hashes a search term both ways - its whole-string exact hash
+ * (still the strongest signal when someone types the full, exact identifier)
+ * and its own UNPADDED trigrams for a partial/"contains" match against
+ * client_identifier_trigrams. `trigrams` comes back null for a term under 3
+ * normalized characters (too short to form even one trigram) - callers
+ * should fall back to exact-match-only for those, same as before this
+ * feature existed.
+ */
+export async function hashSearchIdentifier(raw: string): Promise<FullHashResult> {
+  if (!raw || !raw.trim()) return EMPTY_FULL_HASH;
+
+  try {
+    const { data, error } = await supabase.rpc("hash_search_identifier", { p_term: raw });
+    if (error) {
+      logRpcError("hashSearchIdentifier", error);
+      return EMPTY_FULL_HASH;
+    }
+    return (data as FullHashResult) ?? EMPTY_FULL_HASH;
+  } catch (err) {
+    console.error("[hashSearchIdentifier] Unexpected exception calling the RPC (network-level, not a DB error) - this search will fall back to no match:", err);
+    return EMPTY_FULL_HASH;
   }
 }
