@@ -946,7 +946,7 @@ export default function SettingsTab({
               <div className="flex items-center justify-between p-4 bg-amber-50/50 border border-amber-100 rounded-xl">
                 <div>
                   <h4 className="text-sm font-bold text-amber-900">Enable Roam Target Tracking</h4>
-                  <p className="text-xs text-amber-700 mt-0.5 max-w-xl">Shows the Roam/Incentive widgets: the YTD Projections tab&apos;s Roam Qualifier and Annual Trip Qualifier cards, and the Cockpit&apos;s Roam &amp; Incentive Qualifier.</p>
+                  <p className="text-xs text-amber-700 mt-0.5 max-w-xl">Shows the Roam/Incentive widgets: the YTD Projections tab&apos;s Roam Qualifier and Annual Life Goal cards, and the Cockpit&apos;s Roam &amp; Incentive Qualifier.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
                   <input

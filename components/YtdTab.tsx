@@ -84,7 +84,7 @@ export default function YtdTab({ ytdOverviewData, agencySettings }: any) {
           </div>
           {travelActive && (
           <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-600">
-            <div className="flex justify-between items-center mb-2"><span className="text-gray-300 font-bold text-sm flex items-center gap-2"><Target size={16}/> Annual Trip Qualifier</span><span className="text-white font-black text-lg">{ytdOverviewData.global.targets.lifeApps} Apps</span></div>
+            <div className="flex justify-between items-center mb-2"><span className="text-gray-300 font-bold text-sm flex items-center gap-2"><Target size={16}/> Annual Life Goal</span><span className="text-white font-black text-lg">{ytdOverviewData.global.targets.lifeApps} Apps</span></div>
             <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden mb-2"><div className={`h-full rounded-full transition-all duration-1000 ${ytdOverviewData.global.netYtdLifeApps >= ytdOverviewData.global.targets.lifeApps ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${Math.min(100, (ytdOverviewData.global.netYtdLifeApps / (ytdOverviewData.global.targets.lifeApps || 1)) * 100)}%` }} /></div>
             <p className="text-xs text-gray-400 text-right">Net Run Rate: <strong>{ytdOverviewData.global.runRateLifeApps} Apps / yr</strong></p>
           </div>

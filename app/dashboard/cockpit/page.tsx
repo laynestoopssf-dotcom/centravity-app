@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useReactToPrint } from "react-to-print";
 import {
   Loader2,
   AlertCircle,
@@ -18,6 +19,7 @@ import {
   Gauge,
   Users,
   Plane,
+  Printer,
 } from "lucide-react";
 import { supabase } from "../../../utils/supabase";
 import { resolveParentLine } from "../../../utils/productLines";
@@ -172,6 +174,16 @@ export default function CockpitPage() {
   const [targetRevenueInput, setTargetRevenueInput] = useState<string>("");
   const [sliders, setSliders] = useState<Record<LineKey, number>>({ auto: 0, fire: 0, life: 0, health: 0 });
   const hasAutoDistributedOnce = useRef(false);
+
+  // Export to PDF — mirrors ReportsTab's pattern: a dedicated print-only, light-background
+  // template (see below, right before the closing </div>) rather than trying to force the
+  // dark cockpit UI itself through @media print, so the sliders/buttons/nav chrome fall away
+  // and the math/tiers/tables render as clean black-on-white on a standard PDF page.
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `${agencySettings?.name || "Agency"} What-If Engine Report`,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -848,8 +860,8 @@ export default function CockpitPage() {
   const travelFullyQualifiedWithWhatIf = travelMetrics.every((m) => m.gapProjected <= 0);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-8 print:bg-white print:p-0 print:min-h-0">
+      <div className="max-w-6xl mx-auto space-y-8 print:hidden">
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <button
@@ -867,6 +879,12 @@ export default function CockpitPage() {
               exactly what it takes to get there, built from your actual Year-to-Date (YTD) performance.
             </p>
           </div>
+          <button
+            onClick={handlePrint}
+            className="shrink-0 inline-flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-5 py-3 rounded-xl shadow-[0_0_20px_-5px_rgba(34,211,238,0.5)] transition-colors self-start"
+          >
+            <Printer size={18} /> Export to PDF
+          </button>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -1321,6 +1339,211 @@ export default function CockpitPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* PRINT-ONLY PDF TEMPLATE — targeted by react-to-print; a clean, light-background
+          summary of the What-If Engine's numbers (never shown on screen). Sliders/inputs are
+          rendered as their current static value since a PDF has no interactivity. */}
+      <div ref={printRef} className="hidden print:block text-black bg-white p-8">
+        <header className="border-b-2 border-gray-800 pb-4 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Centravity Executive Cockpit</p>
+          <h1 className="text-2xl font-bold text-black leading-tight">The What-If Engine</h1>
+          <div className="mt-3 grid grid-cols-2 gap-x-8 gap-y-1 text-sm text-gray-700">
+            <p><span className="font-semibold text-black">Agency:</span> {agencySettings?.name || "Agency"}</p>
+            <p><span className="font-semibold text-black">Generated:</span> {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+          </div>
+        </header>
+
+        {agencySettings?.target_vc_active && (
+          <section className="mb-8">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-black mb-3 border-b border-gray-300 pb-1">
+              Additional Earned Comp (AEC) Tier Sniper
+            </h2>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase font-semibold">Auto Gain</p>
+                <p className="text-lg font-bold text-black">{model.autoVcPts.toFixed(2)} / 1.0</p>
+                <p className="text-[10px] text-gray-500">{model.netAutoApps} net apps</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase font-semibold">Fire Gain</p>
+                <p className="text-lg font-bold text-black">{model.fireVcPts.toFixed(2)} / 1.0</p>
+                <p className="text-[10px] text-gray-500">{model.netFireApps} net apps</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase font-semibold">FS Commission</p>
+                <p className="text-lg font-bold text-black">{model.fsVcPts.toFixed(2)} / 2.0</p>
+                <p className="text-[10px] text-gray-500">${money(model.ytdFsComm)}</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-800 mb-3">
+              <span className="font-semibold text-black">Current AEC Rate:</span> {model.currentVcTotal.toFixed(2)}%
+              &nbsp;&nbsp;<span className="font-semibold text-black">Target Year-End AEC:</span> {targetVc.toFixed(2)}%
+            </p>
+            {alreadyHitTarget ? (
+              <p className="text-sm font-bold text-emerald-700">Target already cleared — lock it in!</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-4 text-xs">
+                <div>
+                  <p className="text-gray-500 uppercase font-semibold">More Auto Apps</p>
+                  <p className="text-base font-bold text-black">+{additionalAutoApps}</p>
+                  {additionalAutoPremium !== null && <p className="text-gray-500">~${money(additionalAutoPremium)} premium</p>}
+                </div>
+                <div>
+                  <p className="text-gray-500 uppercase font-semibold">More Fire Apps</p>
+                  <p className="text-base font-bold text-black">+{additionalFireApps}</p>
+                  {additionalFirePremium !== null && <p className="text-gray-500">~${money(additionalFirePremium)} premium</p>}
+                </div>
+                <div>
+                  <p className="text-gray-500 uppercase font-semibold">More FS Commission</p>
+                  <p className="text-base font-bold text-black">+${money(additionalFsComm)}</p>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {agencySettings?.target_travel_active && (
+          <section className="mb-8">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-black mb-3 border-b border-gray-300 pb-1">
+              Roam &amp; Incentive Qualifier
+            </h2>
+            <p className="text-sm text-gray-800 mb-3">
+              <span className="font-semibold text-black">Status:</span> {travelCurrentTierName}
+              {model.travelTierIndex >= 0 ? " Qualified" : ""}
+              {!travelMaxedOut && (
+                <>
+                  &nbsp;&nbsp;<span className="font-semibold text-black">Next Milestone:</span> {travelTargetTier.name}
+                </>
+              )}
+            </p>
+            {travelMaxedOut ? (
+              <p className="text-sm font-bold text-emerald-700">Top tier unlocked — {travelCurrentTierName} secured!</p>
+            ) : (
+              <>
+                <table className="w-full text-left text-xs border-collapse mb-3">
+                  <thead>
+                    <tr>
+                      <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black">Metric</th>
+                      <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">Current</th>
+                      <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">Projected (What-If)</th>
+                      <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">Target</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {travelMetrics.map((m) => (
+                      <tr key={m.key}>
+                        <td className="border border-gray-300 px-3 py-2 font-semibold text-black">{m.label}</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right text-black">{m.format === "money" ? `$${money(m.current)}` : Math.round(m.current)}</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right text-black">{m.format === "money" ? `$${money(m.projected)}` : Math.round(m.projected)}</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right text-black">{m.format === "money" ? `$${money(m.target)}` : m.target}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {travelFullyQualifiedWithWhatIf ? (
+                  <p className="text-sm font-bold text-emerald-700">What-If plan clears {travelTargetTier.name} — lock it in!</p>
+                ) : (
+                  <p className="text-sm text-gray-800">
+                    <span className="font-semibold text-black">Bottleneck:</span> {travelBottleneck.label} — needs{" "}
+                    <span className="font-bold text-black">
+                      {travelBottleneck.format === "money" ? `$${money(travelBottleneck.gapProjected)}` : Math.ceil(travelBottleneck.gapProjected)}
+                    </span>{" "}
+                    more to reach {travelTargetTier.name}.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+        )}
+
+        <section className="mb-8">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-black mb-3 border-b border-gray-300 pb-1">Cash Flow Architect</h2>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm text-gray-800 mb-4">
+            <p><span className="font-semibold text-black">Target Annual Gross Revenue:</span> ${money(targetRevenue)}</p>
+            <p><span className="font-semibold text-black">Projected Revenue:</span> ${money(model.projectedAnnualRevenue)}</p>
+            <p><span className="font-semibold text-black">Revenue Gap:</span> ${money(revenueGap)}</p>
+            <p><span className="font-semibold text-black">Gap Filled by Plan:</span> ${money(totalFill)} ({fillPct.toFixed(0)}%)</p>
+          </div>
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black">Line</th>
+                <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">New Premium</th>
+                <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">Revenue</th>
+                <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">Required Apps</th>
+                <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">Quotes/Day</th>
+              </tr>
+            </thead>
+            <tbody>
+              {LINE_KEYS.map((k) => (
+                <tr key={k}>
+                  <td className="border border-gray-300 px-3 py-2 font-semibold text-black">New {LINE_LABELS[k]} Premium</td>
+                  <td className="border border-gray-300 px-3 py-2 text-right text-black">${money(sliders[k])}</td>
+                  <td className="border border-gray-300 px-3 py-2 text-right text-black">${money(fills[k])}</td>
+                  <td className="border border-gray-300 px-3 py-2 text-right text-black">{requiredApps[k] ?? "—"}</td>
+                  <td className="border border-gray-300 px-3 py-2 text-right text-black">{globalDailyTargets[k] ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        {producerBreakdown.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-black mb-3 border-b border-gray-300 pb-1">
+              Per-Producer Daily Quote Targets
+            </h2>
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr>
+                  <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black">Producer</th>
+                  <th className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">Close Rate</th>
+                  {LINE_KEYS.map((k) => (
+                    <th key={k} className="border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black text-right">{LINE_LABELS[k]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {producerBreakdown.map((p) => (
+                  <tr key={p.id}>
+                    <td className="border border-gray-300 px-3 py-2 font-semibold text-black whitespace-nowrap">{p.name}</td>
+                    <td className="border border-gray-300 px-3 py-2 text-right text-black">{p.closeRatePct.toFixed(1)}%</td>
+                    {LINE_KEYS.map((k) => (
+                      <td key={k} className="border border-gray-300 px-3 py-2 text-right text-black">{p.perLine[k] ?? "—"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        <section>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-black mb-3 border-b border-gray-300 pb-1">Book &amp; Revenue Summary</h2>
+          <div className="grid grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase font-semibold">Annual Book Premium</p>
+              <p className="text-base font-bold text-black">${money(model.totalBookPremium)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase font-semibold">New Business (YTD)</p>
+              <p className="text-base font-bold text-black">${money(model.totalNbRev)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase font-semibold">Net Renewals (P&amp;C)</p>
+              <p className="text-base font-bold text-black">${money(model.pncRenRev)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase font-semibold">Life/Health Renewals</p>
+              <p className="text-base font-bold text-black">${money(model.lifeHealthRenRev)}</p>
+            </div>
+          </div>
+        </section>
+
+        <footer className="mt-8 pt-3 border-t border-gray-300 text-[10px] text-gray-500">
+          Confidential — {agencySettings?.name || "Agency"} · Generated via Centravity Executive Cockpit
+        </footer>
       </div>
     </div>
   );

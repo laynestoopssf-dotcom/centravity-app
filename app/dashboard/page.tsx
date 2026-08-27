@@ -130,13 +130,10 @@ export default function Home() {
   };
   const [logDate, setLogDate] = useState(todayDateStr());
 
-  // Compact "Log Past Data" flow for Touches/Inbound Calls, which (unlike Quotes/Bound Apps)
-  // are logged via a single click with no modal at all in the normal flow.
+  // "Log Past Data" flow: picks a backdated date, then hands off to the full Quote/Bound
+  // form (openLogModal) pre-dated to that day - see startBackdatedEntry below.
   const [isBackdateModalOpen, setIsBackdateModalOpen] = useState(false);
-  const [backdateType, setBackdateType] = useState<'touchpoint' | 'inbound_call'>('touchpoint');
   const [backdateDate, setBackdateDate] = useState(todayDateStr());
-  const [backdateCount, setBackdateCount] = useState<number | string>(1);
-  const [isSubmittingBackdate, setIsSubmittingBackdate] = useState(false);
 
   const [selectedWeekStart, setSelectedWeekStart] = useState<string>(() => {
     const today = new Date();
@@ -2226,51 +2223,21 @@ export default function Home() {
     return () => window.removeEventListener('message', handleLoggerMessage);
   }, [profile, logInboundCall, logTouchpoint, openLogModal]);
 
-  // "Log Past Data" - covers Touches/Inbound Calls, which (unlike Quotes/Bound Apps) are logged
-  // via a single click with no modal in the normal flow, so they have no other way to backdate.
+  // "Log Past Data" - opens the date-picker modal below; the actual quote/bound entry itself
+  // then reuses the full openLogModal form (product line, premium, payment cycle) so historical
+  // production is captured with the same rigor as same-day entries.
   const openBackdateModal = () => {
-    setBackdateType('touchpoint');
     setBackdateDate(todayDateStr());
-    setBackdateCount(1);
     setIsBackdateModalOpen(true);
   };
 
-  const submitBackdatedActivity = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile || isSubmittingBackdate) return;
-    const count = Math.max(1, Math.trunc(Number(backdateCount)) || 1);
-    const [y, m, d] = backdateDate.split('-').map(Number);
-    if (!y || !m || !d) { showToast("Please choose a valid date.", "error"); return; }
-
-    setIsSubmittingBackdate(true);
-    try {
-      const now = new Date();
-      // Stagger each row a second apart (rather than all sharing one identical timestamp) purely
-      // for readable ordering in the Data Ledger - the ledger integrity trigger no longer
-      // penalizes near-simultaneous rows (see scripts/fix_ledger_integrity_trigger.sql).
-      const rows = Array.from({ length: count }, (_, i) => ({
-        id: crypto.randomUUID(),
-        activity_type: backdateType,
-        agency_id: profile.agency_id,
-        office_id: profile.office_id,
-        user_id: profile.id,
-        logged_at: new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds() + i).toISOString(),
-      }));
-
-      for (const row of rows) {
-        const { error } = await supabase.from('activities').insert(row);
-        if (error) { console.error('[submitBackdatedActivity] insert failed:', error); throw error; }
-      }
-
-      showToast(`Logged ${count} ${backdateType === 'touchpoint' ? 'Touchpoint' : 'Inbound Call'}${count > 1 ? 's' : ''} for ${new Date(`${backdateDate}T00:00:00`).toLocaleDateString()}!`);
-      setIsBackdateModalOpen(false);
-      fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
-      if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
-    } catch (error: any) {
-      showToast("Failed to log past activity: " + (error.message || "please try again."), "error");
-    } finally {
-      setIsSubmittingBackdate(false);
-    }
+  // Hands off from the lightweight date-picker to the full Quote/Bound form, pre-dating it to
+  // the chosen backdateDate so submitLogActivity's `logged_at`/`written_at`/`bound_at` timestamps
+  // (and therefore the activities + policies rows it writes) all land on that historical day.
+  const startBackdatedEntry = (type: 'quote' | 'bound') => {
+    setIsBackdateModalOpen(false);
+    openLogModal(type);
+    setLogDate(backdateDate);
   };
   
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -3670,34 +3637,32 @@ export default function Home() {
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in zoom-in-95 duration-200">
             <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2"><CalendarDays className="text-blue-600" size={22}/> Log Past Data</h2>
-            <p className="text-sm text-gray-500 mb-6">Forgot to log a call yesterday? Backfill it here.</p>
+            <p className="text-sm text-gray-500 mb-6">Forgot to log a quote or a bound app? Pick the date, then choose which one below — it opens the full form pre-dated.</p>
 
-            <form onSubmit={submitBackdatedActivity} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Activity Type</label>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setBackdateType('touchpoint')} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${backdateType === 'touchpoint' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Outbound Touch</button>
-                  <button type="button" onClick={() => setBackdateType('inbound_call')} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${backdateType === 'inbound_call' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Inbound Call</button>
-                </div>
-              </div>
-
+            <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Date</label>
                 <input type="date" required max={todayDateStr()} value={backdateDate} onChange={e => setBackdateDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
-                <input type="number" min="1" required value={backdateCount} onChange={e => setBackdateCount(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">What are you logging?</label>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => startBackdatedEntry('quote')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-purple-200 hover:border-purple-500 hover:bg-purple-50 text-purple-700 font-bold text-sm transition-all">
+                    <FileText size={18}/> Quote
+                  </button>
+                  <button type="button" onClick={() => startBackdatedEntry('bound')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 text-emerald-700 font-bold text-sm transition-all">
+                    <ShieldCheck size={18}/> Bound (App)
+                  </button>
+                </div>
               </div>
 
-              <p className="text-xs text-gray-400">Note: Quotes and Bound Apps can be backdated directly from the Log Quote / Log Bound form using its Date field.</p>
+              <p className="text-xs text-gray-400">Opens the full Quote / Bound form, pre-dated to {new Date(`${backdateDate}T00:00:00`).toLocaleDateString()} — product line, premium, and payment cycle all apply as normal, and it routes to the activities table with that backdated timestamp.</p>
 
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setIsBackdateModalOpen(false)} disabled={isSubmittingBackdate} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={isSubmittingBackdate} className="flex-1 py-3 px-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50">{isSubmittingBackdate ? 'Saving...' : 'Save Entry'}</button>
+              <div className="pt-2">
+                <button type="button" onClick={() => setIsBackdateModalOpen(false)} className="w-full py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
