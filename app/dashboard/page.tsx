@@ -1110,6 +1110,19 @@ export default function Home() {
   const fetchPipeline = async (userId: string, agencyId: string) => {
     const officeMemberIds = getActiveOfficeMemberIds();
 
+    // ROLE-BASED SEARCH SCOPING: an Owner/Office-Manager-level viewer (or anyone explicitly
+    // granted the view_agency_dash permission via a custom role) always gets the FULL
+    // office/agency's Active Pipeline here - and therefore the Identifier search box that reads
+    // from it - regardless of which single producer's scoreboard `selectedProducer` currently
+    // has the page pointed at. Without this, an owner who'd clicked into one team member's board
+    // to check their numbers would find the search box could only ever turn up THAT one
+    // producer's policies - looking exactly like "search is restricted to the logged-in user's
+    // own policies" even though they were logged in as the owner. A plain producer/service
+    // account is unaffected: `userId` still scopes to just their own work.
+    const roleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
+    const canSearchAgencyWide = roleConfig?.permissions?.view_agency_dash ?? isManagerLevelRole(profile?.role);
+    const scopedUserId = canSearchAgencyWide ? 'all' : userId;
+
     // BUG FIX: this used to be one single `select('*')...order('logged_at', desc).limit(500)`
     // query - fine for the (large, ever-growing) Issued Archive, but for an agency logging more
     // than 500 rows recently, that cap could silently push an OLDER still-open quote/bound policy
@@ -1121,7 +1134,7 @@ export default function Home() {
     // time-sensitive the same way - keeps a capped, most-recent-first fetch.
     let openQuery = supabase.from('policies').select('*').eq('agency_id', agencyId).in('status', ['quoted', 'bound']).order('logged_at', { ascending: false }).limit(20000);
     let archiveQuery = supabase.from('policies').select('*').eq('agency_id', agencyId).not('status', 'in', '(quoted,bound)').order('logged_at', { ascending: false }).limit(500);
-    if (userId !== 'all') { openQuery = openQuery.eq('user_id', userId); archiveQuery = archiveQuery.eq('user_id', userId); }
+    if (scopedUserId !== 'all') { openQuery = openQuery.eq('user_id', scopedUserId); archiveQuery = archiveQuery.eq('user_id', scopedUserId); }
     if (officeMemberIds) { openQuery = openQuery.in('user_id', officeMemberIds); archiveQuery = archiveQuery.in('user_id', officeMemberIds); }
 
     const [{ data: openData, error: openErr }, { data: archiveData, error: archiveErr }] = await Promise.all([openQuery, archiveQuery]);

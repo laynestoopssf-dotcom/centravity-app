@@ -6,7 +6,7 @@ import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
 import DashboardMetrics from './dashboard/DashboardMetrics';
 import { hashIdentifier } from '../utils/crypto';
-import { getCachedIdentifier } from '../utils/identifierCache';
+import { getCachedIdentifier, cacheIdentifier } from '../utils/identifierCache';
 import IdentifierChip from './ui/IdentifierChip';
 import FormattedNumberInput from './ui/FormattedNumberInput';
 import ProfileAvatar from './ui/ProfileAvatar';
@@ -73,6 +73,30 @@ export default function DashboardTab({
     }, 200);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [activeSearch, archiveSearch, showArchive]);
+
+  // "Enable View Action": once a search term resolves to an exact server-side hash match, this
+  // browser now KNOWS the plaintext for every row sharing that hash - including a team member's
+  // policy this browser never typed the identifier for itself (e.g. an owner searching a
+  // teammate's customer). Without this, <IdentifierChip> would keep rendering a bare, iconless
+  // "-" for those rows forever (its reveal/eye button only appears once something is cached - see
+  // components/ui/IdentifierChip.tsx), even though the searcher just proved they know exactly who
+  // that row belongs to. Caching it here is what makes the eye icon (and the reveal it unlocks)
+  // actually show up on matched search results.
+  useEffect(() => {
+    const term = activeSearch.trim();
+    if (!activeSearchHash || !term) return;
+    (pipeline || []).forEach((p: any) => {
+      if (p.client_identifier_hash === activeSearchHash) cacheIdentifier(p.id, term, activeSearchHash);
+    });
+  }, [activeSearchHash, activeSearch, pipeline]);
+
+  useEffect(() => {
+    const term = archiveSearch.trim();
+    if (!archiveSearchHash || !term) return;
+    (pipeline || []).forEach((p: any) => {
+      if (p.client_identifier_hash === archiveSearchHash) cacheIdentifier(p.id, term, archiveSearchHash);
+    });
+  }, [archiveSearchHash, archiveSearch, pipeline]);
 
   // Pipeline table sorting + pagination (Category 1: Scoreboard Table upgrades)
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'logged_at', direction: 'desc' });
