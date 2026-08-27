@@ -24,7 +24,11 @@ import { buildSystemPrompt, type CentravityRoleLabel } from "./systemPrompt";
 //    change Stratt's behavior; deriving server-side from the authenticated
 //    user's own id makes that impossible. Only a first name and an
 //    Owner/Team Member label are ever handed to the model — no agency name,
-//    no database IDs, no policy numbers.
+//    no database IDs, no policy numbers. `currentPath` (which tab/route the
+//    widget was open on — e.g. "/dashboard?tab=coaching") IS taken from the
+//    client as-is, unlike name/role, but it's low-stakes (there's nothing
+//    sensitive in knowing which tab you're already looking at) and shape-
+//    checked before use — see below.
 //
 // 3. INPUT SANITIZATION — the client-supplied conversation history is capped
 //    in length (MAX_MESSAGES turns) and per-message size (MAX_MESSAGE_LENGTH
@@ -46,6 +50,7 @@ export const runtime = "nodejs";
 
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 2000;
+const MAX_PATH_LENGTH = 200;
 
 interface RawIncomingMessage {
   role?: string;
@@ -65,6 +70,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => null);
     const accessToken: string | undefined = body?.accessToken;
     const rawMessages: RawIncomingMessage[] = Array.isArray(body?.messages) ? body.messages : [];
+    // Purely informational route context ("what page are they looking at?") —
+    // never trusted for auth/authorization, and capped + shape-checked like
+    // every other piece of client input on this route (see file header,
+    // section 3). Anything that doesn't look like a real app path is dropped
+    // rather than handed to the model verbatim.
+    const rawCurrentPath: unknown = body?.currentPath;
+    const currentPath =
+      typeof rawCurrentPath === "string" && rawCurrentPath.trim().startsWith("/")
+        ? rawCurrentPath.trim().slice(0, MAX_PATH_LENGTH)
+        : undefined;
 
     if (!accessToken) {
       return NextResponse.json({ error: "Unauthorized: missing session." }, { status: 401 });
@@ -100,7 +115,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No message provided." }, { status: 400 });
     }
 
-    const systemPrompt = buildSystemPrompt(firstName, roleLabel);
+    const systemPrompt = buildSystemPrompt(firstName, roleLabel, currentPath);
 
     const result = streamText({
       model: openai("gpt-4o-mini"),

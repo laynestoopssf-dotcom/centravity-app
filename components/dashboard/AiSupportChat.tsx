@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sparkles, X, Send, Loader2 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
+import { useDashboardTab } from "./DashboardShellContext";
 
 // =============================================================================
 // Floating "AI Support" chat widget — live, wired to app/api/chat/route.ts.
@@ -34,6 +36,16 @@ function makeId(): string {
 }
 
 export default function AiSupportChat() {
+  // `activeTab` is client-side state (see DashboardShellContext.tsx's header
+  // comment) — the URL itself is just "/dashboard" for every tab — so raw
+  // usePathname() alone can't tell Stratt apart a Scoreboard question from a
+  // Coaching one. Folding the active tab into the same currentPath string
+  // (rather than sending it as a separate field) keeps the API payload/system
+  // prompt contract simple: one human-readable "where are they" string.
+  const pathname = usePathname();
+  const { activeTab } = useDashboardTab();
+  const currentPath = pathname === "/dashboard" ? `/dashboard?tab=${activeTab}` : pathname;
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -78,7 +90,7 @@ export default function AiSupportChat() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken, messages: history }),
+        body: JSON.stringify({ accessToken, messages: history, currentPath }),
       });
 
       if (!res.ok || !res.body) {
