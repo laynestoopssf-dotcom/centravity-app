@@ -157,6 +157,28 @@ const emptyLineTotals = (): LineTotalsMap => ({
   health: { apps: 0, premium: 0 },
 });
 
+// Module-scope (not component state) so it survives unmount/remount of CockpitPage itself —
+// unlike every other tab in app/dashboard/page.tsx (a client-side state swap that never
+// unmounts), /dashboard/cockpit is a real Next.js route: navigating here from the sidebar
+// unmounts whatever was on screen and mounts this component fresh, which previously meant
+// PAYING THE FULL FETCH ROUND-TRIP EVERY SINGLE TIME the owner toggled into it, even for the
+// 2nd/3rd/10th visit in the same session. Stale-while-revalidate fixes that: on mount, if
+// there's a cached snapshot for this agency, it paints INSTANTLY from that (no spinner) while
+// a real fetch quietly runs in the background and swaps in fresh numbers a moment later -
+// same pattern as SWR/react-query, hand-rolled here rather than pulling in a new dependency
+// for one page. Cleared on a real page reload (module state), so it can never go stale across
+// browser sessions or leak between different signed-in agencies within the same tab (guarded
+// by the `agencyId` match check below regardless).
+interface CockpitCacheEntry {
+  agencyId: string;
+  agencySettings: any;
+  offices: any[];
+  team: any[];
+  policies: any[];
+  activities: any[];
+}
+let cockpitCache: CockpitCacheEntry | null = null;
+
 export default function CockpitPage() {
   const router = useRouter();
   const [status, setStatus] = useState<LoadState>("checking");
@@ -232,14 +254,32 @@ export default function CockpitPage() {
 
       const agencyId = prof.agency_id as string;
 
-      const [agencyRes, officesRes, teamRes] = await Promise.all([
+      // STALE-WHILE-REVALIDATE: paint instantly from the last fetch for this agency (if any) —
+      // see the cockpitCache comment above — instead of showing the "Booting up the Cockpit…"
+      // spinner again on every single toggle into this route. A fresh fetch below still always
+      // runs regardless, so the numbers on screen are never more than one round-trip stale.
+      const cached = cockpitCache && cockpitCache.agencyId === agencyId ? cockpitCache : null;
+      if (cached) {
+        setAgencySettings(cached.agencySettings);
+        setOffices(cached.offices);
+        setTeam(cached.team);
+        setPolicies(cached.policies);
+        setActivities(cached.activities);
+        setStatus("ready");
+      } else {
+        setStatus("loading");
+      }
+
+      // All 5 queries only ever need `agencyId` (known the instant the profile above resolves)
+      // — there's no real data dependency between the agency/offices/team batch and the
+      // policies/activities batch, so splitting them into two sequential Promise.all rounds (as
+      // this used to) cost a whole extra network round-trip for nothing. One flat Promise.all
+      // fires all 5 at once.
+      const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString();
+      const [agencyRes, officesRes, teamRes, policiesRes, activitiesRes] = await Promise.all([
         supabase.from("agencies").select("*").eq("id", agencyId).maybeSingle(),
         supabase.from("offices").select("*").eq("agency_id", agencyId),
         supabase.from("profiles").select("*").eq("agency_id", agencyId).eq("is_archived", false),
-      ]);
-
-      const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString();
-      const [policiesRes, activitiesRes] = await Promise.all([
         supabase
           .from("policies")
           .select("id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at")
@@ -260,43 +300,63 @@ export default function CockpitPage() {
 
       if (!mounted) return;
 
-      if (agencyRes.error) {
-        console.error("[Cockpit] agency lookup failed", agencyRes.error);
-        setErrorMsg("We couldn't load your agency settings.");
-        setStatus("error");
-        return;
-      }
-      if (officesRes.error) {
-        console.error("[Cockpit] offices lookup failed", officesRes.error);
-        setErrorMsg("We couldn't load your office locations.");
-        setStatus("error");
-        return;
-      }
-      if (teamRes.error) {
-        console.error("[Cockpit] team lookup failed", teamRes.error);
-        setErrorMsg("We couldn't load your team roster.");
-        setStatus("error");
-        return;
-      }
-      if (policiesRes.error) {
-        console.error("[Cockpit] policies lookup failed", policiesRes.error);
-        setErrorMsg("We couldn't load your production data.");
-        setStatus("error");
-        return;
-      }
-      if (activitiesRes.error) {
-        console.error("[Cockpit] activities lookup failed", activitiesRes.error);
-        setErrorMsg("We couldn't load your activity data.");
-        setStatus("error");
+      // A failed BACKGROUND revalidation (cached !== null) shouldn't yank away data the user is
+      // already looking at and dump them on the full-screen error state — only a first-ever
+      // load (nothing cached yet) with no fallback to show does that.
+      if (agencyRes.error) console.error("[Cockpit] agency lookup failed", agencyRes.error);
+      if (officesRes.error) console.error("[Cockpit] offices lookup failed", officesRes.error);
+      if (teamRes.error) console.error("[Cockpit] team lookup failed", teamRes.error);
+      if (policiesRes.error) console.error("[Cockpit] policies lookup failed", policiesRes.error);
+      if (activitiesRes.error) console.error("[Cockpit] activities lookup failed", activitiesRes.error);
+
+      if (!cached) {
+        if (agencyRes.error) {
+          setErrorMsg("We couldn't load your agency settings.");
+          setStatus("error");
+          return;
+        }
+        if (officesRes.error) {
+          setErrorMsg("We couldn't load your office locations.");
+          setStatus("error");
+          return;
+        }
+        if (teamRes.error) {
+          setErrorMsg("We couldn't load your team roster.");
+          setStatus("error");
+          return;
+        }
+        if (policiesRes.error) {
+          setErrorMsg("We couldn't load your production data.");
+          setStatus("error");
+          return;
+        }
+        if (activitiesRes.error) {
+          setErrorMsg("We couldn't load your activity data.");
+          setStatus("error");
+          return;
+        }
+      } else if (agencyRes.error || officesRes.error || teamRes.error || policiesRes.error || activitiesRes.error) {
+        // Already showing the cached snapshot from earlier in this function — just leave it up
+        // and quietly skip the refresh below rather than overwriting good data with partial
+        // nulls from a half-failed revalidation.
         return;
       }
 
-      setAgencySettings(agencyRes.data || null);
-      setOffices(officesRes.data || []);
-      setTeam(teamRes.data || []);
-      setPolicies(policiesRes.data || []);
-      setActivities(activitiesRes.data || []);
+      const fresh: CockpitCacheEntry = {
+        agencyId,
+        agencySettings: agencyRes.data || null,
+        offices: officesRes.data || [],
+        team: teamRes.data || [],
+        policies: policiesRes.data || [],
+        activities: activitiesRes.data || [],
+      };
+      setAgencySettings(fresh.agencySettings);
+      setOffices(fresh.offices);
+      setTeam(fresh.team);
+      setPolicies(fresh.policies);
+      setActivities(fresh.activities);
       setStatus("ready");
+      cockpitCache = fresh;
     };
 
     load().catch((err) => {
@@ -771,6 +831,15 @@ export default function CockpitPage() {
   };
 
   // --- Translation Layer: premium → required apps (Tweak 3) ---
+  // NOTE: intentionally a plain `const`, not `useMemo` - this whole block of the render body
+  // (here through producerBreakdown/travelMetrics below) runs AFTER the "checking"/"loading"/
+  // "error" early `return`s above, so a hook here would be called conditionally across
+  // different renders (a Rules-of-Hooks violation: React requires the exact same hooks in the
+  // exact same order on every render of a given component instance). This math is O(team
+  // size / 4 line keys) - a handful of iterations - never O(policies), so there's no real cost
+  // being paid by NOT memoizing it; the actual O(policies) work (YTD premium, AEC/VC pacing,
+  // Net Lapse) already lives in the `model` useMemo above, which correctly sits BEFORE the
+  // early returns and is the one that matters for the 1,150-policy dataset.
   const requiredApps: Record<LineKey, number | null> = {
     auto: model.avgPremiumPerApp.auto ? Math.ceil(sliders.auto / model.avgPremiumPerApp.auto) : null,
     fire: model.avgPremiumPerApp.fire ? Math.ceil(sliders.fire / model.avgPremiumPerApp.fire) : null,
