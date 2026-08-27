@@ -18,6 +18,7 @@ import {
   LifeBuoy,
   Crown,
   UserCircle,
+  GraduationCap,
 } from "lucide-react";
 import { useDashboardTab, type DashboardTabId } from "./DashboardShellContext";
 
@@ -104,6 +105,11 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
     { tab: "life", label: "Life Module", icon: HeartPulse, show: canViewLifeModule },
     { tab: "ledger", label: "Data Ledger", icon: BookOpen, show: true },
     { tab: "reports", label: "Reports", icon: FileBarChart, show: canViewReports },
+    // Ungated like Data Ledger - every role gets in, not just managers: Deal
+    // Autopsies and the Sparring Ring (see components/CoachingTab.tsx) are
+    // producer-facing self-serve tools, only the 1-on-1 Snapshot half of the
+    // tab is manager-only, gated INSIDE the component itself.
+    { tab: "coaching", label: "Coaching", icon: GraduationCap, show: true },
   ];
 
   const renderButton = (item: NavItem) => {

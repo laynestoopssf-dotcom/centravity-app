@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MapPin } from 'lucide-react';
+import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MapPin, GraduationCap } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { supabase } from '../utils/supabase';
 import { resolveParentLine } from '../utils/productLines';
@@ -43,6 +43,57 @@ export default function DashboardTab({
   const [archiveSearch, setArchiveSearch] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [timeframe, setTimeframe] = useState<'daily'|'weekly'|'monthly'>('daily');
+
+  // "Send to Coaching" (Coaching Suite Feature 2 - Deal Autopsies, components/CoachingTab.tsx).
+  // Tracks which policy_ids already have a deal_autopsies row so the button can flip to a
+  // disabled "Sent" state, both right after clicking it and on reload. Table-not-exists (the
+  // migration hasn't been applied yet) degrades to "button always available, insert just fails
+  // with a friendly message" rather than crashing the whole Active Pipeline table.
+  const [coachingFlaggedIds, setCoachingFlaggedIds] = useState<Set<string>>(new Set());
+  const [sendingToCoachingId, setSendingToCoachingId] = useState<string | null>(null);
+  const [coachingErrorMsg, setCoachingErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!profile?.agency_id) return;
+    let mounted = true;
+    supabase.from('deal_autopsies').select('policy_id').eq('agency_id', profile.agency_id).then(({ data, error }: any) => {
+      if (!mounted) return;
+      if (error) {
+        if (error.code !== '42P01') console.error('[DashboardTab] deal_autopsies lookup failed', error);
+        return;
+      }
+      setCoachingFlaggedIds(new Set((data || []).map((r: any) => r.policy_id)));
+    });
+    return () => { mounted = false; };
+  }, [profile?.agency_id]);
+
+  const sendToCoaching = async (pol: any) => {
+    if (!profile?.agency_id || coachingFlaggedIds.has(pol.id) || sendingToCoachingId) return;
+    setSendingToCoachingId(pol.id);
+    setCoachingErrorMsg(null);
+    const { error } = await supabase.from('deal_autopsies').insert({
+      agency_id: profile.agency_id,
+      policy_id: pol.id,
+      producer_id: pol.user_id,
+    });
+    setSendingToCoachingId(null);
+    if (error) {
+      // 23505 = unique violation on the "one open autopsy per policy" index - it's already
+      // tagged (maybe by a teammate a moment ago), so just reflect that instead of erroring.
+      if (error.code === '23505') {
+        setCoachingFlaggedIds((prev) => new Set(prev).add(pol.id));
+        return;
+      }
+      console.error('[DashboardTab] sendToCoaching failed', error);
+      setCoachingErrorMsg(
+        error.code === '42P01'
+          ? "Coaching module isn't set up yet — ask your admin to run the latest database migration."
+          : 'Failed to send this deal to Coaching. Please try again.'
+      );
+      return;
+    }
+    setCoachingFlaggedIds((prev) => new Set(prev).add(pol.id));
+  };
 
   // Identifiers are blind-indexed server-side, so there's no way to ask the DB for a substring
   // match against every OTHER producer's identifiers - only an exact-match hash comparison,
@@ -1070,6 +1121,9 @@ export default function DashboardTab({
       </div>}
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-6">
+        {coachingErrorMsg && (
+          <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs font-bold">{coachingErrorMsg}</div>
+        )}
         <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
            <h3 className="font-bold text-gray-900 flex items-center gap-2">
              {showArchive ? <Archive size={20} className="text-gray-500" /> : <List size={20} className="text-blue-500" />}
@@ -1138,16 +1192,34 @@ export default function DashboardTab({
                            <button onClick={() => setEditingPolicyId(null)} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded">Cancel</button>
                         </div>
                       ) : (
-                        <select 
-                          value={pol.status} 
-                          onChange={(e) => handleStatusUpdate(pol.id, e.target.value, pol.premium_amount)}
-                          className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer border ${pol.status === 'quoted' ? 'bg-purple-50 text-purple-700 border-purple-100' : pol.status === 'bound' ? 'bg-blue-50 text-blue-700 border-blue-100' : pol.status === 'not_taken' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}
-                        >
-                          <option value="quoted">Quoted</option>
-                          <option value="bound">Bound (Pending)</option>
-                          <option value="issued">Issued</option>
-                          <option value="not_taken">Not Taken / Declined by Underwriting</option>
-                        </select>
+                        <div className="flex items-center justify-end gap-2">
+                          {pol.status === 'quoted' && (
+                            coachingFlaggedIds.has(pol.id) ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 whitespace-nowrap">
+                                <GraduationCap size={13} /> Sent
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => sendToCoaching(pol)}
+                                disabled={sendingToCoachingId === pol.id}
+                                title="Flag this deal in the Coaching tab so you can log the objection and get an AI talk-path"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap"
+                              >
+                                <GraduationCap size={13} /> Send to Coaching
+                              </button>
+                            )
+                          )}
+                          <select 
+                            value={pol.status} 
+                            onChange={(e) => handleStatusUpdate(pol.id, e.target.value, pol.premium_amount)}
+                            className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer border ${pol.status === 'quoted' ? 'bg-purple-50 text-purple-700 border-purple-100' : pol.status === 'bound' ? 'bg-blue-50 text-blue-700 border-blue-100' : pol.status === 'not_taken' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}
+                          >
+                            <option value="quoted">Quoted</option>
+                            <option value="bound">Bound (Pending)</option>
+                            <option value="issued">Issued</option>
+                            <option value="not_taken">Not Taken / Declined by Underwriting</option>
+                          </select>
+                        </div>
                       )}
                     </td>
                   </tr>

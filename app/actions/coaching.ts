@@ -35,12 +35,14 @@ import type { CoachingInsightPayload, CoachingInsightResult } from "./coaching.t
 
 // gemini-2.5-flash returned a 404 ("no longer available to new users") -
 // Google shut down the 2.x Flash line entirely. gemini-3.6-flash (GA as of
-// July 21, 2026) is the current stable successor in the same Flash tier -
-// the tier Google's free quota is built around, as opposed to the heavier
-// "pro" models. If this 404s again in the future, check
-// https://ai.google.dev/gemini-api/docs/changelog for the current
-// generally-available Flash model id before assuming it's a bug here.
-const GEMINI_MODEL = "gemini-3.6-flash";
+// July 21, 2026) was the next successor, but started returning 503s (model
+// overloaded/at capacity) under this app's key - see
+// app/api/ai/geminiClient.ts (shared by the Coaching Suite's two newer AI
+// routes) for the fuller note. Pinned back to gemini-1.5-flash here too so
+// this and the Coaching Suite don't drift onto two different models. If
+// THIS one ever 404s (fully retired), check
+// https://ai.google.dev/gemini-api/docs/changelog for a current id.
+const GEMINI_MODEL = "gemini-1.5-flash";
 
 let cachedGemini: GoogleGenAI | null = null;
 

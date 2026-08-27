@@ -22,6 +22,7 @@ import {
   Printer,
 } from "lucide-react";
 import { supabase } from "../../../utils/supabase";
+import { isOwnerLevelRole } from "../../../utils/roles";
 import { resolveParentLine } from "../../../utils/productLines";
 import { resolveCommissionRates, getLifeRate, getHealthRate } from "../../../utils/commissionRates";
 import { getWorkingDaysRemainingInYear } from "../../../utils/pacing";
@@ -214,6 +215,18 @@ export default function CockpitPage() {
         console.error("[Cockpit] profile/agency lookup failed", profErr);
         setErrorMsg("We couldn't load your agency data.");
         setStatus("error");
+        return;
+      }
+
+      // SECURITY: the sidebar only ever links here for canManageSettings (owner-level)
+      // users (see DashboardSidebar.tsx), but that's nav-visibility only - nothing
+      // previously stopped a Producer/Service account from typing /dashboard/cockpit
+      // into the address bar directly and loading it anyway, Roam & Incentive
+      // Qualifier / AEC Tier Sniper / agency financials included. Bounced back to the
+      // regular dashboard before any agency-wide data fetch below even starts, same
+      // "not signed in" redirect pattern as the auth check above.
+      if (!isOwnerLevelRole(prof.role)) {
+        router.replace("/dashboard");
         return;
       }
 

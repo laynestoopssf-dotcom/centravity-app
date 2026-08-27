@@ -40,6 +40,7 @@ export type DashboardTabId =
   | "life"
   | "ledger"
   | "reports"
+  | "coaching"
   | "settings"
   | "feedback"
   | "profile";

@@ -37,6 +37,7 @@ import AgencyOverviewTab from '../../components/AgencyOverviewTab';
 import LifeTab from '../../components/LifeTab';
 import LedgerTab from '../../components/LedgerTab';
 import ReportsTab from '../../components/ReportsTab';
+import CoachingTab from '../../components/CoachingTab';
 import SettingsTab from '../../components/SettingsTab';
 import FeedbackTab from '../../components/FeedbackTab';
 import MyProfileTab from '../../components/MyProfileTab';
@@ -3424,6 +3425,8 @@ export default function Home() {
         {activeTab === 'ledger' && <LedgerTab profile={profile} team={team} agencySettings={agencySettings} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} deleteActivitiesBulk={deleteActivitiesBulk} deletePoliciesBulk={deletePoliciesBulk} updateLedgerActivity={updateLedgerActivity} updateLedgerPolicy={updateLedgerPolicy} />}
 
         {activeTab === 'reports' && canViewReports && <ReportsTab team={team} profile={profile} agencySettings={agencySettings} />}
+
+        {activeTab === 'coaching' && <CoachingTab profile={profile} team={team} offices={offices} agencySettings={agencySettings} pipeline={pipeline} showToast={showToast} />}
         
         {activeTab === 'weekly' && canViewWeeklyRank && weeklyOverviewData && <WeeklyRankTab 
           weeklyOverviewData={weeklyOverviewData} 
