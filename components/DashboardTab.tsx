@@ -1137,6 +1137,7 @@ export default function DashboardTab({
                  placeholder="Search Identifier, Line, or Team Member..."
                  value={showArchive ? archiveSearch : activeSearch}
                  onChange={(e) => { setCurrentPage(1); if (showArchive) setArchiveSearch(e.target.value); else setActiveSearch(e.target.value); }}
+                 title="Identifier matches must be the exact text as originally logged (case-insensitive) unless you've already revealed that customer's identifier in this browser before - see the note below the table when a search comes up empty."
                  className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400"
                />
              </div>
@@ -1160,7 +1161,22 @@ export default function DashboardTab({
             </thead>
             <tbody>
               {sortedPipelineRows.length === 0 ? (
-                <tr><td colSpan={6} className="p-8 text-center text-gray-400 text-sm font-medium">{showArchive ? 'No issued policies match your search.' : 'Pipeline is empty. Time to hit the phones!'}</td></tr>
+                <tr><td colSpan={6} className="p-8 text-center text-sm font-medium">
+                  {(showArchive ? archiveSearch : activeSearch).trim() ? (
+                    // A non-empty search came up empty. This is NOT necessarily a permissions/RLS
+                    // problem - identifiers are one-way hashed (see utils/crypto.ts), so an exact
+                    // string match against the ORIGINAL text as logged is required for any row this
+                    // browser hasn't already revealed itself (see identifierCache.ts). Owners/managers
+                    // already search the full agency/office pipeline here, not just their own rows -
+                    // spelling this out so a partial/fuzzy term for a teammate's customer doesn't read
+                    // as "search is broken" or "I can't see my team's policies."
+                    <span className="text-gray-400">
+                      No exact match for &ldquo;{(showArchive ? archiveSearch : activeSearch).trim()}&rdquo;. Identifier search needs the <span className="font-bold text-gray-500">exact text</span> as originally logged (case-insensitive) - partial text only matches identifiers already revealed in this browser. Try the full identifier, or search by product line/team member name instead.
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">{showArchive ? 'No issued policies match your search.' : 'Pipeline is empty. Time to hit the phones!'}</span>
+                  )}
+                </td></tr>
               ) : (
                 paginatedPipelineRows.map((pol: any) => (
                   <tr key={pol.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
