@@ -1108,16 +1108,26 @@ export default function Home() {
   };
 
   const fetchPipeline = async (userId: string, agencyId: string) => {
-    // Raised from 50 -> 500 so the Scoreboard's pipeline table has enough rows for its new
-    // pagination controls to be meaningful, while still bounding query size for performance.
-    let query = supabase.from('policies').select('*').eq('agency_id', agencyId).order('logged_at', { ascending: false }).limit(500);
-    if (userId !== 'all') query = query.eq('user_id', userId);
-    
     const officeMemberIds = getActiveOfficeMemberIds();
-    if (officeMemberIds) query = query.in('user_id', officeMemberIds);
-    
-    const { data } = await query;
-    if (data) setPipeline(data);
+
+    // BUG FIX: this used to be one single `select('*')...order('logged_at', desc).limit(500)`
+    // query - fine for the (large, ever-growing) Issued Archive, but for an agency logging more
+    // than 500 rows recently, that cap could silently push an OLDER still-open quote/bound policy
+    // (one that's been sitting unconverted for weeks, so it sorts far down a logged_at-desc list)
+    // out of `pipeline` entirely - making it invisible not just to the Identifier search box, but
+    // to the whole Active Pipeline table. Quoted/Bound are the working set a producer actively
+    // needs to find, so they're now fetched with NO cap (a generous safety ceiling, not a
+    // "most recent N" cutoff) while the Archive - which already paginates client-side and isn't
+    // time-sensitive the same way - keeps a capped, most-recent-first fetch.
+    let openQuery = supabase.from('policies').select('*').eq('agency_id', agencyId).in('status', ['quoted', 'bound']).order('logged_at', { ascending: false }).limit(20000);
+    let archiveQuery = supabase.from('policies').select('*').eq('agency_id', agencyId).not('status', 'in', '(quoted,bound)').order('logged_at', { ascending: false }).limit(500);
+    if (userId !== 'all') { openQuery = openQuery.eq('user_id', userId); archiveQuery = archiveQuery.eq('user_id', userId); }
+    if (officeMemberIds) { openQuery = openQuery.in('user_id', officeMemberIds); archiveQuery = archiveQuery.in('user_id', officeMemberIds); }
+
+    const [{ data: openData, error: openErr }, { data: archiveData, error: archiveErr }] = await Promise.all([openQuery, archiveQuery]);
+    if (openErr) console.error('[fetchPipeline] open (quoted/bound) fetch failed', openErr);
+    if (archiveErr) console.error('[fetchPipeline] archive fetch failed', archiveErr);
+    setPipeline([...(openData || []), ...(archiveData || [])]);
   };
 
   const fetchLedgerData = async () => {
@@ -3327,8 +3337,8 @@ export default function Home() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && <DashboardTab 
-          profile={profile} team={team} stats={stats} chartData={chartData} pipeline={pipeline} commissionData={commissionData} teamCommissions={teamCommissions} 
+        {activeTab === 'dashboard' && <DashboardTab
+          profile={profile} team={team} archivedTeam={archivedTeam} stats={stats} chartData={chartData} pipeline={pipeline} commissionData={commissionData} teamCommissions={teamCommissions}
           dailyQuoteRate={stats.todayTouches > 0 ? ((stats.todayQuotes / stats.todayTouches) * 100).toFixed(1) : "0.0"} 
           dailyCloseRate={stats.todayQuotes > 0 ? ((stats.todayBound / stats.todayQuotes) * 100).toFixed(1) : "0.0"} 
           monthQuoteRate={stats.monthTouches > 0 ? ((stats.monthQuotes / stats.monthTouches) * 100).toFixed(1) : "0.0"} 

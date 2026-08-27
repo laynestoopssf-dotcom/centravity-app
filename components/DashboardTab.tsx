@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MapPin } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { supabase } from '../utils/supabase';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole } from '../utils/roles';
 import DashboardMetrics from './dashboard/DashboardMetrics';
@@ -16,7 +17,7 @@ const displayIdentifier = (policyId: string, hash?: string | null) => getCachedI
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
 export default function DashboardTab({ 
-  profile, team, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
+  profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
   offices, selectedOffice, setSelectedOffice, customTargets
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -120,23 +121,93 @@ export default function DashboardTab({
     return Number(commissionData?.total) || 0;
   }, [teamCommissions, commissionData]);
 
-  // Daily Production Roster: groups today's bound/issued policies (from the existing `pipeline`
-  // array, which is already scoped to the selected producer/office) by team member, so managers
-  // can see exactly who wrote what today without leaving the main dashboard.
+  // Production Roster: groups the selected date window's bound/issued policies by team member,
+  // so managers can see exactly who wrote what without leaving the main dashboard.
   const [expandedRosterUserId, setExpandedRosterUserId] = useState<string | null>(null);
-  const dailyRoster = useMemo(() => {
-    const todayStr = new Date().toDateString();
-    const todaysPolicies = (pipeline || []).filter((p: any) => {
-      if (p.status !== 'bound' && p.status !== 'issued') return false;
-      // bound_at (stamped once, the moment status first becomes 'bound') - not logged_at, which
-      // stays at quote time for an existing quote converted to bound later, and gets re-stamped to
-      // "now" on a later bound -> issued transition - is what decides "today". See the identical
-      // fix/note on the Scoreboard's own boundDate calc in app/dashboard/page.tsx.
-      return new Date(p.bound_at || p.written_at || p.logged_at).toDateString() === todayStr;
-    });
 
+  // Time filter for the roster below - deliberately its OWN dedicated Supabase query (not a
+  // client-side filter over the `pipeline` prop, which is capped at 500 rows ordered by
+  // logged_at and would silently drop an older quote that just bound today in a busy agency)
+  // so switching Today/This Week/Last Week/Current Month always reflects the FULL set of
+  // bound/issued policies for that window.
+  const ROSTER_TIMEFRAMES = ['today', 'week', 'lastWeek', 'month'] as const;
+  type RosterTimeframe = typeof ROSTER_TIMEFRAMES[number];
+  const ROSTER_TIMEFRAME_LABELS: Record<RosterTimeframe, string> = {
+    today: "Today's Production", week: "This Week's Production", lastWeek: "Last Week's Production", month: "This Month's Production",
+  };
+  const [rosterTimeframe, setRosterTimeframe] = useState<RosterTimeframe>('today');
+  const [rosterPolicies, setRosterPolicies] = useState<any[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+
+  useEffect(() => {
+    if (!profile?.agency_id) return;
+    let cancelled = false;
+
+    (async () => {
+      setRosterLoading(true);
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfTomorrow = new Date(startOfToday); startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+      // Same Monday-start week convention as fetchDashboardData in app/dashboard/page.tsx.
+      const dow = now.getDay();
+      const diffToMonday = now.getDate() - dow + (dow === 0 ? -6 : 1);
+      const thisMonday = new Date(now.getFullYear(), now.getMonth(), diffToMonday);
+      const lastMonday = new Date(thisMonday); lastMonday.setDate(thisMonday.getDate() - 7);
+      const nextMonday = new Date(thisMonday); nextMonday.setDate(thisMonday.getDate() + 7);
+
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      let rangeStart: Date, rangeEnd: Date;
+      switch (rosterTimeframe) {
+        case 'week': rangeStart = thisMonday; rangeEnd = nextMonday; break;
+        case 'lastWeek': rangeStart = lastMonday; rangeEnd = thisMonday; break;
+        case 'month': rangeStart = startOfMonth; rangeEnd = startOfNextMonth; break;
+        default: rangeStart = startOfToday; rangeEnd = startOfTomorrow;
+      }
+
+      // Cast a wider SQL net (a policy can sit quoted for weeks before binding inside the
+      // selected window), then filter to the EXACT boundDate (bound_at -> written_at ->
+      // logged_at fallback, same as fetchDashboardData) client-side.
+      const fetchFloor = new Date(rangeStart);
+      fetchFloor.setDate(fetchFloor.getDate() - 60);
+
+      const officeMemberIds = activeOfficeVal !== 'all' ? (team || []).filter((t: any) => t.office_id === activeOfficeVal).map((t: any) => t.id) : null;
+
+      let query = supabase.from('policies')
+        .select('id, user_id, office_id, status, premium_amount, product_line, logged_at, written_at, bound_at')
+        .eq('agency_id', profile.agency_id)
+        .in('status', ['bound', 'issued'])
+        .gte('logged_at', fetchFloor.toISOString())
+        .limit(20000);
+      if (selectedProducer && selectedProducer !== 'all') query = query.eq('user_id', selectedProducer);
+      if (officeMemberIds) query = query.in('user_id', officeMemberIds);
+
+      const { data, error } = await query;
+      if (cancelled) return;
+      if (error) {
+        console.error('[DashboardTab] production roster fetch failed', error);
+        setRosterPolicies([]);
+      } else {
+        const inRange = (p: any) => {
+          const d = new Date(p.bound_at || p.written_at || p.logged_at);
+          return d >= rangeStart && d < rangeEnd;
+        };
+        setRosterPolicies((data || []).filter(inRange));
+      }
+      setRosterLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+    // `pipeline` is included purely as a "something just changed" signal (page.tsx re-fetches
+    // it after every log/status-update action) so newly logged production shows up here too,
+    // without needing a duplicate refetch call wired through every one of its call sites.
+  }, [rosterTimeframe, profile?.agency_id, selectedProducer, activeOfficeVal, team, pipeline]);
+
+  const productionRoster = useMemo(() => {
     const byUser = new Map<string, any>();
-    todaysPolicies.forEach((p: any) => {
+    (rosterPolicies || []).forEach((p: any) => {
       const uid = p.user_id;
       if (!byUser.has(uid)) {
         const member = (team || []).find((t: any) => t.id === uid);
@@ -159,7 +230,7 @@ export default function DashboardTab({
     });
 
     return Array.from(byUser.values()).sort((a, b) => b.apps - a.apps);
-  }, [pipeline, team, agencySettings]);
+  }, [rosterPolicies, team, agencySettings]);
 
   if (!profile) return null;
 
@@ -177,15 +248,31 @@ export default function DashboardTab({
     setEditingPolicyId(null);
   };
 
+  // Pipeline Attribution: resolves whichever team member wrote/owns a policy, so the Active
+  // Pipeline / Archive table can render a Team Member column instead of leaving it implicit.
+  // Falls back to `archivedTeam` (a producer who's since been archived/removed still wrote real
+  // historical production) before giving up with "Unknown Producer".
+  const nameForUser = (userId: string): string => {
+    const member = (team || []).find((t: any) => t.id === userId) || (archivedTeam || []).find((t: any) => t.id === userId);
+    return member ? `${member.first_name} ${member.last_name}` : 'Unknown Producer';
+  };
+
   // Shared by both filters below: matches if the exact server-computed hash lines up, OR this
   // browser's own local cache resolves a plaintext label for the row that substring-matches the
   // typed term (see the identifierCache note above), OR the term substring-matches the product
-  // line itself.
-  const matchesIdentifierSearch = (p: any, term: string, hash: string | null) => {
+  // line or the assigned team member's name.
+  const matchesIdentifierSearch = (p: any, rawTerm: string, hash: string | null) => {
+    // Trimmed so a stray leading/trailing space (the RPC already trims server-side before
+    // hashing - see utils/crypto.ts - but the client-side cachedLabel/product_line/name
+    // fallbacks below never went through that normalization) doesn't silently break every
+    // match path except the exact-hash one.
+    const term = rawTerm.trim();
+    if (!term) return true;
     if (hash !== null && p.client_identifier_hash === hash) return true;
     const cachedLabel = getCachedIdentifier(p.id, p.client_identifier_hash);
     if (cachedLabel && cachedLabel.toLowerCase().includes(term)) return true;
-    return p.product_line.toLowerCase().includes(term);
+    if ((p.product_line || '').toLowerCase().includes(term)) return true;
+    return nameForUser(p.user_id).toLowerCase().includes(term);
   };
 
   const activePipeline = (pipeline || []).filter((p: any) => {
@@ -225,6 +312,7 @@ export default function DashboardTab({
         // Best-effort: sorts by whatever readable label this browser can resolve locally
         // (see displayIdentifier above) - there is no plaintext name left to sort by otherwise.
         case 'identifier': aVal = displayIdentifier(a.id, a.client_identifier_hash).toLowerCase(); bVal = displayIdentifier(b.id, b.client_identifier_hash).toLowerCase(); break;
+        case 'producer': aVal = nameForUser(a.user_id).toLowerCase(); bVal = nameForUser(b.user_id).toLowerCase(); break;
         case 'product_line': aVal = (a.product_line || '').toLowerCase(); bVal = (b.product_line || '').toLowerCase(); break;
         case 'premium_amount': aVal = Number(a.premium_amount) || 0; bVal = Number(b.premium_amount) || 0; break;
         case 'status': aVal = a.status || ''; bVal = b.status || ''; break;
@@ -863,12 +951,27 @@ export default function DashboardTab({
           just the viewer's own. */}
       {canViewProductionRoster && <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-6">
         <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-          <h3 className="font-bold text-gray-900 flex items-center gap-2"><Users size={18} className="text-emerald-500" /> Today's Production</h3>
-          <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm">{dailyRoster.length} {dailyRoster.length === 1 ? 'Producer' : 'Producers'} On The Board</span>
+          <h3 className="font-bold text-gray-900 flex items-center gap-2">
+            <Users size={18} className="text-emerald-500" /> {ROSTER_TIMEFRAME_LABELS[rosterTimeframe]}
+            {rosterLoading && <RefreshCw size={13} className="text-gray-300 animate-spin" />}
+          </h3>
+          <div className="flex items-center gap-2">
+            <select
+              value={rosterTimeframe}
+              onChange={(e) => setRosterTimeframe(e.target.value as RosterTimeframe)}
+              className="text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400 cursor-pointer"
+            >
+              <option value="today">Today</option>
+              <option value="week">This Week</option>
+              <option value="lastWeek">Last Week</option>
+              <option value="month">Current Month</option>
+            </select>
+            <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm whitespace-nowrap">{productionRoster.length} {productionRoster.length === 1 ? 'Producer' : 'Producers'} On The Board</span>
+          </div>
         </div>
-        {dailyRoster.length === 0 ? (
+        {productionRoster.length === 0 ? (
           <div className="p-10 text-center">
-            <p className="text-gray-400 font-bold">No production yet today. Let's get on the board! 🚀</p>
+            <p className="text-gray-400 font-bold">{rosterLoading ? 'Loading...' : "No production yet for this window. Let's get on the board! 🚀"}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -887,7 +990,7 @@ export default function DashboardTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {dailyRoster.map((row: any) => (
+                {productionRoster.map((row: any) => (
                   <React.Fragment key={row.userId}>
                     <tr
                       onClick={() => setExpandedRosterUserId(prev => prev === row.userId ? null : row.userId)}
@@ -953,7 +1056,7 @@ export default function DashboardTab({
                <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
                <input
                  type="text"
-                 placeholder="Search exact Identifier or Line..."
+                 placeholder="Search Identifier, Line, or Team Member..."
                  value={showArchive ? archiveSearch : activeSearch}
                  onChange={(e) => { setCurrentPage(1); if (showArchive) setArchiveSearch(e.target.value); else setActiveSearch(e.target.value); }}
                  className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400"
@@ -970,6 +1073,7 @@ export default function DashboardTab({
             <thead>
               <tr className="bg-white border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400">
                 <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('logged_at')}>Date Logged<SortIcon column="logged_at" /></th>
+                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('producer')}>Team Member<SortIcon column="producer" /></th>
                 <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('identifier')}>Identifier<SortIcon column="identifier" /></th>
                 <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('product_line')}>Line<SortIcon column="product_line" /></th>
                 <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('premium_amount')}>Premium<SortIcon column="premium_amount" /></th>
@@ -978,11 +1082,17 @@ export default function DashboardTab({
             </thead>
             <tbody>
               {sortedPipelineRows.length === 0 ? (
-                <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm font-medium">{showArchive ? 'No issued policies match your search.' : 'Pipeline is empty. Time to hit the phones!'}</td></tr>
+                <tr><td colSpan={6} className="p-8 text-center text-gray-400 text-sm font-medium">{showArchive ? 'No issued policies match your search.' : 'Pipeline is empty. Time to hit the phones!'}</td></tr>
               ) : (
                 paginatedPipelineRows.map((pol: any) => (
                   <tr key={pol.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="p-4 text-sm font-semibold text-gray-500 whitespace-nowrap">{new Date(pol.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                    <td className="p-4 text-sm font-bold text-gray-700 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <ProfileAvatar src={(team || []).find((t: any) => t.id === pol.user_id)?.avatar_url || (archivedTeam || []).find((t: any) => t.id === pol.user_id)?.avatar_url || null} name={nameForUser(pol.user_id)} size="xs" />
+                        {nameForUser(pol.user_id)}
+                      </div>
+                    </td>
                     <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                     <td className="p-4 text-sm font-bold text-gray-600">
                        {pol.product_line === 'Complex Resolution' ? <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">Complex Res.</span> : pol.product_line}
