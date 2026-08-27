@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { joinAgencyWithInviteCode } from "./actions/joinAgency";
+import PasswordInput from "../components/ui/PasswordInput";
 
 // =============================================================================
 // "/" — standard login / signup page ONLY.
@@ -389,16 +390,16 @@ export default function LoginPage() {
               <label htmlFor="join-password" className="mb-1.5 block text-sm font-medium text-slate-300">
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="join-password"
-                type="password"
                 autoComplete="new-password"
                 required
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
-                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                iconClassName="text-slate-500 hover:text-slate-300"
                 placeholder="••••••••"
               />
             </div>
@@ -460,16 +461,16 @@ export default function LoginPage() {
               <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-300">
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete={isSignup ? "new-password" : "current-password"}
                 required
                 minLength={isSignup ? 6 : undefined}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
-                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                iconClassName="text-slate-500 hover:text-slate-300"
                 placeholder="••••••••"
               />
               {!isSignup && (

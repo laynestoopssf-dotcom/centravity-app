@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import { verifyWaitlistInvite } from "../actions/waitlist";
+import PasswordInput from "../../components/ui/PasswordInput";
 
 // =============================================================================
 // "/signup" — the waitlist invite "Token Catcher".
@@ -197,16 +198,16 @@ function SignupCatcher() {
             <label htmlFor="signup-password" className="mb-1.5 block text-sm font-medium text-slate-300">
               Create a Password
             </label>
-            <input
+            <PasswordInput
               id="signup-password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isSubmitting}
-              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              iconClassName="text-slate-500 hover:text-slate-300"
               placeholder="••••••••"
             />
           </div>
@@ -215,16 +216,16 @@ function SignupCatcher() {
             <label htmlFor="signup-confirm-password" className="mb-1.5 block text-sm font-medium text-slate-300">
               Confirm Password
             </label>
-            <input
+            <PasswordInput
               id="signup-confirm-password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={6}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={isSubmitting}
-              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              iconClassName="text-slate-500 hover:text-slate-300"
               placeholder="••••••••"
             />
           </div>

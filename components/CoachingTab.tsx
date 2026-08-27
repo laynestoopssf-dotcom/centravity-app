@@ -61,7 +61,15 @@ interface CoachingSession {
 }
 
 export default function CoachingTab({ profile, team, agencySettings, pipeline, showToast }: any) {
-  const isManagerLevel = isManagerLevelRole(profile?.role);
+  // Same custom_roles-aware permission pattern as every other manager-gated
+  // tab (canViewReports, canViewAgencyDash, etc. in app/dashboard/page.tsx) —
+  // `manage_coaching` (see components/SettingsTab.tsx's AVAILABLE_PERMISSIONS/
+  // DEFAULT_ROLES) defaults to Owner/Admin/Manager (an "Office Manager" gets
+  // full parity with the Owner here out of the box), but an agency can still
+  // dial it up/down per-role from Settings -> Roles & Permissions instead of
+  // being stuck with the hardcoded fallback.
+  const roleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
+  const isManagerLevel = roleConfig?.permissions?.manage_coaching ?? isManagerLevelRole(profile?.role);
   const [innerTab, setInnerTab] = useState<InnerTab>(isManagerLevel ? "snapshot" : "autopsies");
 
   const producers = useMemo(() => {

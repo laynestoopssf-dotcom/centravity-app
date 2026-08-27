@@ -2297,10 +2297,11 @@ export default function Home() {
     setIsBackdateModalOpen(true);
   };
 
-  // Hands off from the lightweight date-picker to the full Quote/Bound form, pre-dating it to
-  // the chosen backdateDate so submitLogActivity's `logged_at`/`written_at`/`bound_at` timestamps
+  // Hands off from the lightweight date-picker to the full Quote/Bound (or, for Service-role
+  // users, Complex Resolution/Cross-Sell — see the modal JSX below) form, pre-dating it to the
+  // chosen backdateDate so submitLogActivity's `logged_at`/`written_at`/`bound_at` timestamps
   // (and therefore the activities + policies rows it writes) all land on that historical day.
-  const startBackdatedEntry = (type: 'quote' | 'bound') => {
+  const startBackdatedEntry = (type: 'quote' | 'bound' | 'complex_res' | 'cross_sell') => {
     setIsBackdateModalOpen(false);
     openLogModal(type);
     setLogDate(backdateDate);
@@ -3705,7 +3706,11 @@ export default function Home() {
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in zoom-in-95 duration-200">
             <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2"><CalendarDays className="text-blue-600" size={22}/> Log Past Data</h2>
-            <p className="text-sm text-gray-500 mb-6">Forgot to log a quote or a bound app? Pick the date, then choose which one below — it opens the full form pre-dated.</p>
+            <p className="text-sm text-gray-500 mb-6">
+              {profile?.role === 'service'
+                ? 'Forgot to log a complex resolution or a cross-sell? Pick the date, then choose which one below — it opens the full form pre-dated.'
+                : 'Forgot to log a quote or a bound app? Pick the date, then choose which one below — it opens the full form pre-dated.'}
+            </p>
 
             <div className="space-y-4">
               <div>
@@ -3715,17 +3720,38 @@ export default function Home() {
 
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">What are you logging?</label>
+                {/* Mirrors DashboardTab.tsx's "Log Activity" menu, which relabels the same two
+                    slots to Complex Resolution/Cross-Sell for Service - producers/managers keep
+                    Quote/Bound. Without this, a Service rep backdating an entry only ever saw
+                    "Quote"/"Bound (App)", neither of which is a thing Service logs. */}
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => startBackdatedEntry('quote')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-purple-200 hover:border-purple-500 hover:bg-purple-50 text-purple-700 font-bold text-sm transition-all">
-                    <FileText size={18}/> Quote
-                  </button>
-                  <button type="button" onClick={() => startBackdatedEntry('bound')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 text-emerald-700 font-bold text-sm transition-all">
-                    <ShieldCheck size={18}/> Bound (App)
-                  </button>
+                  {profile?.role === 'service' ? (
+                    <>
+                      <button type="button" onClick={() => startBackdatedEntry('complex_res')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-purple-200 hover:border-purple-500 hover:bg-purple-50 text-purple-700 font-bold text-sm transition-all">
+                        <RefreshCw size={18}/> Complex Resolution
+                      </button>
+                      <button type="button" onClick={() => startBackdatedEntry('cross_sell')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 text-emerald-700 font-bold text-sm transition-all">
+                        <Users size={18}/> Cross-Sell
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => startBackdatedEntry('quote')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-purple-200 hover:border-purple-500 hover:bg-purple-50 text-purple-700 font-bold text-sm transition-all">
+                        <FileText size={18}/> Quote
+                      </button>
+                      <button type="button" onClick={() => startBackdatedEntry('bound')} className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-lg border-2 border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 text-emerald-700 font-bold text-sm transition-all">
+                        <ShieldCheck size={18}/> Bound (App)
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
-              <p className="text-xs text-gray-400">Opens the full Quote / Bound form, pre-dated to {new Date(`${backdateDate}T00:00:00`).toLocaleDateString()} — product line, premium, and payment cycle all apply as normal, and it routes to the activities table with that backdated timestamp.</p>
+              <p className="text-xs text-gray-400">
+                {profile?.role === 'service'
+                  ? <>Opens the full Complex Resolution / Cross-Sell form, pre-dated to {new Date(`${backdateDate}T00:00:00`).toLocaleDateString()} — it routes to the activities table with that backdated timestamp.</>
+                  : <>Opens the full Quote / Bound form, pre-dated to {new Date(`${backdateDate}T00:00:00`).toLocaleDateString()} — product line, premium, and payment cycle all apply as normal, and it routes to the activities table with that backdated timestamp.</>}
+              </p>
 
               <div className="pt-2">
                 <button type="button" onClick={() => setIsBackdateModalOpen(false)} className="w-full py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>

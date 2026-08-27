@@ -12,19 +12,25 @@ import AiSupportChat from "../../components/dashboard/AiSupportChat";
 // =============================================================================
 // Persistent App Shell for everything under /dashboard.
 // -----------------------------------------------------------------------------
-// This physically wraps THREE routes: /dashboard itself (the tab-based "Agent
-// View", still app/dashboard/page.tsx), /dashboard/reveal (the one-time
-// post-onboarding welcome page), and /dashboard/cockpit (the full-bleed
-// Executive Cockpit). Only the first of those wants this shell's dark
-// sidebar/header wrapped around it — reveal and cockpit are deliberately
-// full-screen, self-contained experiences with their own chrome. So this
-// renders bare `{children}` for any path other than exactly "/dashboard",
-// and also renders bare `{children}` on "/dashboard" itself until its own
-// independent session/profile/agency fetch below actually resolves to a real
-// signed-in, onboarded user — that keeps this shell out of the way of
-// app/dashboard/page.tsx's OWN fallback states (dead session, profile load
-// error, or its legacy inline login form), none of which should ever get a
-// "Sign Out" button wrapped around them.
+// This physically wraps FOUR routes: /dashboard itself (the tab-based "Agent
+// View", still app/dashboard/page.tsx), /dashboard/help (the FAQ / Help
+// Center — see app/dashboard/help/page.tsx's header comment), /dashboard/reveal
+// (the one-time post-onboarding welcome page), and /dashboard/cockpit (the
+// full-bleed Executive Cockpit). Only the first two want this shell's dark
+// sidebar/header wrapped around them — Help & FAQ used to be a bare, chrome-
+// less route reached via a router.push() that made it feel like the whole app
+// had been swapped out from under the user; it's now included in
+// `isShellRoute` below (and reached via a real <Link>, not a router.push, in
+// components/dashboard/DashboardSidebar.tsx) specifically so the main sidebar
+// and nav tabs stay visible while reading it. reveal and cockpit remain
+// deliberately full-screen, self-contained experiences with their own chrome.
+// This renders bare `{children}` for any other path, and also renders bare
+// `{children}` on a shell route until its own independent session/profile/
+// agency fetch below actually resolves to a real signed-in, onboarded user —
+// that keeps this shell out of the way of app/dashboard/page.tsx's OWN
+// fallback states (dead session, profile load error, or its legacy inline
+// login form), none of which should ever get a "Sign Out" button wrapped
+// around them.
 //
 // Deliberately does its OWN lightweight fetch here rather than reaching into
 // app/dashboard/page.tsx's state — a layout physically can't read a child
@@ -54,7 +60,7 @@ interface ShellData {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isShellRoute = pathname === "/dashboard";
+  const isShellRoute = pathname === "/dashboard" || pathname === "/dashboard/help";
 
   const [activeTab, setActiveTab] = useState<DashboardTabId>("dashboard");
   const [shellData, setShellData] = useState<ShellData | null>(null);

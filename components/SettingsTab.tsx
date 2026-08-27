@@ -58,7 +58,14 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'view_reports', label: 'View Reports', desc: 'Allows access to Agency Reports, historical analytics, and PDF exports.' },
   { id: 'edit_historical', label: 'Import Historical Data', desc: 'Can bulk import past activities and policies.' },
   { id: 'delete_records', label: 'Delete Ledger Records', desc: 'Can permanently delete logged policies and activities.' },
-  { id: 'manage_settings', label: 'Manage Agency Settings', desc: 'Can create comp plans, locations, and edit agency targets.' }
+  { id: 'manage_settings', label: 'Manage Agency Settings', desc: 'Can create comp plans, locations, and edit agency targets.' },
+  // Everyone gets Deal Autopsies + the Sparring Ring in the Coaching tab (self-serve, no
+  // permission gate needed) - this specifically controls the manager-only half: running
+  // 1-on-1s against ANY producer in the agency (picker, live snapshot, logging notes/
+  // commitments to coaching_sessions). Defaults to Owner/Admin/Manager, same as every other
+  // manager-level default below, so an "Office Manager" gets full parity with the Owner here
+  // out of the box - see components/CoachingTab.tsx.
+  { id: 'manage_coaching', label: 'Run 1-on-1 Coaching Sessions', desc: 'Access to the manager-only 1-on-1 Snapshot engine for every producer in the agency.' }
 ];
 // NOTE: 'view_ytd_projections'/'view_revenue_vc' used to live in the list above,
 // gating the old standalone YTD Projections / Revenue & VC tabs. Those tabs are
@@ -70,7 +77,7 @@ const AVAILABLE_PERMISSIONS = [
 // they're simply inert now.
 
 const DEFAULT_ROLES = [
-  { id: 'owner', name: 'Owner', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
+  { id: 'owner', name: 'Owner', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true, manage_coaching: true } },
   // Mirrors 'owner' by default — see isOwnerLevelRole() in utils/roles.ts, the
   // single source of truth every permission check falls back to when (as
   // here) no custom_roles entry overrides it. Kept isSystem so its name can't
@@ -79,10 +86,18 @@ const DEFAULT_ROLES = [
   // screen just like 'manager' can. Billing is the one deliberate exception —
   // it's never granted here or anywhere else regardless of these toggles
   // (see the EXCEPTION note in utils/roles.ts).
-  { id: 'admin', name: 'Admin', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true } },
-  { id: 'manager', name: 'Manager', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: false, manage_settings: false } },
-  { id: 'producer', name: 'Producer', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } },
-  { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false } }
+  { id: 'admin', name: 'Admin', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: true, manage_settings: true, manage_coaching: true } },
+  // "Office Manager" in plain agency-owner language — this id's display name
+  // is freely renamable from the Roles & Permissions screen (isSystem only
+  // blocks deleting it), and manage_coaching defaults to true here so an
+  // Office Manager gets full read/write on the 1-on-1 Snapshot engine
+  // alongside the Owner out of the box, matching coaching_sessions/
+  // deal_autopsies' own RLS (see the migration's role in (...) lists), not
+  // scoped down to just their own office the way policies/activities SELECT
+  // is for this role elsewhere.
+  { id: 'manager', name: 'Manager', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: false, manage_settings: false, manage_coaching: true } },
+  { id: 'producer', name: 'Producer', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false, manage_coaching: false } },
+  { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false, manage_coaching: false } }
 ];
 
 // `date` inputs need a plain local "YYYY-MM-DD" string. Reading that back out of a stored

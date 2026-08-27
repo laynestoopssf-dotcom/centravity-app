@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   Search,
   ChevronDown,
   LifeBuoy,
@@ -20,8 +19,16 @@ import { FAQ_CATEGORIES, type FaqItem } from "../../../utils/faqData";
 // =============================================================================
 // Protected route: /dashboard/help — the FAQ / Help Center.
 // -----------------------------------------------------------------------------
-// Self-contained page (own auth check, no data fetch beyond that), mirroring
-// the pattern in app/dashboard/reveal/page.tsx and app/dashboard/cockpit/page.tsx.
+// Unlike /dashboard/cockpit and /dashboard/reveal (deliberately full-bleed,
+// chrome-less routes), this one IS wrapped in the persistent sidebar/header
+// shell — see app/dashboard/layout.tsx's `isShellRoute` check, which
+// special-cases this exact path so navigating here (via the "Help & FAQ"
+// <Link> in components/dashboard/DashboardSidebar.tsx) keeps the main nav
+// fully visible instead of replacing the whole screen. Still its own real
+// Next.js route rather than a tab inside app/dashboard/page.tsx's SPA - only
+// its OWN auth check + no shared dashboard data fetch, so no benefit to
+// folding it into that page's much heavier data-loading lifecycle.
+//
 // The actual FAQ content lives in utils/faqData.ts — a shared module also
 // consumed by app/api/chat/route.ts, which flattens it into "Stratt" the AI
 // Support assistant's system prompt as its ONLY knowledge base. Keeping it in
@@ -114,22 +121,15 @@ export default function HelpPage() {
 
   if (status !== "ready") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center py-24">
         <LifeBuoy className="animate-pulse text-gray-300" size={32} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-6 py-10">
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors mb-6"
-        >
-          <ArrowLeft size={16} /> Back to Dashboard
-        </button>
-
+    <div className="p-6 md:p-10">
+      <div className="max-w-4xl mx-auto">
         <header className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">

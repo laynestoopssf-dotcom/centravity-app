@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import { verifyTeamInvite, acceptTeamInvite } from "../actions/teamInvites";
+import PasswordInput from "../../components/ui/PasswordInput";
 
 // =============================================================================
 // "/accept-invite" — the Team Member Invite "Token Catcher".
@@ -228,16 +229,16 @@ function AcceptInviteCatcher() {
             <label htmlFor="accept-invite-password" className="mb-1.5 block text-sm font-medium text-slate-300">
               Create a Password
             </label>
-            <input
+            <PasswordInput
               id="accept-invite-password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isSubmitting}
-              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              iconClassName="text-slate-500 hover:text-slate-300"
               placeholder="••••••••"
             />
           </div>
@@ -246,16 +247,16 @@ function AcceptInviteCatcher() {
             <label htmlFor="accept-invite-confirm-password" className="mb-1.5 block text-sm font-medium text-slate-300">
               Confirm Password
             </label>
-            <input
+            <PasswordInput
               id="accept-invite-confirm-password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={6}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={isSubmitting}
-              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 pr-10 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+              iconClassName="text-slate-500 hover:text-slate-300"
               placeholder="••••••••"
             />
           </div>

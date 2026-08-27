@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   BarChart3,
   Wallet,
@@ -63,6 +63,20 @@ const brandTileClass = "flex h-10 w-10 shrink-0 items-center justify-center roun
 export default function DashboardSidebar({ permissions }: { permissions: DashboardSidebarPermissions }) {
   const { activeTab, setActiveTab } = useDashboardTab();
   const router = useRouter();
+  // Every tab button below only ever renders its own content on the literal
+  // "/dashboard" route (they call setActiveTab, which app/dashboard/page.tsx
+  // reads) - `activeTab` itself doesn't reset when navigating to a different
+  // shell route like /dashboard/help, so two things key off pathname instead:
+  // isOnTabbedShell suppresses the "active" highlight on a tab button while
+  // sitting on a different route, and goToTab() actually navigates back to
+  // "/dashboard" (not just flips the context value underneath a page that
+  // isn't listening for it) when a tab button is clicked from anywhere else.
+  const pathname = usePathname();
+  const isOnTabbedShell = pathname === "/dashboard";
+  const goToTab = (tab: DashboardTabId) => {
+    setActiveTab(tab);
+    if (!isOnTabbedShell) router.push("/dashboard");
+  };
   const {
     canViewAgencyDash,
     canViewTeamComm,
@@ -114,11 +128,11 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
 
   const renderButton = (item: NavItem) => {
     const Icon = item.icon;
-    const isActive = activeTab === item.tab;
+    const isActive = isOnTabbedShell && activeTab === item.tab;
     return (
       <button
         key={item.tab}
-        onClick={() => setActiveTab(item.tab)}
+        onClick={() => goToTab(item.tab)}
         className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
           isActive ? "bg-blue-500/15 text-blue-300" : "text-slate-400 hover:bg-white/5 hover:text-slate-100"
         }`}
@@ -164,9 +178,9 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
       {isOwner && (
         <div className="mt-4">
           <button
-            onClick={() => setActiveTab("agent")}
+            onClick={() => goToTab("agent")}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold text-sm border transition-colors ${
-              activeTab === "agent"
+              isOnTabbedShell && activeTab === "agent"
                 ? "text-amber-200 bg-amber-500/20 border-amber-500/40"
                 : "text-amber-300 bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/20"
             }`}
@@ -197,36 +211,45 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
         {/* Ungated - every role gets a self-service profile, unlike Settings below which
             stays owner/admin-only. */}
         <button
-          onClick={() => setActiveTab("profile")}
+          onClick={() => goToTab("profile")}
           className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
-            activeTab === "profile" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+            isOnTabbedShell && activeTab === "profile" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
           }`}
         >
           <UserCircle size={18} /> My Profile
         </button>
         <button
-          onClick={() => setActiveTab("feedback")}
+          onClick={() => goToTab("feedback")}
           className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
-            activeTab === "feedback" ? "bg-purple-500/15 text-purple-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+            isOnTabbedShell && activeTab === "feedback" ? "bg-purple-500/15 text-purple-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
           }`}
         >
           <MessageSquare size={18} /> Community Board
         </button>
-        <button
-          onClick={() => router.push("/dashboard/help")}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-colors"
+        {/* A real Next.js <Link> (client-side nav, no new tab/window), not a
+            setActiveTab call - Help & FAQ is its own route (/dashboard/help),
+            not one of app/dashboard/page.tsx's SPA tabs. Still highlighted
+            like every button above via pathname rather than activeTab, and
+            still keeps this whole sidebar mounted around it - see
+            app/dashboard/layout.tsx's `isShellRoute` for why that's true here
+            but not for e.g. Executive Cockpit below. */}
+        <Link
+          href="/dashboard/help"
+          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+            pathname === "/dashboard/help" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+          }`}
         >
           <LifeBuoy size={18} /> Help &amp; FAQ
-        </button>
+        </Link>
         {/* Pinned dead-last, below even Community Board/Help & FAQ — an
             occasional-use destination, not a daily-driver tab. Team roster
             management lives inside it (Team Management section) rather than
             as its own top-level nav item. */}
         {canManageSettings && (
           <button
-            onClick={() => setActiveTab("settings")}
+            onClick={() => goToTab("settings")}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
-              activeTab === "settings" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+              isOnTabbedShell && activeTab === "settings" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
             }`}
           >
             <Settings size={18} /> Settings
