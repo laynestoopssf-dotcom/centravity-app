@@ -525,9 +525,9 @@ export default function AgentDashboardTab() {
             {ownerFirstName ? `${ownerFirstName}'s` : "Your"} Master Command Center
           </h1>
           <p className="text-gray-500 mt-2 max-w-2xl">
-            Everything the standalone Year-to-Date (YTD) Projections and Revenue &amp; Variable Compensation tabs used to
+            Everything the standalone Year-to-Date (YTD) Projections and Revenue &amp; Additional Earned Comp tabs used to
             show, combined into one continuous view — macro pacing at the top, flowing down into what it means for
-            cash flow and next year&apos;s Variable Compensation (VC) tier.
+            cash flow and next year&apos;s Additional Earned Comp (AEC) tier.
           </p>
         </div>
 

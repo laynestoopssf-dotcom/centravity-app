@@ -511,7 +511,7 @@ export default function RevealPage() {
               default off for carrier-agnostic compliance. */}
           {agencySettings?.target_vc_active && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center text-center">
-            <h3 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider">Current Variable Compensation (VC) Rate</h3>
+            <h3 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider">Current Additional Earned Comp (AEC) Rate</h3>
             <div className="text-5xl font-black text-gray-900 mb-2">{health.vcRate}%</div>
             <p className="text-sm text-gray-500 font-medium">Applied to Auto & Fire base commissions.</p>
             <div className="mt-5 pt-5 border-t border-gray-100 grid grid-cols-2 gap-2 text-left">
@@ -603,11 +603,11 @@ export default function RevealPage() {
         {agencySettings?.target_vc_active && (
         <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-lg p-8 text-white">
           <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-            <RefreshCw size={22} className="text-blue-400" /> Your Variable Compensation (VC) Engine Is Armed
+            <RefreshCw size={22} className="text-blue-400" /> Your Additional Earned Comp (AEC) Engine Is Armed
           </h3>
           <p className="text-gray-400 max-w-3xl">
-            Auto and Fire net gains, plus Life &amp; Health commission, feed straight into your Variable Compensation tier —
-            up to <strong className="text-white">3%</strong> total. Head to the full Revenue &amp; Variable Comp tab on your
+            Auto and Fire net gains, plus Life &amp; Health commission, feed straight into your Additional Earned Comp tier —
+            up to <strong className="text-white">3%</strong> total. Head to the full Revenue &amp; Additional Earned Comp tab on your
             dashboard to watch it move in real time as your team logs production.
           </p>
         </div>

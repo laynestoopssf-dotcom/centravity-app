@@ -289,7 +289,7 @@ const STEPS = [
 ] as const;
 
 // Cycled every 1s on the post-Step-5 launch screen (see isLaunching below).
-const LAUNCH_MESSAGES = ["Projecting Cash Flow...", "Calculating VC Tiers...", "Building Scoreboard..."];
+const LAUNCH_MESSAGES = ["Projecting Cash Flow...", "Calculating AEC Tiers...", "Building Scoreboard..."];
 
 export default function OnboardingWizard({
   onComplete,
@@ -1166,7 +1166,7 @@ export default function OnboardingWizard({
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">YTD Starting Line</h2>
                   <p className="text-gray-500 mt-1">
-                    Give everyone on the team a fair starting point for pacing and VC calculations —
+                    Give everyone on the team a fair starting point for pacing and AEC calculations —
                     Apps &amp; Premium for each core line, for the owner and every team member.
                   </p>
                 </div>
@@ -1465,10 +1465,10 @@ export default function OnboardingWizard({
 
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                   <label className="block text-sm font-bold text-blue-900 mb-1.5">
-                    Agency Variable Compensation (VC) Total (%)
+                    Agency Additional Earned Comp (AEC) Total (%)
                   </label>
                   <p className="text-xs text-blue-700 mb-3">
-                    The single blended VC rate used across the whole agency&apos;s Revenue/VC engine.
+                    The single blended AEC rate used across the whole agency&apos;s Revenue/AEC engine.
                   </p>
                   <input
                     type="number"

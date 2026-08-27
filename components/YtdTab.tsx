@@ -15,7 +15,7 @@ export default function YtdTab({ ytdOverviewData, agencySettings }: any) {
 
       {!travelActive && (
         <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-6 text-center">
-          <p className="text-sm font-semibold text-gray-400">Travel Target Tracking is currently disabled for this agency.</p>
+          <p className="text-sm font-semibold text-gray-400">Roam Target Tracking is currently disabled for this agency.</p>
           <p className="text-xs text-gray-400 mt-1">An owner can turn it on under Settings → Corporate Targets.</p>
         </div>
       )}
@@ -26,8 +26,8 @@ export default function YtdTab({ ytdOverviewData, agencySettings }: any) {
           <div className="absolute top-0 right-0 bg-blue-50 w-64 h-full skew-x-12 translate-x-10 z-0"></div>
           <div className="relative z-10 flex flex-col lg:flex-row gap-10">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2"><Plane size={28} className="text-blue-600" /><h3 className="text-2xl font-black text-gray-900">{locData.name} Travel Qualifier</h3></div>
-              <p className="text-gray-500 mb-8 max-w-lg">Track progress towards the annual travel incentive levels. See current issued status and your potential pipeline &quot;What-If&quot; boost.</p>
+              <div className="flex items-center gap-3 mb-2"><Plane size={28} className="text-blue-600" /><h3 className="text-2xl font-black text-gray-900">{locData.name} Roam Qualifier</h3></div>
+              <p className="text-gray-500 mb-8 max-w-lg">Track progress towards the annual roam incentive levels. See current issued status and your potential pipeline &quot;What-If&quot; boost.</p>
               <div className="flex gap-4 mb-8">
                 <div className="bg-gray-900 text-white px-5 py-3 rounded-xl shadow-md border border-gray-800"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Current Status</p><p className="text-2xl font-black text-green-400">{locData.travelStatus.currentTierName}</p></div>
                 <div className="bg-blue-50 text-blue-900 px-5 py-3 rounded-xl border border-blue-100"><p className="text-[10px] font-bold uppercase tracking-wider text-blue-400 mb-1">Next Milestone</p><p className="text-2xl font-black">{locData.travelStatus.targetTierName}</p></div>

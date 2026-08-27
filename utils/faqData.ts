@@ -34,9 +34,9 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
           "Onboarding auto-saves as you go — just sign back in and you'll be dropped right back on the step you left off on. Nothing you already entered is lost.",
       },
       {
-        question: "What does VC stand for?",
+        question: "What does AEC stand for?",
         answer:
-          "VC is short for Variable Compensation — an extra 0-3% commission bump on top of an agency's base rates, earned by hitting Auto/Fire app-growth and Financial Services (Life/Health) commission targets. See the Revenue & Variable Comp tab or the Cockpit's VC Tier Sniper for the live breakdown.",
+          "AEC is short for Additional Earned Comp — an extra 0-3% commission bump on top of an agency's base rates, earned by hitting Auto/Fire app-growth and Financial Services (Life/Health) commission targets. See the Revenue & Additional Earned Comp tab or the Cockpit's AEC Tier Sniper for the live breakdown.",
       },
     ],
   },
@@ -83,7 +83,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       {
         question: "What counts as \"Financial Services\" for commission purposes?",
         answer:
-          "Life and Health are grouped together as Financial Services (FS) everywhere commission tiers, accelerators, and Variable Compensation are calculated.",
+          "Life and Health are grouped together as Financial Services (FS) everywhere commission tiers, accelerators, and Additional Earned Comp are calculated.",
       },
     ],
   },
@@ -92,19 +92,19 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
     label: "Settings & Admin",
     items: [
       {
-        question: "Where do I set up Travel/Promotion benchmarks?",
+        question: "Where do I set up Roam/Promotion benchmarks?",
         answer:
-          "Settings → Corporate Promotions → Travel & Promotion Qualification Benchmarks. Every field starts blank on purpose - there are no pre-filled sample goals, so nothing counts toward qualification until you enter your own numbers.",
+          "Settings → Corporate Promotions → Roam & Promotion Qualification Benchmarks. Every field starts blank on purpose - there are no pre-filled sample goals, so nothing counts toward qualification until you enter your own numbers.",
       },
       {
-        question: "How do I control who can see the Revenue & Variable Comp tab?",
+        question: "How do I control who can see the Revenue & Additional Earned Comp tab?",
         answer:
-          "Settings → Roles & Permissions → toggle \"View Revenue & Variable Compensation (VC)\" for any custom role. Owners and Admins always have it by default.",
+          "Settings → Roles & Permissions → toggle \"View Revenue & Additional Earned Comp (AEC)\" for any custom role. Owners and Admins always have it by default.",
       },
       {
         question: "What's the difference between a Custom Target and a Corporate Target toggle?",
         answer:
-          "The Corporate Targets toggles (Variable Compensation / Travel) turn entire built-in widgets on or off agency-wide. The Custom Target Builder underneath lets you define your own one-off goals on top of any tracked metric, and choose whether the team sees it on the Scoreboard or it stays owner-only on the Revenue tab.",
+          "The Corporate Targets toggles (Additional Earned Comp / Roam) turn entire built-in widgets on or off agency-wide. The Custom Target Builder underneath lets you define your own one-off goals on top of any tracked metric, and choose whether the team sees it on the Scoreboard or it stays owner-only on the Revenue tab.",
       },
     ],
   },

@@ -149,7 +149,7 @@ export default function HelpPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search for a topic — e.g. &quot;renewal&quot;, &quot;VC&quot;, &quot;identifier&quot;..."
+            placeholder="Search for a topic — e.g. &quot;renewal&quot;, &quot;AEC&quot;, &quot;identifier&quot;..."
             className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
         </div>

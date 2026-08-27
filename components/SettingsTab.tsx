@@ -857,15 +857,15 @@ export default function SettingsTab({
                <div className="text-blue-400"><Plane size={24}/></div>
                <div>
                   <h3 className="font-bold text-white text-lg flex items-center gap-1.5">
-                    Travel & Promotion Qualification Benchmarks
+                    Roam & Promotion Qualification Benchmarks
                     {/* This header sits right at the top edge of a `overflow-hidden` dark
                         card (barely 24px of padding above it) - the tooltip's default "top"
                         placement got clipped by that overflow boundary before it could even
                         render, making the "?" look broken/invisible. "bottom" drops it down
                         into the header's own open space instead, where it can't get clipped. */}
-                    <InfoTooltip text="Each tier is a travel/trip incentive level (e.g. a carrier-sponsored trip). A producer qualifies for a tier once their Year-to-Date Life Credits AND Total Credits both clear that tier's minimums." position="bottom" />
+                    <InfoTooltip text="Each tier is a roam/trip incentive level (e.g. a carrier-sponsored trip). A producer qualifies for a tier once their Year-to-Date Life Credits AND Total Credits both clear that tier's minimums." position="bottom" />
                   </h3>
-                  <p className="text-xs text-slate-400">Set the specific targets for each tier. &quot;Min Life Credits&quot; and &quot;Total Credits&quot; power the Year-to-Date (YTD) Travel tracking engine. Every field starts blank - there are no pre-filled sample goals, so nothing counts toward qualification until you enter your own numbers here.</p>
+                  <p className="text-xs text-slate-400">Set the specific targets for each tier. &quot;Min Life Credits&quot; and &quot;Total Credits&quot; power the Year-to-Date (YTD) Roam tracking engine. Every field starts blank - there are no pre-filled sample goals, so nothing counts toward qualification until you enter your own numbers here.</p>
                </div>
              </div>
              <div className="p-6">
@@ -927,10 +927,10 @@ export default function SettingsTab({
               <div className="flex items-center justify-between p-4 bg-cyan-50/50 border border-cyan-100 rounded-xl">
                 <div>
                   <h4 className="text-sm font-bold text-cyan-900 flex items-center gap-1.5">
-                    Enable Variable Compensation (VC) Target Tracking
-                    <InfoTooltip text="Variable Compensation is the extra 0-3% commission bump agencies can earn on top of base rates - toggling this on shows VC widgets across the app; off hides them without losing any of your saved numbers." />
+                    Enable Additional Earned Comp (AEC) Target Tracking
+                    <InfoTooltip text="Additional Earned Comp is the extra 0-3% commission bump agencies can earn on top of base rates - toggling this on shows AEC widgets across the app; off hides them without losing any of your saved numbers." />
                   </h4>
-                  <p className="text-xs text-cyan-700 mt-0.5 max-w-xl">Shows the Variable Compensation widgets: the Revenue &amp; Variable Compensation tab&apos;s VC Rate/Pacing Scorecard, the Cockpit&apos;s VC Tier Sniper, and the onboarding Reveal page&apos;s VC cards.</p>
+                  <p className="text-xs text-cyan-700 mt-0.5 max-w-xl">Shows the Additional Earned Comp widgets: the Revenue &amp; Additional Earned Comp tab&apos;s AEC Rate/Pacing Scorecard, the Cockpit&apos;s AEC Tier Sniper, and the onboarding Reveal page&apos;s AEC cards.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
                   <input
@@ -945,8 +945,8 @@ export default function SettingsTab({
 
               <div className="flex items-center justify-between p-4 bg-amber-50/50 border border-amber-100 rounded-xl">
                 <div>
-                  <h4 className="text-sm font-bold text-amber-900">Enable Travel Target Tracking</h4>
-                  <p className="text-xs text-amber-700 mt-0.5 max-w-xl">Shows the Travel/Incentive widgets: the YTD Projections tab&apos;s Travel Qualifier and Annual Trip Qualifier cards, and the Cockpit&apos;s Travel &amp; Incentive Qualifier.</p>
+                  <h4 className="text-sm font-bold text-amber-900">Enable Roam Target Tracking</h4>
+                  <p className="text-xs text-amber-700 mt-0.5 max-w-xl">Shows the Roam/Incentive widgets: the YTD Projections tab&apos;s Roam Qualifier and Annual Trip Qualifier cards, and the Cockpit&apos;s Roam &amp; Incentive Qualifier.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
                   <input
@@ -1225,7 +1225,7 @@ export default function SettingsTab({
                       <input type="radio" name="display_location" checked={editingCustomTarget.display_location === 'revenue'} onChange={() => setEditingCustomTarget({ ...editingCustomTarget, display_location: 'revenue' })} className="w-4 h-4 text-purple-600" />
                       <div>
                         <p className="font-bold text-sm text-gray-900">Revenue Tab (Owner Only)</p>
-                        <p className="text-xs text-gray-500">Only visible on the Revenue &amp; VC tab, gated by the same permission as the rest of that tab.</p>
+                        <p className="text-xs text-gray-500">Only visible on the Revenue &amp; AEC tab, gated by the same permission as the rest of that tab.</p>
                       </div>
                     </label>
                   </div>
@@ -1291,7 +1291,7 @@ export default function SettingsTab({
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><MapPin size={20}/></div>
-             <div><h3 className="font-bold text-gray-900">Office Locations & Financials</h3><p className="text-xs text-gray-500">Manage branches and set localized production, revenue, and Variable Compensation (VC) targets</p></div>
+             <div><h3 className="font-bold text-gray-900">Office Locations & Financials</h3><p className="text-xs text-gray-500">Manage branches and set localized production, revenue, and Additional Earned Comp (AEC) targets</p></div>
           </div>
           <div className="p-6 space-y-4">
             <div className="flex gap-4">
@@ -1368,11 +1368,11 @@ export default function SettingsTab({
 
                        {/* VARIABLE COMP */}
                        <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2 flex items-center gap-1.5">
-                         4. Variable Compensation (VC) Targets
-                         <InfoTooltip text="Variable Compensation is the extra 0-3% commission bump on top of base rates, earned by hitting Auto/Fire app-gain and Financial Services commission thresholds. Set the Min/Max app or dollar range for each bucket below." />
+                         4. Additional Earned Comp (AEC) Targets
+                         <InfoTooltip text="Additional Earned Comp is the extra 0-3% commission bump on top of base rates, earned by hitting Auto/Fire app-gain and Financial Services commission thresholds. Set the Min/Max app or dollar range for each bucket below." />
                        </h4>
                        <div className="w-1/3 mb-4">
-                         <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Current Base VC Rate (%)</label>
+                         <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Current Base AEC Rate (%)</label>
                          <input type="number" value={localOfficeData[office.id]?.current_vc_rate || 0} onChange={e => updateLocalOffice(office.id, 'current_vc_rate', Number(e.target.value))} className="w-full p-2.5 bg-white border border-blue-200 rounded-lg text-sm font-bold text-blue-900" />
                        </div>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -1393,7 +1393,7 @@ export default function SettingsTab({
                          <div className="bg-white p-4 rounded-xl border border-gray-200 md:col-span-2">
                             <label className="flex items-center gap-1 text-xs font-bold text-gray-900 mb-3">
                               Financial Services (FS) Commission Limits ($) (Life, Health, IPS)
-                              <InfoTooltip text="The Min/Max dollar range of Life + Health (+ IPS) commission that maps to the 0-2% Financial Services portion of the Variable Compensation rate above." />
+                              <InfoTooltip text="The Min/Max dollar range of Life + Health (+ IPS) commission that maps to the 0-2% Financial Services portion of the Additional Earned Comp rate above." />
                             </label>
                             <div className="flex gap-4">
                               <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Min</label><FormattedNumberInput value={localOfficeData[office.id]?.vc_min_fs_comm || 0} onChange={v => updateLocalOffice(office.id, 'vc_min_fs_comm', v === '' ? 0 : v)} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
@@ -2040,7 +2040,7 @@ export default function SettingsTab({
             <AlertCircle size={18} className="text-blue-600 mt-0.5 shrink-0" />
             <p className="text-sm text-blue-900">
               These rates apply <strong>only</strong> to Life &amp; Health revenue projections and are completely
-              independent of the Variable Comp (VC) rate above — VC applies exclusively to Auto, Fire, and Commercial.
+              independent of the Additional Earned Comp (AEC) rate above — AEC applies exclusively to Auto, Fire, and Commercial.
               <strong> New Business</strong> uses the Year 1 / First Year column; <strong>Renewals &amp; existing book</strong>
               use the Servicing / Year 2+ column.
             </p>

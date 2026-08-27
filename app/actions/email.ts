@@ -82,7 +82,7 @@ export async function sendBetaWelcomeEmail({
             ${safeAgencyName} is officially set up. You're in the beta group helping us shape the platform before general availability — thank you for being one of the first agencies on board.
           </p>
           <p style="font-size: 15px; line-height: 1.6; color: #475569;">
-            Next step: finish the onboarding wizard to add your team and set your production baselines — the dashboard, Revenue &amp; VC tracking, and the Executive Cockpit all key off that data.
+            Next step: finish the onboarding wizard to add your team and set your production baselines — the dashboard, Revenue &amp; AEC tracking, and the Executive Cockpit all key off that data.
           </p>
           <p style="font-size: 15px; line-height: 1.6; color: #475569; margin-top: 24px;">
             Questions or feedback? Just reply to this email — a real person reads every one during beta.

@@ -899,7 +899,7 @@ export default function Home() {
       // Revenue/VC math falls back to hardcoded defaults (8% base comm, 0% VC, etc.)
       // whenever agencySettings is null — that's a silent, misleading "$0-ish" render
       // rather than an obvious failure, so surface it instead of failing quietly.
-      showToast('Failed to load agency settings — revenue and VC numbers may be inaccurate.', 'error');
+      showToast('Failed to load agency settings — revenue and AEC numbers may be inaccurate.', 'error');
       return;
     }
     if (data) setAgencySettings(data);

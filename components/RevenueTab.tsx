@@ -37,9 +37,9 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300 pb-12">
       <header>
         <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-          <DollarSign size={32} className="text-emerald-600" /> Revenue &amp; Variable Compensation
+          <DollarSign size={32} className="text-emerald-600" /> Revenue &amp; Additional Earned Comp
         </h2>
-        <p className="text-gray-500 mt-1">Track actual agency cash flow, renewal book decay, and your pace toward next year&apos;s Variable Compensation (VC) tier.</p>
+        <p className="text-gray-500 mt-1">Track actual agency cash flow, renewal book decay, and your pace toward next year&apos;s Additional Earned Comp (AEC) tier.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -73,8 +73,8 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
         {agencySettings?.target_vc_active && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center text-center">
            <h3 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider flex items-center justify-center gap-1.5">
-             Current Variable Compensation (VC) Rate
-             <InfoTooltip text="Variable Compensation is the extra 0-3% commission bump earned on top of base rates, based on Auto/Fire app growth plus Financial Services commission. See the pacing scorecard below for the breakdown." />
+             Current Additional Earned Comp (AEC) Rate
+             <InfoTooltip text="Additional Earned Comp is the extra 0-3% commission bump earned on top of base rates, based on Auto/Fire app growth plus Financial Services commission. See the pacing scorecard below for the breakdown." />
            </h3>
            
            {/* If Multiple Locations, stack them */}
@@ -102,10 +102,10 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
       {agencySettings?.target_vc_active && (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
          <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-           <RefreshCw size={24} className="text-blue-600"/> 2027 Variable Compensation (VC) Pacing Scorecard
-           <InfoTooltip text="Shows how close each office is to the 3% Variable Compensation cap, both where you stand today (VC Earned YTD) and where your current run rate projects you to land by December 31st (Year-End Pace)." />
+           <RefreshCw size={24} className="text-blue-600"/> 2027 Additional Earned Comp (AEC) Pacing Scorecard
+           <InfoTooltip text="Shows how close each office is to the 3% Additional Earned Comp cap, both where you stand today (AEC Earned YTD) and where your current run rate projects you to land by December 31st (Year-End Pace)." />
          </h3>
-         <p className="text-gray-500 mb-8 max-w-3xl">Your projected Variable Compensation for next year is based on Year-to-Date (YTD) Net Gain. Auto and Fire contribute up to 1% each. Financial Services (FS) Commission (Life, Health, IPS) contributes up to 2%. Max total cap is 3%.</p>
+         <p className="text-gray-500 mb-8 max-w-3xl">Your projected Additional Earned Comp for next year is based on Year-to-Date (YTD) Net Gain. Auto and Fire contribute up to 1% each. Financial Services (FS) Commission (Life, Health, IPS) contributes up to 2%. Max total cap is 3%.</p>
 
          <div className="space-y-6">
             {/* MAP OVER LOCATIONS FOR INDIVIDUAL SCORECARDS */}
@@ -116,7 +116,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
                   
                   {/* Projected VC Module with RUN RATE */}
                   <div className="lg:col-span-1 bg-white rounded-xl border border-gray-200 p-5 text-center flex flex-col justify-center shadow-sm relative overflow-hidden">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">VC Earned Year-to-Date</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">AEC Earned Year-to-Date</p>
                     <div className={`text-4xl font-black ${locData.projectedVc >= 3.0 ? 'text-green-500' : 'text-gray-900'}`}>+{locData.projectedVc.toFixed(2)}%</div>
                     
                     <div className="mt-5 pt-5 border-t border-gray-100">
@@ -178,7 +178,7 @@ export default function RevenueTab({ revenueOverviewData, agencySettings, primar
 
       {!agencySettings?.target_vc_active && (
         <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-10 text-center">
-          <p className="text-sm font-semibold text-gray-400">Variable Compensation (VC) Target Tracking is currently disabled for this agency.</p>
+          <p className="text-sm font-semibold text-gray-400">Additional Earned Comp (AEC) Target Tracking is currently disabled for this agency.</p>
           <p className="text-xs text-gray-400 mt-1">An owner can turn it on under Settings → Corporate Targets.</p>
         </div>
       )}

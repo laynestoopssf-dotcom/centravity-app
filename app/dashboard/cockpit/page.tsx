@@ -863,7 +863,7 @@ export default function CockpitPage() {
             </div>
             <h1 className="text-3xl sm:text-4xl font-black text-white">The What-If Engine</h1>
             <p className="text-slate-500 mt-2 max-w-xl">
-              Run reverse-math on your goals — pick a Variable Compensation (VC) tier or a revenue target, and see
+              Run reverse-math on your goals — pick an Additional Earned Comp (AEC) tier or a revenue target, and see
               exactly what it takes to get there, built from your actual Year-to-Date (YTD) performance.
             </p>
           </div>
@@ -877,7 +877,7 @@ export default function CockpitPage() {
               target_travel_active) - default off for carrier-agnostic compliance. */}
           {!agencySettings?.target_vc_active && !agencySettings?.target_travel_active && (
             <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-10 text-center">
-              <p className="text-sm font-semibold text-slate-500">Variable Compensation (VC) and Travel Target Tracking are currently disabled for this agency.</p>
+              <p className="text-sm font-semibold text-slate-500">Additional Earned Comp (AEC) and Roam Target Tracking are currently disabled for this agency.</p>
               <p className="text-xs text-slate-600 mt-1">An owner can turn them on under Settings → Corporate Targets.</p>
             </div>
           )}
@@ -891,10 +891,10 @@ export default function CockpitPage() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
-                  Variable Compensation (VC) Tier Sniper
-                  <InfoTooltip text="Reverse-math tool: pick the VC (Variable Compensation) rate you want by year-end, and this shows exactly how many more Auto/Fire apps or Financial Services (FS) commission dollars you need to get there." />
+                  Additional Earned Comp (AEC) Tier Sniper
+                  <InfoTooltip text="Reverse-math tool: pick the AEC (Additional Earned Comp) rate you want by year-end, and this shows exactly how many more Auto/Fire apps or Financial Services (FS) commission dollars you need to get there." />
                 </h2>
-                <p className="text-xs text-slate-500">Auto/Fire Gain + Financial Services (FS) Commission → your Variable Compensation (VC) rate</p>
+                <p className="text-xs text-slate-500">Auto/Fire Gain + Financial Services (FS) Commission → your Additional Earned Comp (AEC) rate</p>
               </div>
             </div>
 
@@ -918,14 +918,14 @@ export default function CockpitPage() {
 
             <div className="bg-slate-900/80 rounded-xl border border-cyan-900/40 p-4 mb-6 flex items-center justify-between gap-4">
               <div>
-                <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1">Current VC Rate</p>
+                <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1">Current AEC Rate</p>
                 <p className="text-3xl font-black text-white">{model.currentVcTotal.toFixed(2)}%</p>
-                <p className="text-[10px] text-slate-500 mt-1">Variable Compensation earned year-to-date</p>
+                <p className="text-[10px] text-slate-500 mt-1">Additional Earned Comp earned year-to-date</p>
               </div>
               <div className="text-right">
                 <label className="flex items-center justify-end gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Target Year-End VC (%)
-                  <InfoTooltip text="The Variable Compensation rate you're aiming to hit by December 31st. Max is 3% - up to 1% each from Auto and Fire, up to 2% from Financial Services (Life/Health) commission." />
+                  Target Year-End AEC (%)
+                  <InfoTooltip text="The Additional Earned Comp rate you're aiming to hit by December 31st. Max is 3% - up to 1% each from Auto and Fire, up to 2% from Financial Services (Life/Health) commission." />
                 </label>
                 <input
                   type="number"
@@ -1001,8 +1001,8 @@ export default function CockpitPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
-                    Travel &amp; Incentive Qualifier
-                    <InfoTooltip text="Shows which travel/promotion tier you'd currently qualify for, blending real Year-to-Date (YTD) production with whatever hypothetical premium you've added on the sliders below." />
+                    Roam &amp; Incentive Qualifier
+                    <InfoTooltip text="Shows which roam/promotion tier you'd currently qualify for, blending real Year-to-Date (YTD) production with whatever hypothetical premium you've added on the sliders below." />
                   </h2>
                   <p className="text-xs text-slate-500">Real Year-to-Date (YTD) pipeline + Cash Flow Architect What-If</p>
                 </div>
