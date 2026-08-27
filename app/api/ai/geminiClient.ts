@@ -5,16 +5,20 @@
 // would throw before either route's own try/catch starts.
 import { GoogleGenAI } from "@google/genai";
 
-// Keep in sync with app/actions/coaching.ts's GEMINI_MODEL. Pinned to
-// gemini-1.5-flash (down from gemini-3.6-flash) after the newer Flash tier
-// started returning 503s (model overloaded/at capacity) under this app's key -
-// an older, lower-demand model trades that capacity risk for whatever gap
-// exists between it and the newest tier's quality/latency. If this model id
-// itself ever comes back 404 (fully retired, the same failure mode that
-// pushed this app off gemini-2.5-flash originally), check
-// https://ai.google.dev/gemini-api/docs/changelog for a current id before
-// assuming it's a bug here.
-export const GEMINI_MODEL = "gemini-1.5-flash";
+// Model id history here has been trial-and-error based on stale/incorrect assumptions
+// twice in a row (gemini-3.6-flash -> 503 "overloaded"; gemini-1.5-flash -> 404 "not
+// found", it never existed for this key/API version at all) - so this one was verified
+// against the LIVE API instead of guessed: `GET v1beta/models?key=...` was queried
+// directly against this project's real GEMINI_API_KEY, gemini-flash-lite-latest was
+// confirmed present there AND a real generateContent call against it returned 200 (it
+// currently resolves to gemini-3.5-flash-lite server-side). It's a Google-maintained
+// alias, not a dated snapshot - it always points at whatever the current Flash-Lite
+// build is, so it can't 404 the way a hardcoded dated model id eventually will, and
+// being the "lite" tier makes it the least likely of the Flash-family models to hit a
+// 503 capacity error under this app's key. If it ever does 404, this key's model
+// access has changed - re-run `curl v1beta/models?key=$GEMINI_API_KEY` rather than
+// guessing another id.
+export const GEMINI_MODEL = "gemini-flash-lite-latest";
 
 let cachedGemini: GoogleGenAI | null = null;
 
