@@ -28,10 +28,13 @@ export default function IdentifierChip({
 }) {
   const [revealed, setRevealed] = useState(false);
   const cached = getCachedIdentifier(policyId, hash);
-
-  if (!cached) {
-    return <span className={`text-gray-300 ${className}`}>—</span>;
-  }
+  // A row this browser has no plaintext for (most commonly: a teammate's policy an
+  // owner/manager never typed the identifier for themselves) still needs to be openable -
+  // premium, product line, dates, and status are all legitimate to review even without the
+  // customer's name/number. Rather than hiding the row entirely, reveal falls back to a
+  // clearly-labeled placeholder instead of ever showing the raw one-way hash (which is
+  // meaningless to a human) or silently doing nothing when clicked.
+  const revealedText = cached ?? "Secure Customer (cross-team)";
 
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
@@ -44,13 +47,14 @@ export default function IdentifierChip({
           e.stopPropagation();
           setRevealed((v) => !v);
         }}
-        title={revealed ? "Hide identifier" : "Reveal identifier (visible to you only)"}
+        title={revealed ? "Hide identifier" : cached ? "Reveal identifier (visible to you only)" : "This browser doesn't have the customer's name/number cached - reveal shows a placeholder instead"}
         aria-label={revealed ? "Hide identifier" : "Reveal identifier"}
         className="inline-flex items-center justify-center text-gray-300 hover:text-blue-500 focus:text-blue-500 outline-none transition-colors shrink-0"
       >
         {revealed ? <Eye size={14} /> : <EyeOff size={14} />}
       </button>
-      {revealed && <span className="font-bold">{cached}</span>}
+      {revealed && <span className={`font-bold ${cached ? "" : "italic text-gray-400"}`}>{revealedText}</span>}
+      {!revealed && !cached && <span className="text-gray-300">—</span>}
     </span>
   );
 }
