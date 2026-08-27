@@ -88,6 +88,10 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
     },
   ];
 
+  // Order below is deliberate (Team Performance, Weekly Rank, Agency MTD, Life Module,
+  // Data Ledger, Reports, then Executive Cockpit rendered separately right after this
+  // list - see the .map() call site) - not alphabetical/insertion order, so don't
+  // reorder these without reordering the actual requested nav sequence too.
   const moreItems: NavItem[] = [
     {
       tab: "performance",
@@ -95,11 +99,11 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
       icon: Award,
       show: true,
     },
-    { tab: "ledger", label: "Data Ledger", icon: BookOpen, show: true },
-    { tab: "reports", label: "Reports", icon: FileBarChart, show: canViewReports },
     { tab: "weekly", label: "Weekly Rank", icon: CalendarDays, show: canViewWeeklyRank },
     { tab: "agency", label: "Agency MTD", icon: Briefcase, show: canViewAgencyMtd },
     { tab: "life", label: "Life Module", icon: HeartPulse, show: canViewLifeModule },
+    { tab: "ledger", label: "Data Ledger", icon: BookOpen, show: true },
+    { tab: "reports", label: "Reports", icon: FileBarChart, show: canViewReports },
   ];
 
   const renderButton = (item: NavItem) => {

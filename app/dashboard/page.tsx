@@ -1254,6 +1254,48 @@ export default function Home() {
     }
   };
 
+  // Data Ledger "Bulk Delete" - each ledger table (Bound Policies, Quotes, Complex Resolutions,
+  // Calls & Touches, etc.) manages its own checkbox selection locally (see LedgerTab.tsx), but the
+  // actual delete still funnels through here so it goes through the exact same
+  // `.delete().in('id', ids)` query + refresh pattern as the single-row delete above, rather than
+  // firing `ids.length` separate DELETE requests. Returns a boolean so the caller (LedgerTab) only
+  // clears its local checkbox selection after a confirmed, successful delete.
+  const deleteActivitiesBulk = async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return false;
+    if (!window.confirm(`Are you sure you want to delete ${ids.length} ${ids.length === 1 ? 'activity' : 'activities'}? This cannot be undone.`)) return false;
+    try {
+      const { error } = await supabase.from('activities').delete().in('id', ids);
+      if (error) throw error;
+
+      showToast(`${ids.length} ${ids.length === 1 ? 'activity' : 'activities'} permanently deleted.`, "success");
+      fetchLedgerData();
+      if (profile) fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+      return true;
+    } catch (err: any) {
+      console.error("Bulk Delete Activities Error:", err);
+      showToast("Failed to delete selected activities. Check database permissions.", "error");
+      return false;
+    }
+  };
+
+  const deletePoliciesBulk = async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return false;
+    if (!window.confirm(`Are you sure you want to delete ${ids.length} ${ids.length === 1 ? 'policy' : 'policies'}? This cannot be undone.`)) return false;
+    try {
+      const { error } = await supabase.from('policies').delete().in('id', ids);
+      if (error) throw error;
+
+      showToast(`${ids.length} ${ids.length === 1 ? 'policy' : 'policies'} permanently deleted.`, "success");
+      fetchLedgerData();
+      if (profile) fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+      return true;
+    } catch (err: any) {
+      console.error("Bulk Delete Policies Error:", err);
+      showToast("Failed to delete selected policies. Check database permissions.", "error");
+      return false;
+    }
+  };
+
   // Ledger "Edit" support - lets an owner/manager correct a mis-logged numerical value
   // (premium, sentiment, date/time) after the fact instead of having to delete and re-log it.
   const updateLedgerActivity = async (id: string, updates: Record<string, any>) => {
@@ -3379,7 +3421,7 @@ export default function Home() {
 
         {activeTab === 'commission' && <CommissionTab profile={profile} stats={stats} commissionData={commissionData} manualBonuses={manualBonuses} addManualBonus={addManualBonus} deleteManualBonus={deleteManualBonus} commissionMonth={commissionMonth} setCommissionMonth={setCommissionMonth} team={team} selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} teamCommissions={teamCommissions} monthPolicies={monthPolicies} agencySettings={agencySettings} />}
         
-        {activeTab === 'ledger' && <LedgerTab profile={profile} team={team} agencySettings={agencySettings} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} updateLedgerActivity={updateLedgerActivity} updateLedgerPolicy={updateLedgerPolicy} />}
+        {activeTab === 'ledger' && <LedgerTab profile={profile} team={team} agencySettings={agencySettings} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} deleteActivitiesBulk={deleteActivitiesBulk} deletePoliciesBulk={deletePoliciesBulk} updateLedgerActivity={updateLedgerActivity} updateLedgerPolicy={updateLedgerPolicy} />}
 
         {activeTab === 'reports' && canViewReports && <ReportsTab team={team} profile={profile} agencySettings={agencySettings} />}
         

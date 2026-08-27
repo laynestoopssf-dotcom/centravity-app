@@ -6,6 +6,70 @@ import { cacheIdentifier } from "../utils/identifierCache";
 import IdentifierChip from "./ui/IdentifierChip";
 import FormattedNumberInput from "./ui/FormattedNumberInput";
 
+// Bulk-Delete row selection - one independent instance per ledger table (Bound Policies,
+// Quotes, Complex Resolutions, Calls & Touches, etc.), NOT shared globally, so checking rows
+// in one table never bleeds into another and "Select All"/"Delete Selected" always act on
+// exactly the table they're rendered under.
+function useRowSelection() {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // "Select All" toggles based on the CURRENTLY VISIBLE (already filtered) rows for this table -
+  // if every visible row is already selected, it clears; otherwise it selects all of them.
+  const toggleAll = (visibleIds: string[]) => setSelected(prev => {
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => prev.has(id));
+    return allSelected ? new Set() : new Set(visibleIds);
+  });
+  const clear = () => setSelected(new Set());
+  return { selected, toggle, toggleAll, clear };
+}
+
+type RowSelection = ReturnType<typeof useRowSelection>;
+
+function SelectAllCheckbox({ visibleIds, selection }: { visibleIds: string[]; selection: RowSelection }) {
+  const allSelected = visibleIds.length > 0 && visibleIds.every(id => selection.selected.has(id));
+  return (
+    <input
+      type="checkbox"
+      checked={allSelected}
+      onChange={() => selection.toggleAll(visibleIds)}
+      aria-label="Select all rows"
+      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+    />
+  );
+}
+
+function RowCheckbox({ id, selection }: { id: string; selection: RowSelection }) {
+  return (
+    <input
+      type="checkbox"
+      checked={selection.selected.has(id)}
+      onChange={(e) => { e.stopPropagation(); selection.toggle(id); }}
+      aria-label="Select row"
+      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+    />
+  );
+}
+
+function DeleteSelectedButton({ selection, onDelete }: { selection: RowSelection; onDelete: (ids: string[]) => Promise<boolean> | void }) {
+  const count = selection.selected.size;
+  if (count === 0) return null;
+  return (
+    <button
+      onClick={async () => {
+        const ok = await onDelete(Array.from(selection.selected));
+        if (ok) selection.clear();
+      }}
+      className="flex items-center gap-1.5 text-xs font-bold bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+    >
+      <Trash2 size={14} /> Delete Selected ({count})
+    </button>
+  );
+}
+
 // Converts an ISO timestamp into the "YYYY-MM-DDTHH:mm" shape <input type="datetime-local">
 // expects, in the browser's local timezone (so the value the user sees/edits matches what
 // toLocaleString() already renders elsewhere in this table).
@@ -21,7 +85,7 @@ type EditingEntry =
   | { kind: "policyPremium"; id: string; identifier: string; productLine: string; premiumAmount: number; paymentCycle: string; loggedAt: string }
   | { kind: "resolution"; id: string; identifier: string; status: "positive" | "negative"; loggedAt: string };
 
-export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolicies, ledgerDateFilter, setLedgerDateFilter, ledgerCustomStart, setLedgerCustomStart, ledgerCustomEnd, setLedgerCustomEnd, ledgerProducerFilter, setLedgerProducerFilter, ledgerLoading, fetchLedgerData, deleteActivity, deletePolicy, updateLedgerActivity, updateLedgerPolicy }: any) {
+export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolicies, ledgerDateFilter, setLedgerDateFilter, ledgerCustomStart, setLedgerCustomStart, ledgerCustomEnd, setLedgerCustomEnd, ledgerProducerFilter, setLedgerProducerFilter, ledgerLoading, fetchLedgerData, deleteActivity, deletePolicy, deleteActivitiesBulk, deletePoliciesBulk, updateLedgerActivity, updateLedgerPolicy }: any) {
   
   // FIX 1: Dynamically determine if we should show the Service View
   // It activates if the logged-in user is a Service role OR if an Owner/Manager filters by a Service team member
@@ -30,6 +94,17 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
 
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Bulk-Delete selection state - one per rendered table (see useRowSelection above). Declared
+  // unconditionally (not inside the isServiceView branch) since hooks can't be called
+  // conditionally; only whichever set is actually rendered below ever gets used.
+  const serviceTouchSelection = useRowSelection();
+  const serviceResolutionSelection = useRowSelection();
+  const servicePolicySelection = useRowSelection();
+  const boundSelection = useRowSelection();
+  const quoteSelection = useRowSelection();
+  const resolutionSelection = useRowSelection();
+  const activitySelection = useRowSelection();
 
   const openEditActivity = (act: any) => setEditingEntry({ kind: "activity", id: act.id, loggedAt: act.logged_at });
   // The DB only ever has a hash (or nothing, for legacy rows) - the edit field starts from
@@ -94,6 +169,9 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   // Surfaced here as its own dedicated table so resolutions are visible alongside sales instead of
   // falling through every status filter unnoticed.
   const standardResolutions = ledgerPolicies.filter((p: any) => p.product_line === 'Complex Resolution');
+  const boundPolicies = ledgerPolicies.filter((p: any) => p.status === 'bound' || p.status === 'issued');
+  const quotedPolicies = ledgerPolicies.filter((p: any) => p.status === 'quoted');
+  const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote');
 
   const activityTypeLabel = (type: string) => {
     switch (type) {
@@ -159,16 +237,23 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         /* ----------------------------------------------------- */
         <>
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center"><h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Touches (Calls/Contacts)</h3><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{serviceTouches.length} Records</span></div>
+             <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Touches (Calls/Contacts)</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={serviceTouchSelection} onDelete={deleteActivitiesBulk} />
+                 <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{serviceTouches.length} Records</span>
+               </div>
+             </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceTouches.map((a: any) => a.id)} selection={serviceTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceTouches.length === 0 ? (<tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 font-medium">No touches logged.</td></tr>) : (
+                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No touches logged.</td></tr>) : (
                      serviceTouches.map((act: any) => (
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={serviceTouchSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800">TOUCHPOINT</span></td>
                          <td className="px-6 py-4 text-right">
@@ -184,11 +269,18 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-amber-50/30 flex justify-between items-center"><h3 className="text-lg font-bold text-amber-900 flex items-center gap-2"><RefreshCcw size={20} className="text-amber-600"/> Complex Resolutions</h3><span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">{serviceResolutions.length} Records</span></div>
+             <div className="p-6 border-b border-gray-100 bg-amber-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-amber-900 flex items-center gap-2"><RefreshCcw size={20} className="text-amber-600"/> Complex Resolutions</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={serviceResolutionSelection} onDelete={deletePoliciesBulk} />
+                 <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">{serviceResolutions.length} Records</span>
+               </div>
+             </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
                    <tr>
+                     <th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceResolutions.map((p: any) => p.id)} selection={serviceResolutionSelection} /></th>
                      <th className="px-6 py-4">Date & Time</th>
                      <th className="px-6 py-4">Identifier</th>
                      <th className="px-6 py-4">Sentiment</th>
@@ -196,9 +288,10 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceResolutions.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No resolutions logged.</td></tr>) : (
+                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceResolutions.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No resolutions logged.</td></tr>) : (
                      serviceResolutions.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-amber-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={serviceResolutionSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4 font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="px-6 py-4">
@@ -219,16 +312,23 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-emerald-50/30 flex justify-between items-center"><h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={20} className="text-emerald-600"/> Policies (Quoted, Bound & Issued)</h3><span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">{servicePolicies.length} Records</span></div>
+             <div className="p-6 border-b border-gray-100 bg-emerald-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={20} className="text-emerald-600"/> Policies (Quoted, Bound & Issued)</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={servicePolicySelection} onDelete={deletePoliciesBulk} />
+                 <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">{servicePolicies.length} Records</span>
+               </div>
+             </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4">Date</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={servicePolicies.map((p: any) => p.id)} selection={servicePolicySelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : servicePolicies.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No policies found.</td></tr>) : (
+                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : servicePolicies.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">No policies found.</td></tr>) : (
                      servicePolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={servicePolicySelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
@@ -260,16 +360,23 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         /* ----------------------------------------------------- */
         <>
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-emerald-50/30 flex justify-between items-center"><h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={20} className="text-emerald-600"/> Bound Policies</h3><span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">{ledgerPolicies.filter((p: any) => p.status === 'bound' || p.status === 'issued').length} Records</span></div>
+             <div className="p-6 border-b border-gray-100 bg-emerald-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={20} className="text-emerald-600"/> Bound Policies</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={boundSelection} onDelete={deletePoliciesBulk} />
+                 <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">{boundPolicies.length} Records</span>
+               </div>
+             </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={boundPolicies.map((p: any) => p.id)} selection={boundSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : ledgerPolicies.filter((p: any) => p.status === 'bound' || p.status === 'issued').length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">No bound policies found.</td></tr>) : (
-                     ledgerPolicies.filter((p: any) => p.status === 'bound' || p.status === 'issued').map((pol: any) => (
+                   {ledgerLoading ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : boundPolicies.length === 0 ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 font-medium">No bound policies found.</td></tr>) : (
+                     boundPolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={boundSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
                          <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
@@ -288,16 +395,23 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center"><h3 className="text-lg font-bold text-purple-900 flex items-center gap-2"><FileText size={20} className="text-purple-600"/> Quotes</h3><span className="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full">{ledgerPolicies.filter((p: any) => p.status === 'quoted').length} Records</span></div>
+             <div className="p-6 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-purple-900 flex items-center gap-2"><FileText size={20} className="text-purple-600"/> Quotes</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={quoteSelection} onDelete={deletePoliciesBulk} />
+                 <span className="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full">{quotedPolicies.length} Records</span>
+               </div>
+             </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={quotedPolicies.map((p: any) => p.id)} selection={quoteSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : ledgerPolicies.filter((p: any) => p.status === 'quoted').length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No quotes found.</td></tr>) : (
-                     ledgerPolicies.filter((p: any) => p.status === 'quoted').map((pol: any) => (
+                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : quotedPolicies.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">No quotes found.</td></tr>) : (
+                     quotedPolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-purple-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={quoteSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
                          <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
@@ -315,11 +429,18 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-amber-50/30 flex justify-between items-center"><h3 className="text-lg font-bold text-amber-900 flex items-center gap-2"><RefreshCcw size={20} className="text-amber-600"/> Complex Resolutions</h3><span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">{standardResolutions.length} Records</span></div>
+             <div className="p-6 border-b border-gray-100 bg-amber-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-amber-900 flex items-center gap-2"><RefreshCcw size={20} className="text-amber-600"/> Complex Resolutions</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={resolutionSelection} onDelete={deletePoliciesBulk} />
+                 <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">{standardResolutions.length} Records</span>
+               </div>
+             </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
                    <tr>
+                     <th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={standardResolutions.map((p: any) => p.id)} selection={resolutionSelection} /></th>
                      <th className="px-6 py-4">Date & Time</th>
                      <th className="px-6 py-4">Producer</th>
                      <th className="px-6 py-4">Identifier</th>
@@ -328,9 +449,10 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : standardResolutions.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No resolutions logged.</td></tr>) : (
+                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : standardResolutions.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">No resolutions logged.</td></tr>) : (
                      standardResolutions.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-amber-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={resolutionSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
                          <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} /></td>
@@ -357,18 +479,25 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                  completed through the Log Activity workflow). This section is calls/touches only -
                  activity_type === 'quote' rows are intentionally excluded here so a single quote
                  submission isn't counted a second time under a legacy "scoreboard click" label. */}
-             <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center"><h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Calls & Touches</h3><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote').length} Records</span></div>
+             <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Calls & Touches</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={activitySelection} onDelete={deleteActivitiesBulk} />
+                 <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{callsAndTouches.length} Records</span>
+               </div>
+             </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={callsAndTouches.map((a: any) => a.id)} selection={activitySelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote').length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No calls found.</td></tr>) : (
-                     ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote').map((act: any) => {
+                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : callsAndTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No calls found.</td></tr>) : (
+                     callsAndTouches.map((act: any) => {
                        const label = activityTypeLabel(act.activity_type);
                        return (
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={activitySelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{act.profiles?.first_name} {act.profiles?.last_name}</td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
