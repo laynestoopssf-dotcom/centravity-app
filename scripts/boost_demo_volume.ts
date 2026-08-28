@@ -30,11 +30,11 @@
 // without hardcoding names/emails - if a 5th producer is ever added to the demo roster and given
 // real production, they'd automatically be included on a future run too.
 //
-// PRODUCT LINE / PREMIUM REALISM: new rows are distributed across Auto/Fire/Commercial/Life/
-// Health proportional to the agency's CURRENT live mix, with premiums randomized around each
-// line's CURRENT live average (same +/-30% jitter formula as utils/demoSimulator.ts uses) -
-// pulled fresh from the database at run time, not hardcoded, so this stays accurate even if the
-// book's mix drifts over future runs.
+// PRODUCT LINE MIX: pinned to an explicit override (FIXED_LOB_MIX below) rather than derived
+// from the agency's live mix - 50% Auto / 35% Fire / 10% Life / 5% split across Commercial+Health
+// - per an explicit request to weight new volume toward Auto/Fire specifically. Premiums are
+// still randomized around each line's CURRENT live average (same +/-30% jitter formula
+// utils/demoSimulator.ts uses), just the LOB each row is assigned to is fixed, not live-derived.
 //
 // SANDBOXING (same posture as scripts/backfill_demo_identifiers.ts / normalize_demo_metrics.ts):
 //   - NOT wired into "dev"/"build"/"start", any Vercel/CI step, or imported by any app code.
@@ -45,7 +45,7 @@
 //   - Only ever INSERTs new rows - never updates or deletes an existing policy.
 //
 // Usage:
-//   npm run boost:demo-volume             # generate + insert ~350-400 new encrypted policies
+//   npm run boost:demo-volume             # generate + insert new encrypted policies (see TOTAL_NEW_ROWS_MIN/MAX)
 //   npm run boost:demo-volume -- --dry-run   # print the full before/after plan, write nothing
 process.loadEnvFile(new URL("../.env.local", import.meta.url).pathname);
 
@@ -65,10 +65,11 @@ const DEMO_LOGIN_PASSWORD = process.env.DEMO_LOGIN_PASSWORD;
 // service-role client regardless.
 const AUTH_EMAIL = "casey.rivera@centravitydemo.invalid";
 
-const TOTAL_NEW_ROWS_MIN = 350;
-const TOTAL_NEW_ROWS_MAX = 400;
+const TOTAL_NEW_ROWS_MIN = 400;
+const TOTAL_NEW_ROWS_MAX = 500;
 
-// Same band scripts/normalize_demo_metrics.ts established live - kept identical on purpose so
+// Same band scripts/normalize_demo_metrics.ts established live (confirmed 2026-08-27: keep this
+// band rather than the older, since-abandoned ~26% figure) - kept identical on purpose so
 // blending new rows in can never drift the agency-wide rate outside it (see header comment).
 const TARGET_CLOSE_RATE_MIN = 0.38;
 const TARGET_CLOSE_RATE_MAX = 0.45;
@@ -76,6 +77,16 @@ const QUOTED_SHARE_OF_OPEN = 0.6;
 
 const LOB_LIST = ["Auto", "Fire", "Commercial", "Life", "Health"] as const;
 type LineOfBusiness = (typeof LOB_LIST)[number];
+
+// Explicit product-mix override for this batch - see header comment. The "5% Commercial/Health"
+// bucket is split evenly between the two since they were requested as a single grouped share.
+const FIXED_LOB_MIX: Record<LineOfBusiness, number> = {
+  Auto: 0.5,
+  Fire: 0.35,
+  Life: 0.1,
+  Commercial: 0.025,
+  Health: 0.025,
+};
 const PAYMENT_CYCLE: Record<LineOfBusiness, "monthly" | "annual"> = {
   Auto: "monthly",
   Fire: "monthly",
@@ -217,7 +228,8 @@ async function main() {
 
   console.log(`Active producers: ${producers.map((p) => `${nameFor(p.userId)} (${p.weight} existing)`).join(", ")}\n`);
 
-  // Live product-mix + premium averages, pulled fresh rather than hardcoded (see header comment).
+  // Premium averages are still pulled live per LOB (see header comment) - only the LOB
+  // ASSIGNMENT itself uses the fixed override below instead of the live mix.
   const lobStats = new Map<LineOfBusiness, { count: number; premiumSum: number }>();
   for (const lob of LOB_LIST) lobStats.set(lob, { count: 0, premiumSum: 0 });
   for (const p of pipelineExisting) {
@@ -227,8 +239,7 @@ async function main() {
     s.count += 1;
     s.premiumSum += Number(p.premium_amount) || 0;
   }
-  const totalLobCount = Array.from(lobStats.values()).reduce((s, v) => s + v.count, 0) || 1;
-  const lobWeights = LOB_LIST.map((lob) => ({ lob, weight: lobStats.get(lob)!.count / totalLobCount }));
+  const lobWeights = LOB_LIST.map((lob) => ({ lob, weight: FIXED_LOB_MIX[lob] }));
   const avgPremiumByLob = new Map<LineOfBusiness, number>(LOB_LIST.map((lob) => [lob, lobStats.get(lob)!.count > 0 ? lobStats.get(lob)!.premiumSum / lobStats.get(lob)!.count : 500]));
 
   const totalNewRows = Math.round(randomInRange(TOTAL_NEW_ROWS_MIN, TOTAL_NEW_ROWS_MAX));
@@ -294,6 +305,12 @@ async function main() {
   console.log("Per-producer new-volume plan:\n");
   for (const s of summaryRows) {
     console.log(`  ${s.name.padEnd(20)} +${s.total} new rows: won=${s.won} quoted=${s.quoted} notTaken=${s.notTaken} (new-batch close rate ${pct(s.closeRate)})`);
+  }
+
+  console.log("\nNew-batch product mix (target vs actual):");
+  for (const lob of LOB_LIST) {
+    const actual = plans.filter((p) => p.product_line === lob).length;
+    console.log(`  ${lob.padEnd(12)} target ${pct(FIXED_LOB_MIX[lob])}  actual ${pct(plans.length > 0 ? actual / plans.length : 0)} (${actual} rows)`);
   }
 
   const newYtdPremium = plans.filter((p) => p.status === "bound" || p.status === "issued").reduce((sum, p) => sum + p.premium_amount, 0);
