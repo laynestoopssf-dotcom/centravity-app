@@ -9,12 +9,10 @@ import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
-import InfoTooltip from "../../components/ui/InfoTooltip";
-import FormattedNumberInput from "../../components/ui/FormattedNumberInput";
-import { isLoggerMessage } from "../../utils/loggerBridge";
-import { hashIdentifier, hashIdentifiers, hashIdentifierFull, hashIdentifiersFull } from "../../utils/crypto";
-import { encryptIdentifierForAgency, encryptIdentifiersForAgency } from "../../utils/e2ee";
-import { cacheIdentifier, getCachedIdentifierForAny, forgetCachedIdentifier } from "../../utils/identifierCache";
+import LogActivityModal, { type LoggingType } from "../../components/dashboard/LogActivityModal";
+import { isLoggerMessage, isLoggerDataChangedMessage } from "../../utils/loggerBridge";
+import { hashIdentifiersFull } from "../../utils/crypto";
+import { encryptIdentifiersForAgency } from "../../utils/e2ee";
 import { 
   Target, 
   FileText, ShieldCheck, CheckCircle2, 
@@ -22,7 +20,7 @@ import {
   X, ChevronDown, ChevronUp, Calculator,
   ClipboardList, ArrowRightCircle, CalendarDays, Trophy,
   Plane, Luggage, RefreshCw, Sparkles, Trash2, Filter,
-  DownloadCloud, ThumbsUp, ThumbsDown
+  DownloadCloud
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, 
@@ -64,7 +62,6 @@ type Agency = { id: string; name: string; timezone?: string; production_days_per
 // shown for a policy row comes only from utils/identifierCache.ts's local,
 // browser-only cache (see components consuming this type), never from here.
 type Policy = { id: string; user_id: string; client_identifier_hash?: string | null; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
-type LineItemData = { id: string; parentCategory: string; productLine: string; count: number; premiumAmount: string; paymentCycle: string; existingQuoteIds: string[]; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
 
 const DEFAULT_PRODUCT_LINES = [
@@ -72,15 +69,6 @@ const DEFAULT_PRODUCT_LINES = [
   {name: 'Commercial', parent: 'Commercial'}, {name: 'Life', parent: 'Life'}, 
   {name: 'Health', parent: 'Health'}
 ];
-
-// Explicit per-row ID generator for bulk activity/policy inserts - never rely on every row in a
-// batch getting a distinct value from a DB default alone. Mirrors the same fallback pattern used
-// in OnboardingWizard's makeId() for browsers without crypto.randomUUID.
-const makeRowId = (): string =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `row-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
 
 // Hoisted to module scope: pure constants with no dependency on props/state, shared by every
 // dynamic-average / dual-engine What-If calculation (agency-wide and per-producer alike).
@@ -109,7 +97,6 @@ export default function Home() {
   const [globalOfficeFilter, setGlobalOfficeFilter] = useState('all');
   const [selectedOffice, setSelectedOffice] = useState('all');
   const [selectedProducer, setSelectedProducer] = useState('all');
-  const [logOfficeId, setLogOfficeId] = useState("");
   // Backdating support for the Log Quote/Bound modal - defaults to "today" so normal same-day
   // logging behaves exactly as before, but lets a rep correct the date if they forgot to log
   // yesterday's activity. Capped at "today" (see the modal's max attribute) since the
@@ -118,7 +105,7 @@ export default function Home() {
   // converts to UTC first, so for any US timezone (all behind UTC) during local
   // evening/night hours (any time after UTC has already rolled to the next
   // calendar day - as early as 4-5pm Pacific) this would return TOMORROW's date
-  // instead of today's. Combined with submitLogActivity's effectiveNow (which
+  // instead of today's. Combined with LogActivityModal's effectiveNow (which
   // re-applies the LOCAL time-of-day on top of whichever Y/M/D this returns),
   // that silently produced a genuinely future timestamp - enough to trip
   // protect_ledger_integrity()'s "No Time Travel" trigger and have the entire
@@ -130,7 +117,6 @@ export default function Home() {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   };
-  const [logDate, setLogDate] = useState(todayDateStr());
 
   // "Log Past Data" flow: picks a backdated date, then hands off to the full Quote/Bound
   // form (openLogModal) pre-dated to that day - see startBackdatedEntry below.
@@ -210,21 +196,13 @@ export default function Home() {
   const [customTargetPolicies, setCustomTargetPolicies] = useState<any[]>([]);
 
   const [isLoggingModalOpen, setIsLoggingModalOpen] = useState(false);
-  // Guards against an accidental double-click firing submitLogActivity twice in a row (two
-  // fully separate submissions, each with its own uuids) - this used to be "handled" by a
-  // blunt same-user/same-activity-type/3-second DB trigger that also silently ate legitimate
-  // multi-line submissions. That trigger has been narrowed to drop only its flawed dedup
-  // heuristic (see scripts/fix_ledger_integrity_trigger.sql); double-click protection now
-  // belongs here instead, where it can't be confused with intentional multi-unit submissions.
-  const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
-  const [loggingType, setLoggingType] = useState<'quote' | 'bound' | 'complex_res' | 'cross_sell'>('quote');
-  const [resolutionStatus, setResolutionStatus] = useState<'positive' | 'negative'>('positive');
-  const [isExistingQuote, setIsExistingQuote] = useState(false);
-  // Free-text "Identifier (Optional)" - a blind-index search key, not a name field.
-  // It's hashed client-side (utils/crypto.ts) right before submit; nothing here
-  // is ever sent to Supabase in plain text.
-  const [custIdentifier, setCustIdentifier] = useState("");
-  const [lineItems, setLineItems] = useState<LineItemData[]>([]);
+  const [loggingType, setLoggingType] = useState<LoggingType>('quote');
+  // Seeds LogActivityModal's own internal `logDate` field each time it's (re)opened - see
+  // openLogModal/startBackdatedEntry below. All the rest of the form's state (line items,
+  // resolution sentiment, existing-quote picker, submitting flag, etc.) now lives inside
+  // components/dashboard/LogActivityModal.tsx itself, since that component is also mounted
+  // standalone by app/logger/page.tsx, which has none of this page's state to reach into.
+  const [logModalInitialDate, setLogModalInitialDate] = useState(todayDateStr());
 
   const [ledgerActivities, setLedgerActivities] = useState<any[]>([]);
   const [ledgerPolicies, setLedgerPolicies] = useState<any[]>([]);
@@ -652,7 +630,7 @@ export default function Home() {
       // months after the policy was actually bound), so filtering on it made those calcs silently
       // pull in policies whose real bind date was outside the period, purely because they'd been
       // touched/updated recently. `bound_at` is stamped exactly once, at the moment status first
-      // becomes 'bound' (see updatePolicyStatus / submitLogActivity), so it's the authoritative bind
+      // becomes 'bound' (see updatePolicyStatus / LogActivityModal), so it's the authoritative bind
       // date. Falls back to `written_at` (creation-time only - stale for an existing quote converted
       // to bound later, which was the original bug here) then `logged_at` only for legacy rows
       // written before `bound_at` existed.
@@ -2031,213 +2009,24 @@ export default function Home() {
     } catch (error: any) { console.error(error); showToast("Error updating policy: " + error.message, "error"); }
   };
 
-  const openLogModal = (type: 'quote' | 'bound' | 'complex_res' | 'cross_sell') => {
-    const defaultLine = agencySettings?.custom_product_lines?.[0]?.name || 'Auto';
+  // Opens the shared LogActivityModal (components/dashboard/LogActivityModal.tsx) for this tab.
+  // `initialDate` lets startBackdatedEntry below seed a non-today date without this page needing
+  // to reach into the modal's own internal state (it owns logDate itself now).
+  const openLogModal = (type: LoggingType, initialDate?: string) => {
     setLoggingType(type);
-    setResolutionStatus('positive');
-    setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: defaultLine, count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]);
-    setCustIdentifier("");
-    setIsExistingQuote(false);
-    setLogOfficeId(profile?.office_id || "");
-    setLogDate(todayDateStr());
+    setLogModalInitialDate(initialDate || todayDateStr());
     setIsLoggingModalOpen(true);
   };
 
-  const addLineItem = () => {
-    const defaultLine = agencySettings?.custom_product_lines?.[0]?.name || 'Auto';
-    setLineItems([...lineItems, { id: Date.now().toString(), parentCategory: 'Auto', productLine: defaultLine, count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]);
-  };
-
-  const removeLineItem = (id: string) => setLineItems(lineItems.filter(item => item.id !== id));
-  const updateLineItem = (id: string, field: string, value: any) => setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
-
-  const submitLogActivity = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Fires once LogActivityModal has finished writing to Supabase - this tab's own job is just to
+  // refresh whatever derived state (stats, pipeline, agency overview) depends on the new row(s).
+  const handleLogActivitySuccess = (message: string) => {
     if (!profile) return;
-    // Blocks a second submission from firing while one is already in flight (e.g. an accidental
-    // double-click on Save) - see the isSubmittingActivity declaration above for why this replaced
-    // a DB-side trigger that used to (over-broadly) try to catch the same thing.
-    if (isSubmittingActivity) return;
-    setIsSubmittingActivity(true);
-
-    // Blind index: the raw identifier never gets included in any Supabase request -
-    // only its SHA-256 hash does (see utils/crypto.ts). `trimmedIdentifier` is kept
-    // around purely in-memory for this submit (toast text, and the local-only
-    // picker cache in utils/identifierCache.ts) - it's never written anywhere.
-    const trimmedIdentifier = custIdentifier.trim();
-
-    try {
-      // Deliberately INSIDE the try block (unlike the very first version of this line) -
-      // hashIdentifierFull() itself never throws (see utils/crypto.ts), but keeping this call
-      // here rather than before the try means a bind/quote can never be silently stuck
-      // "submitting forever" (finally below resets isSubmittingActivity) or fail with no visible
-      // toast if that ever changes. hashIdentifierFull (not the plain hashIdentifier) also
-      // returns padded trigram hashes so this identifier becomes partial-searchable for
-      // Owners/Managers later, not just exact-match - see 20260827030000_add_blind_trigram_search.sql.
-      const { hash: identifierHash, trigrams: identifierTrigrams } = await hashIdentifierFull(custIdentifier);
-      // Encrypted alongside the hash/trigrams (never instead of - search still only ever reads
-      // the hash/trigram columns, see components/DashboardTab.tsx) so a teammate viewing this
-      // row cross-team later can decrypt the real name instead of seeing a placeholder.
-      const { ciphertext: identifierCiphertext, iv: identifierIv } = await encryptIdentifierForAgency(custIdentifier, profile.agency_id);
-
-      // Builds the effective timestamp from the (possibly backdated) `logDate` combined with the
-      // actual current time-of-day, so same-day submissions are byte-for-byte identical to before
-      // and a backdated submission still sorts sensibly within its chosen day.
-      const now = new Date();
-      const [logYear, logMonth, logDay] = logDate.split('-').map(Number);
-      const effectiveNow = (logYear && logMonth && logDay)
-        ? new Date(logYear, logMonth - 1, logDay, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
-        : now;
-      const currentTime = effectiveNow.toISOString();
-      const targetOffice = logOfficeId || profile.office_id;
-      // Re-derives "now, but on logDate" fresh per call (rather than reusing the single
-      // `currentTime` snapshot above) so sequential rows within one submission still land at
-      // distinct real wall-clock instants on the chosen day, matching the un-backdated behavior.
-      const nowWithLogDate = () => {
-        const n = new Date();
-        return (logYear && logMonth && logDay)
-          ? new Date(logYear, logMonth - 1, logDay, n.getHours(), n.getMinutes(), n.getSeconds(), n.getMilliseconds()).toISOString()
-          : n.toISOString();
-      };
-
-      if (loggingType === 'complex_res') {
-        const { error: actErr } = await supabase.from('activities').insert([{ id: makeRowId(), activity_type: 'complex_res', agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: currentTime }]);
-        if (actErr) { console.error('[submitLogActivity] complex_res activity insert failed:', actErr); throw new Error(`Activity Error: ${actErr.message}${actErr.details ? ` (${actErr.details})` : ''}`); }
-
-        const resolutionPolicyId = makeRowId();
-        const { error: polErr } = await supabase.from('policies').insert([{ id: resolutionPolicyId, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: 'Complex Resolution', premium_amount: 0, payment_cycle: 'monthly', status: resolutionStatus, logged_at: currentTime, written_at: currentTime }]);
-        if (polErr) { console.error('[submitLogActivity] complex_res policy insert failed:', polErr); throw new Error(`Policy Error: ${polErr.message}${polErr.details ? ` (${polErr.details})` : ''}`); }
-        // This branch used to skip caching entirely - Resolution rows in the Ledger's Recent
-        // Resolutions list (and its edit modal's prefill) would always show "—" no matter what
-        // was typed here, since nothing had ever written this row's id/hash into the local cache.
-        if (trimmedIdentifier) cacheIdentifier(resolutionPolicyId, trimmedIdentifier, identifierHash);
-
-        showToast(trimmedIdentifier ? `Resolution logged for ${trimmedIdentifier}!` : 'Resolution logged!');
-        setIsLoggingModalOpen(false);
-        fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
-        fetchPipeline(selectedProducer, profile.agency_id);
-        return;
-      }
-
-      // Flatten every submitted line-item card into one "unit" per Quantity - a card is just a
-      // grouping for data entry (Category/Product/Premium/Renewal Cycle); the actual quote/bound
-      // credit is per-unit. So Card 1 (Auto, Qty 3) + Card 2 (Fire, Qty 1) expands to 4 units
-      // (3x Auto, 1x Fire) before anything is written to Supabase.
-      const qtyOf = (item: LineItemData) => Math.max(1, Math.trunc(Number(item.count)) || 1);
-      const expandedUnits = lineItems.flatMap(item => Array.from({ length: qtyOf(item) }, () => item));
-      const totalCount = expandedUnits.length;
-
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[submitLogActivity] cards:', lineItems.map(i => ({ line: i.productLine, qty: qtyOf(i) })), '-> expanded units:', totalCount);
-      }
-
-      // Still used by the 'bound' branch below, which keeps its existing (working, per-line-item)
-      // batch insert shape untouched - only the quote/cross_sell path below switches to fully
-      // sequential single-row requests.
-      const stampFor = (index: number) => new Date(new Date(currentTime).getTime() + index * 1000).toISOString();
-
-      // BYPASS: a batch multi-row .insert() into `activities` was confirmed (via the previous
-      // diagnostic pass) to silently collapse down to 1 persisted row with zero error reported,
-      // even with every row carrying a provably distinct id. Rather than chase the exact
-      // trigger/rule causing that inside a single atomic multi-row statement, send each row as its
-      // own fully separate request/transaction - Postgres has no batch array to collapse if there
-      // never is one. The real wall-clock gap between sequential awaited network round-trips also
-      // naturally staggers `logged_at` far more than any client-computed offset could, which
-      // doubles as a bypass for a possible timestamp-based dedup trigger.
-      const activitiesPayload = expandedUnits.map(() => ({ id: crypto.randomUUID(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: nowWithLogDate() }));
-      const insertedActivityIds: string[] = [];
-      for (const activity of activitiesPayload) {
-        const { error: actErr } = await supabase.from('activities').insert(activity);
-        if (actErr) {
-          console.error(`[submitLogActivity] sequential activities insert failed at row ${insertedActivityIds.length + 1}/${activitiesPayload.length}. Full Supabase error - check .code/.details/.hint:`, actErr, 'row:', activity);
-          // Strict transaction: roll back every row from this submission that DID succeed before
-          // this one failed, so a partial submission never silently survives as a fraction of the
-          // real count.
-          if (insertedActivityIds.length > 0) {
-            const { error: rollbackErr } = await supabase.from('activities').delete().in('id', insertedActivityIds);
-            if (rollbackErr) console.error('[submitLogActivity] CRITICAL: failed to roll back partially-inserted activities - manual cleanup needed for ids:', insertedActivityIds, rollbackErr);
-          }
-          throw new Error(`Activity Insert Error [${actErr.code || 'no code'}] on row ${insertedActivityIds.length + 1}/${activitiesPayload.length}: ${actErr.message}${actErr.details ? ` — ${actErr.details}` : ''}${actErr.hint ? ` (hint: ${actErr.hint})` : ''}`);
-        }
-        insertedActivityIds.push(activity.id);
-      }
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[submitLogActivity] sequentially inserted all', insertedActivityIds.length, 'activity rows.');
-      }
-
-      if (loggingType === 'quote' || loggingType === 'cross_sell') {
-        // Premium is split per-unit (card total ÷ card quantity) so a bundled "$300 for 3 autos"
-        // entry books $100/unit instead of multiplying the household's premium by 3. Same
-        // sequential-insert bypass as activities above.
-        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: 'quoted', logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
-        // Local-only convenience cache (never sent to Supabase) so the "Bind from existing
-        // Household Quote?" picker can still show this identifier back to this same browser
-        // later, since the DB will only ever have the hash - see utils/identifierCache.ts.
-        if (trimmedIdentifier) policiesPayload.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
-        const insertedPolicyIds: string[] = [];
-        for (const policy of policiesPayload) {
-          const { error: polErr } = await supabase.from('policies').insert(policy);
-          if (polErr) {
-            console.error(`[submitLogActivity] sequential policies insert failed at row ${insertedPolicyIds.length + 1}/${policiesPayload.length}. Full Supabase error - check .code/.details/.hint:`, polErr, 'row:', policy);
-            // Roll back this submission's policies that DID succeed, plus every activities row
-            // from above (separate table/request, not a shared DB transaction) - so a partial
-            // pipeline write never leaves orphaned "phantom" activity credit with no matching
-            // Pipeline entries.
-            if (insertedPolicyIds.length > 0) {
-              const { error: rbPolErr } = await supabase.from('policies').delete().in('id', insertedPolicyIds);
-              if (rbPolErr) console.error('[submitLogActivity] CRITICAL: failed to roll back partially-inserted policies - manual cleanup needed for ids:', insertedPolicyIds, rbPolErr);
-            }
-            const { error: rbActErr } = await supabase.from('activities').delete().in('id', insertedActivityIds);
-            if (rbActErr) console.error('[submitLogActivity] CRITICAL: failed to roll back activities after policy insert failure - manual cleanup needed for ids:', insertedActivityIds, rbActErr);
-            throw new Error(`Policy Insert Error [${polErr.code || 'no code'}] on row ${insertedPolicyIds.length + 1}/${policiesPayload.length}: ${polErr.message}${polErr.details ? ` — ${polErr.details}` : ''}${polErr.hint ? ` (hint: ${polErr.hint})` : ''}`);
-          }
-          insertedPolicyIds.push(policy.id);
-        }
-
-        showToast(`Successfully logged ${totalCount} Items to your Pipeline!`);
-        
-      } else if (loggingType === 'bound') {
-        for (const item of lineItems) {
-          if (isExistingQuote && item.existingQuoteIds.length > 0) {
-            const idsToUpdate = item.existingQuoteIds.slice(0, item.count);
-            if (idsToUpdate.length > 0) {
-              // bound_at = currentTime (not stampFor(i) - these rows are a single batch update, not
-              // sequential inserts) so this conversion-from-quote is credited to the day it's ACTUALLY
-              // bound. Previously this update never touched any timestamp, so a quote logged on one
-              // day and bound days/weeks later kept counting as bound on its original quote date.
-              const { error: updErr } = await supabase.from('policies').update({ status: 'bound', client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in('id', idsToUpdate);
-              if (updErr) { console.error('[submitLogActivity] bind existing-quote update failed:', updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
-              // Refresh (or clear) the local picker cache to match whatever the producer just
-              // re-typed here - it may differ from what was cached when this was first quoted.
-              idsToUpdate.forEach(id => trimmedIdentifier ? cacheIdentifier(id, trimmedIdentifier, identifierHash) : forgetCachedIdentifier(id));
-            }
-            if (item.count > idsToUpdate.length) {
-               const extraCount = item.count - idsToUpdate.length;
-               const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
-               if (trimmedIdentifier) extraPolicies.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
-               const { error: extraErr } = await supabase.from('policies').insert(extraPolicies);
-               if (extraErr) { console.error('[submitLogActivity] bind extra-policies insert failed:', extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
-            }
-          } else {
-            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: 'bound', logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
-            if (trimmedIdentifier) policiesToLog.forEach(p => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
-            const { error: bndErr } = await supabase.from('policies').insert(policiesToLog);
-            if (bndErr) { console.error('[submitLogActivity] bound policies insert failed:', bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
-          }
-        }
-        showToast(`Successfully bound ${totalCount} items!`);
-      }
-
-      setIsLoggingModalOpen(false);
-      fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
-      fetchPipeline(selectedProducer, profile.agency_id);
-      if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
-    } catch (error: any) { 
-      console.error(error); 
-      showToast(error.message || "Error saving data", "error"); 
-    } finally {
-      setIsSubmittingActivity(false);
-    }
+    showToast(message);
+    setIsLoggingModalOpen(false);
+    fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+    fetchPipeline(selectedProducer, profile.agency_id);
+    if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
 
   const logTouchpoint = async () => {
@@ -2285,26 +2074,31 @@ export default function Home() {
     if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
 
-  // Relays taps from the /logger pop-out window (see app/logger/page.tsx + utils/loggerBridge.ts)
-  // into this exact same tab's own logInboundCall/logTouchpoint/openLogModal - the pop-out has no
-  // Supabase client or modal UI of its own, it's purely a remote control for whichever dashboard
-  // tab launched it (window.opener), so a Quote/Bound tap there opens the full line-item modal
-  // right here, and this tab's own state/toasts/stats update exactly as if the tap happened on
-  // this tab's own Quick Actions dock.
+  // Relays "inbound"/"outbound" taps from the /logger pop-out window (see app/logger/page.tsx +
+  // utils/loggerBridge.ts) into this exact same tab's own logInboundCall/logTouchpoint - those two
+  // are instant one-tap counters with no form, so there's no reason for the pop-out not to relay
+  // them here. Quote/Bound are NOT relayed anymore - the pop-out now renders its own local copy of
+  // LogActivityModal and submits independently (it has its own Supabase session/data fetch - see
+  // app/logger/page.tsx), so instead it pings this tab with "dataChanged" once it's done, and this
+  // tab just refetches its own stats/pipeline to pick up whatever the pop-out just wrote.
   useEffect(() => {
     const handleLoggerMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || !profile) return;
+      if (isLoggerDataChangedMessage(event.data)) {
+        fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+        fetchPipeline(selectedProducer, profile.agency_id);
+        if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
+        return;
+      }
       if (!isLoggerMessage(event.data)) return;
       switch (event.data.action) {
         case 'inbound': logInboundCall(); break;
         case 'outbound': logTouchpoint(); break;
-        case 'quote': openLogModal(profile.role === 'service' ? 'complex_res' : 'quote'); break;
-        case 'bound': openLogModal(profile.role === 'service' ? 'cross_sell' : 'bound'); break;
       }
     };
     window.addEventListener('message', handleLoggerMessage);
     return () => window.removeEventListener('message', handleLoggerMessage);
-  }, [profile, logInboundCall, logTouchpoint, openLogModal]);
+  }, [profile, logInboundCall, logTouchpoint, selectedProducer, agencySettings]);
 
   // "Log Past Data" - opens the date-picker modal below; the actual quote/bound entry itself
   // then reuses the full openLogModal form (product line, premium, payment cycle) so historical
@@ -2315,13 +2109,12 @@ export default function Home() {
   };
 
   // Hands off from the lightweight date-picker to the full Quote/Bound (or, for Service-role
-  // users, Complex Resolution/Cross-Sell — see the modal JSX below) form, pre-dating it to the
-  // chosen backdateDate so submitLogActivity's `logged_at`/`written_at`/`bound_at` timestamps
-  // (and therefore the activities + policies rows it writes) all land on that historical day.
-  const startBackdatedEntry = (type: 'quote' | 'bound' | 'complex_res' | 'cross_sell') => {
+  // users, Complex Resolution/Cross-Sell — see LogActivityModal) form, pre-dating it to the chosen
+  // backdateDate so the modal's `logged_at`/`written_at`/`bound_at` timestamps (and therefore the
+  // activities + policies rows it writes) all land on that historical day.
+  const startBackdatedEntry = (type: LoggingType) => {
     setIsBackdateModalOpen(false);
-    openLogModal(type);
-    setLogDate(backdateDate);
+    openLogModal(type, backdateDate);
   };
   
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -3492,231 +3285,19 @@ export default function Home() {
       </main>
 
       {/* MODALS */}
-      {isLoggingModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 capitalize flex items-center gap-2">
-              {loggingType === 'bound' ? <ShieldCheck className="text-emerald-600"/> : loggingType === 'complex_res' ? <RefreshCw className="text-blue-600"/> : <FileText className="text-purple-600"/>}
-              Log New {loggingType.replace('_', ' ')}
-            </h2>
-
-            <form onSubmit={submitLogActivity} className="space-y-4">
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl mb-4">
-                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider flex items-center gap-1.5"><CalendarDays size={13}/> Date Logged</label>
-                <input
-                  type="date"
-                  required
-                  max={todayDateStr()}
-                  value={logDate}
-                  onChange={e => setLogDate(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
-                />
-                {logDate !== todayDateStr() && <p className="text-[11px] font-semibold text-amber-600 mt-1.5">Backdating this entry to {new Date(`${logDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}.</p>}
-              </div>
-
-              {profile?.is_floater && offices.length > 1 && (
-                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl mb-4">
-                  <label className="flex items-center gap-1 text-xs font-bold text-indigo-900 mb-1 uppercase tracking-wider">
-                    Logging Destination
-                    <InfoTooltip text="Which office this activity counts toward. You're seeing this because your profile is marked as a floater with access to more than one office." />
-                  </label>
-                  <select 
-                    value={logOfficeId} 
-                    onChange={e => setLogOfficeId(e.target.value)}
-                    className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-600 text-sm font-bold text-indigo-900"
-                  >
-                    {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {loggingType === 'bound' && (
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <input type="checkbox" id="existingQuoteToggle" checked={isExistingQuote} onChange={(e) => { setIsExistingQuote(e.target.checked); if (!e.target.checked) { setCustIdentifier(""); setLineItems([{ id: Date.now().toString(), parentCategory: 'Auto', productLine: agencySettings?.custom_product_lines?.[0]?.name || 'Auto', count: 1, premiumAmount: '', paymentCycle: 'monthly', existingQuoteIds: [] }]); } }} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-600" />
-                    <label htmlFor="existingQuoteToggle" className="text-sm font-semibold text-blue-900 cursor-pointer">Bind from existing Household Quote?</label>
-                    <InfoTooltip text="Check this if you already logged this client as a Quote earlier - it pre-fills the product line, premium, and term below from that quote instead of you re-typing them, and marks the original quote as bound." />
-                  </div>
-                  {isExistingQuote && (
-                     <div className="mt-3">
-                       {/* Quotes are grouped by client_identifier_hash (the DB can never show a
-                           readable name once it's hashed) - the label falls back to this
-                           browser's local identifierCache if this same device typed the quote,
-                           otherwise to product lines/premium/date, which is still enough to tell
-                           households apart. See utils/identifierCache.ts for why. */}
-                       <select
-                         className="w-full p-2 bg-white border border-blue-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
-                         onChange={(e) => {
-                           const groupKey = e.target.value;
-                           if (!groupKey) return;
-                           const customerQuotes = pipeline.filter(p => p.status === 'quoted' && (p.client_identifier_hash || p.id) === groupKey);
-                           
-                           if (customerQuotes.length > 0) {
-                              const getParent = (pLine: string) => {
-                                 const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
-                                 const obj = lines.find((l: any) => l.name === pLine);
-                                 return obj ? obj.parent : 'Auto';
-                              };
-                              const newLineItems = customerQuotes.map((q, idx) => ({
-                                  id: Date.now().toString() + idx,
-                                  parentCategory: getParent(q.product_line),
-                                  productLine: q.product_line,
-                                  count: 1,
-                                  premiumAmount: q.premium_amount.toString(),
-                                  paymentCycle: q.payment_cycle,
-                                  existingQuoteIds: [q.id]
-                              }));
-                              setLineItems(newLineItems);
-                              // Only recoverable if THIS browser cached it when the quote was typed -
-                              // otherwise there's no plaintext anywhere to prefill, so it stays blank.
-                              // Tries every row id in the group first, then falls back to their shared
-                              // client_identifier_hash (every quote in this group has the identical
-                              // hash, by construction of groupKey below) - covers the case where this
-                              // browser cached the identifier under a DIFFERENT row id than the ones in
-                              // this specific group (e.g. it was first typed on an earlier quote for the
-                              // same household that got bound/archived since).
-                              setCustIdentifier(getCachedIdentifierForAny(customerQuotes.map(q => q.id), customerQuotes.map(q => q.client_identifier_hash)) || "");
-                           }
-                         }}
-                       >
-                         <option value="">-- Choose a Household --</option>
-                         {Object.entries(
-                           pipeline.filter(p => p.status === 'quoted').reduce((acc: any, curr: any) => {
-                             const key = curr.client_identifier_hash || curr.id;
-                             if (!acc[key]) acc[key] = [];
-                             acc[key].push(curr);
-                             return acc;
-                           }, {})
-                         ).map(([groupKey, quotes]: [string, any]) => {
-                           const lines = quotes.map((q: any) => q.product_line).join(', ');
-                           const totalPrem = quotes.reduce((sum: number, q: any) => sum + Number(q.premium_amount), 0);
-                           const cachedName = getCachedIdentifierForAny(quotes.map((q: any) => q.id), quotes.map((q: any) => q.client_identifier_hash));
-                           const loggedDate = quotes[0]?.logged_at ? new Date(quotes[0].logged_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
-                           const label = cachedName || `Quote${loggedDate ? ` — ${loggedDate}` : ''}`;
-                           return (
-                             <option key={groupKey} value={groupKey}>
-                               {label} - {quotes.length} Items ({lines}) - ${totalPrem.toLocaleString()}
-                             </option>
-                           );
-                         })}
-                       </select>
-                     </div>
-                  )}
-                </div>
-              )}
-
-              <div className="mb-2">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <label className="block text-sm font-semibold text-gray-700">Identifier (Optional)</label>
-                  <span title="For compliance, this identifier is cryptographically scrambled before leaving your browser and is never stored in plain text." className="cursor-help shrink-0">
-                    <ShieldCheck size={14} className="text-blue-500" />
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  placeholder="e.g. Lead #459 (used only to search your own Pipeline later)"
-                  value={custIdentifier}
-                  onChange={e => setCustIdentifier(e.target.value)}
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              {loggingType === 'complex_res' ? (
-                <div className="pt-4 border-t border-gray-100">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 text-center">Resolution Sentiment</label>
-                  <div className="flex gap-4">
-                    <button type="button" onClick={() => setResolutionStatus('negative')} className={`flex-1 py-4 flex flex-col items-center justify-center rounded-xl border-2 transition-all ${resolutionStatus === 'negative' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>
-                      <ThumbsDown size={28} className="mb-2"/>
-                      <span className="font-bold text-sm">Negative</span>
-                    </button>
-                    <button type="button" onClick={() => setResolutionStatus('positive')} className={`flex-1 py-4 flex flex-col items-center justify-center rounded-xl border-2 transition-all ${resolutionStatus === 'positive' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>
-                      <ThumbsUp size={28} className="mb-2"/>
-                      <span className="font-bold text-sm">Positive</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                    {lineItems.map((item, index) => (
-                      <div key={item.id} className="p-4 bg-gray-50 border border-gray-200 rounded-xl relative">
-                        {lineItems.length > 1 && <button type="button" onClick={() => removeLineItem(item.id)} className="absolute top-3 right-3 text-red-400 hover:text-red-600 bg-white rounded-full p-1 shadow-sm"><X size={16} /></button>}
-                        
-                        {/* DUAL CASCADING DROPDOWNS */}
-                        <div className="grid grid-cols-3 gap-4 mb-4">
-                          <div>
-                            <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                              Category
-                              <InfoTooltip text="The broad line of business (Auto, Fire, Life, etc.) this policy rolls up into for commission and Scoreboard reporting. Choosing a Category filters the specific Product options to the right." />
-                            </label>
-                            <select 
-                              value={item.parentCategory} 
-                              onChange={e => {
-                                const newParent = e.target.value;
-                                const available = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === newParent);
-                                const newProd = available.length > 0 ? available[0].name : newParent;
-                                setLineItems(prev => prev.map(li => li.id === item.id ? { ...li, parentCategory: newParent, productLine: newProd } : li));
-                              }}
-                              className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-700"
-                            >
-                              <option value="Auto">Auto</option>
-                              <option value="Fire">Fire</option>
-                              <option value="Commercial">Commercial</option>
-                              <option value="Life">Life</option>
-                              <option value="Health">Health</option>
-                              <option value="Standalone">Standalone</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                              Product
-                              <InfoTooltip text="The specific product within the Category selected to the left. Your agency's own custom product lines (Settings → Custom Product Lines) show up here." />
-                            </label>
-                            <select 
-                              value={item.productLine} 
-                              onChange={e => updateLineItem(item.id, 'productLine', e.target.value)} 
-                              className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
-                            >
-                              {(() => {
-                                const availableLines = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === item.parentCategory);
-                                if (availableLines.length === 0) return <option value={item.parentCategory}>{item.parentCategory}</option>;
-                                return availableLines.map((lineObj: any) => (
-                                  <option key={lineObj.name} value={lineObj.name}>{lineObj.name}</option>
-                                ));
-                              })()}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
-                            <input type="number" min="1" required value={item.count} onChange={e => updateLineItem(item.id, 'count', Math.max(1, parseInt(e.target.value) || 1))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold" />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Term Premium</label><FormattedNumberInput allowDecimal placeholder="$0.00" value={item.premiumAmount === "" ? "" : Number(item.premiumAmount)} onChange={v => updateLineItem(item.id, 'premiumAmount', v === '' ? '' : String(v))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm" /></div>
-                          <div>
-                            <label className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-                              Renewal Cycle
-                              <InfoTooltip text="How often this policy's term premium is billed/renewed. This affects how the 'Total Term Premium' amount you entered gets annualized for commission math - pick the term length that matches the actual policy." />
-                            </label>
-                            <select value={item.paymentCycle} onChange={e => updateLineItem(item.id, 'paymentCycle', e.target.value)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm"><option value="monthly">6-Month Term</option><option value="annual">12-Month Term</option></select>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button type="button" onClick={addLineItem} className="w-full mt-2 py-2.5 border-2 border-dashed border-gray-300 text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-colors text-sm">+ Add Another Product Line</button>
-                </>
-              )}
-              
-              <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
-                <button type="button" onClick={() => setIsLoggingModalOpen(false)} disabled={isSubmittingActivity} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
-                <button type="submit" disabled={isSubmittingActivity} className={`flex-1 py-3 px-4 text-white font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${loggingType === 'bound' ? 'bg-emerald-600 hover:bg-emerald-700' : loggingType === 'complex_res' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>{isSubmittingActivity ? 'Saving...' : `Save ${loggingType.replace('_', ' ')}`}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {isLoggingModalOpen && profile && (
+        <LogActivityModal
+          isOpen={isLoggingModalOpen}
+          loggingType={loggingType}
+          initialDate={logModalInitialDate}
+          profile={profile}
+          agencySettings={agencySettings}
+          offices={offices}
+          quotedPipeline={pipeline.filter(p => p.status === 'quoted')}
+          onClose={() => setIsLoggingModalOpen(false)}
+          onSuccess={handleLogActivitySuccess}
+          onError={(msg) => showToast(msg, 'error')}
+        />
       )}
 
       {isBackdateModalOpen && (

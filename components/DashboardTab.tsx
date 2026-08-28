@@ -470,11 +470,12 @@ export default function DashboardTab({
 
   const isService = activeProfile.role === 'service';
 
-  // "Launch Logger" pop-out (see app/logger/page.tsx) - a tiny standalone window that's nothing but
-  // this Scoreboard's Quick Actions dock, for docking to the side of a screen without needing to
-  // resize/narrow the whole dashboard tab to get QuickActionsBar's lg:hidden dock to show. Sized to
-  // hug that grid's natural footprint (4 columns of icon+label buttons) plus a small header - see
-  // QuickActionsBar.tsx's `standalone` prop for the layout it renders inside this window.
+  // "Launch Logger" pop-out (see app/logger/page.tsx) - a standalone window with this Scoreboard's
+  // Quick Actions dock, for docking to the side of a screen without needing to resize/narrow the
+  // whole dashboard tab to get QuickActionsBar's lg:hidden dock to show. Quote/Bound taps open the
+  // full LogActivityModal form right inside this same window (it has its own Supabase fetch/submit
+  // - see app/logger/page.tsx), so it's sized well beyond just QuickActionsBar's own compact
+  // 4-column grid - see the window.open dimensions below.
   // Deliberately keyed off `profile.role` (the actual signed-in user), NOT the `isService` above
   // (which reflects whichever producer's board a manager happens to be VIEWING via selectedProducer)
   // - logging always attributes activity to whoever is actually signed in, exactly like the main
@@ -484,10 +485,13 @@ export default function DashboardTab({
       service: profile?.role === 'service' ? '1' : '0',
       agency: agencySettings?.name || 'Centravity',
     });
+    // Sized generously enough to fit LogActivityModal's own max-w-md form (not just the compact
+    // QuickActionsBar dock) without the user needing to manually resize the window first - the
+    // modal internally scrolls (max-h-[90vh] overflow-y-auto) for anything taller than this.
     window.open(
       `/logger?${params.toString()}`,
       'CentravityLogger',
-      'width=380,height=300,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes'
+      'width=460,height=720,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes'
     );
   };
 
