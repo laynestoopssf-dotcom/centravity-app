@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useState, FormEvent } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { joinAgencyWithInviteCode } from "./actions/joinAgency";
+import { joinWaitlist } from "./actions/waitlist";
 import PasswordInput from "../components/ui/PasswordInput";
 
 // =============================================================================
@@ -34,13 +35,22 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [forgotSent, setForgotSent] = useState(false);
-  // supabase.auth.signUp() fires its own SIGNED_IN event once the session is
-  // established — same as signInWithPassword. Without this flag, that event
-  // would race the explicit window.location.href navigation in handleSubmit's
-  // signup branch against this listener's own redirect, since both fire
-  // almost simultaneously. Set right before either auth call, so the listener
-  // knows "this SIGNED_IN came from our own form submit, which already owns
-  // routing for it" and should stay hands-off.
+  // New-agency registration is paused — the "Create Agency" tab (still shown
+  // so existing users know the option exists) is replaced with a simple
+  // waitlist capture instead of the real signup form. See handleJoinWaitlist
+  // and app/actions/waitlist.ts's joinWaitlist.
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [waitlistError, setWaitlistError] = useState("");
+  const [isJoiningWaitlist, setIsJoiningWaitlist] = useState(false);
+  // supabase.auth.signUp() (still used by handleJoinSubmit's "Join a Team"
+  // flow) fires its own SIGNED_IN event once the session is established —
+  // same as signInWithPassword. Without this flag, that event would race the
+  // explicit window.location.href navigation in the calling handler against
+  // this listener's own redirect, since both fire almost simultaneously. Set
+  // right before either auth call, so the listener knows "this SIGNED_IN came
+  // from our own form submit, which already owns routing for it" and should
+  // stay hands-off.
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -89,6 +99,12 @@ export default function LoginPage() {
     };
   }, []);
 
+  // Sign-in only now — new-agency self-signup was removed from this form when
+  // the "Create Agency" tab became a waitlist capture (see handleJoinWaitlist
+  // below). Kept as its own handler (rather than folding into
+  // handleJoinWaitlist) since it's still shared with nothing else changing:
+  // same session-listener race-avoidance concerns as every other hard
+  // navigation on this page.
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -96,27 +112,6 @@ export default function LoginPage() {
     submittingRef.current = true;
 
     try {
-      if (mode === "signup") {
-        // Deliberately bare: only creates the auth.users row. No agency, no
-        // profile fields, and — critically — no `profiles` row at all yet either
-        // (nothing here inserts one). Route straight to /onboarding instead of
-        // /dashboard: fetchProfile's gatekeeper would otherwise have to correctly
-        // interpret "0 rows" as "brand new, not an error", and there's no reason
-        // to make it guess when we already know exactly why the row is missing.
-        const { error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        });
-
-        if (signUpError) throw signUpError;
-
-        // Hard navigation — see the mount effect's comment above for why
-        // router.push()/router.replace() can race proxy.ts's server-side
-        // cookie check and bounce back to "/", looking like a hung spinner.
-        window.location.href = "/onboarding";
-        return;
-      }
-
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -223,6 +218,25 @@ export default function LoginPage() {
     }
   };
 
+  const handleJoinWaitlist = async (e: FormEvent) => {
+    e.preventDefault();
+    setWaitlistError("");
+    setIsJoiningWaitlist(true);
+    try {
+      const result = await joinWaitlist(waitlistEmail.trim());
+      if (!result.success) {
+        throw new Error(result.error || "Unable to join the waitlist. Please try again.");
+      }
+      setWaitlistSubmitted(true);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Unable to join the waitlist. Please try again.";
+      setWaitlistError(message);
+    } finally {
+      setIsJoiningWaitlist(false);
+    }
+  };
+
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
@@ -239,6 +253,9 @@ export default function LoginPage() {
     setMode(next);
     setError("");
     setForgotSent(false);
+    setWaitlistSubmitted(false);
+    setWaitlistEmail("");
+    setWaitlistError("");
   };
 
   const tabs: { id: "signin" | "signup" | "join"; label: string }[] = [
@@ -256,7 +273,7 @@ export default function LoginPage() {
             {isForgot
               ? "Reset your password"
               : isSignup
-              ? "Create your agency's account"
+              ? "New agency waitlist"
               : isJoin
               ? "Join your agency's existing scoreboard"
               : "Sign in to your agency scoreboard"}
@@ -438,6 +455,73 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+        ) : isSignup ? (
+          waitlistSubmitted ? (
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
+                <CheckCircle2 className="h-6 w-6 text-emerald-400" aria-hidden />
+              </div>
+              <h2 className="text-lg font-bold text-white">You&apos;re on the list!</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                We&apos;ll email <span className="font-semibold text-white">{waitlistEmail}</span> as soon as a
+                spot opens up for new agencies.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div className="mb-6 text-center">
+                <h2 className="text-lg font-bold text-white">
+                  Centravity is currently at capacity for new agencies.
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Join the waitlist and we&apos;ll email you the moment a spot opens up.
+                </p>
+              </div>
+
+              {waitlistError && (
+                <div
+                  role="alert"
+                  className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+                >
+                  {waitlistError}
+                </div>
+              )}
+
+              <form onSubmit={handleJoinWaitlist} className="space-y-5">
+                <div>
+                  <label htmlFor="waitlist-email" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    Email
+                  </label>
+                  <input
+                    id="waitlist-email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    disabled={isJoiningWaitlist}
+                    className="block w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+                    placeholder="you@agency.com"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isJoiningWaitlist}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isJoiningWaitlist ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Joining…
+                    </>
+                  ) : (
+                    "Join Waitlist"
+                  )}
+                </button>
+              </form>
+            </div>
+          )
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
@@ -463,9 +547,8 @@ export default function LoginPage() {
               </label>
               <PasswordInput
                 id="password"
-                autoComplete={isSignup ? "new-password" : "current-password"}
+                autoComplete="current-password"
                 required
-                minLength={isSignup ? 6 : undefined}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
@@ -473,17 +556,15 @@ export default function LoginPage() {
                 iconClassName="text-slate-500 hover:text-slate-300"
                 placeholder="••••••••"
               />
-              {!isSignup && (
-                <div className="mt-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => switchMode("forgot")}
-                    className="text-xs font-medium text-blue-400 hover:text-blue-300 transition"
-                  >
-                    Forgot your password?
-                  </button>
-                </div>
-              )}
+              <div className="mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => switchMode("forgot")}
+                  className="text-xs font-medium text-blue-400 hover:text-blue-300 transition"
+                >
+                  Forgot your password?
+                </button>
+              </div>
             </div>
 
             <button
@@ -494,10 +575,8 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  {isSignup ? "Creating account…" : "Signing in…"}
+                  Signing in…
                 </>
-              ) : isSignup ? (
-                "Create Account"
               ) : (
                 "Sign In"
               )}

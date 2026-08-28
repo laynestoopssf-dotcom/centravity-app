@@ -16,3 +16,13 @@ export interface VerifyWaitlistInviteResult {
   // row, or a row that exists but isn't status === 'approved' yet).
   error?: string;
 }
+
+export interface JoinWaitlistResult {
+  success: boolean;
+  // True when the email was already on the waitlist (a pre-existing row hit
+  // the unique constraint) — the caller still shows the normal "you're on
+  // the list" success state either way; this is exposed only in case a
+  // caller ever wants to log/branch on it, never to change the user-facing copy.
+  alreadyOnList?: boolean;
+  error?: string;
+}

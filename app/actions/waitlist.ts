@@ -1,7 +1,7 @@
 "use server";
 
 import { supabaseAdmin } from "./supabaseAdmin";
-import type { VerifyWaitlistInviteResult } from "./waitlist.types";
+import type { JoinWaitlistResult, VerifyWaitlistInviteResult } from "./waitlist.types";
 
 // =============================================================================
 // Server Action: verify a waitlist invite token ("Token Catcher")
@@ -60,5 +60,53 @@ export async function verifyWaitlistInvite(token: string): Promise<VerifyWaitlis
   } catch (err: any) {
     console.error("[waitlist] unexpected error verifying invite", err);
     return { valid: false, error: err?.message || "Unexpected server error." };
+  }
+}
+
+// =============================================================================
+// Server Action: public "Join Waitlist" submission
+// -----------------------------------------------------------------------------
+// Consumed by "/"'s "Create Agency" tab, which is currently locked down to a
+// capacity message + this single email field while new-agency registration is
+// paused. Runs server-side for the exact same reason verifyWaitlistInvite
+// above does: `waitlist` has RLS enabled with no anon-facing policies at all
+// (confirmed live — anon insert returns 42501), so the ONLY way anything
+// unauthenticated can ever add a row is through a Server Action using the
+// service-role client. Do not add a public INSERT RLS policy as a shortcut
+// around this — that would let anyone enumerate/spam the table directly from
+// the browser with the anon key, bypassing whatever validation lives here.
+//
+// Only ever writes `email` — first_name/last_name/agency_name/status all take
+// their column defaults ('' / '' / '' / 'pending'), and invite_token stays
+// NULL until an admin approves this row through the separate, external
+// approval tool this table already integrates with (see this file's header
+// comment). That approval flow is what eventually sends the invite email
+// that lands someone on app/signup/page.tsx.
+// =============================================================================
+export async function joinWaitlist(rawEmail: string): Promise<JoinWaitlistResult> {
+  try {
+    const email = (rawEmail || "").trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { success: false, error: "Please enter a valid email address." };
+    }
+
+    const { error } = await supabaseAdmin.from("waitlist").insert({ email });
+
+    if (error) {
+      // 23505 = unique_violation on waitlist_email_unique — this email is
+      // already on the list. Treated as success (not surfaced as an error)
+      // so the UI shows the same confirmation either way, rather than
+      // leaking to an anonymous caller whether a given email already signed up.
+      if (error.code === "23505") {
+        return { success: true, alreadyOnList: true };
+      }
+      console.error("[waitlist] joinWaitlist insert failed", error);
+      return { success: false, error: "Something went wrong. Please try again." };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("[waitlist] joinWaitlist unexpected error", err);
+    return { success: false, error: err?.message || "Unexpected server error." };
   }
 }
