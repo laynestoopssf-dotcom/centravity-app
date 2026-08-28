@@ -52,6 +52,23 @@ export function getDefaultPriceId(): string {
   return priceId;
 }
 
+// Beta-vs-standard price split for the Beta Conversion Gate
+// (app/api/stripe/create-checkout/route.ts, called from
+// components/dashboard/BetaCompleteModal.tsx). `agencies.is_beta_user` is
+// purely a pricing signal here — it does NOT gate access on its own; see
+// utils/billing.ts's isBetaAccessLocked for the actual lockout condition.
+// Kept as a hard error (not a silent fallback to getDefaultPriceId) so a
+// missing env var surfaces immediately as a loud checkout failure instead of
+// quietly charging every beta agency the standard rate.
+export function getPriceIdForAgency(isBetaUser: boolean): string {
+  const envVarName = isBetaUser ? "NEXT_PUBLIC_STRIPE_BETA_PRICE_ID" : "NEXT_PUBLIC_STRIPE_STANDARD_PRICE_ID";
+  const priceId = process.env[envVarName] || "";
+  if (!priceId) {
+    throw new Error(`Billing is misconfigured: missing ${envVarName}.`);
+  }
+  return priceId;
+}
+
 // Builds default Checkout redirect URLs from NEXT_PUBLIC_APP_URL when a
 // caller doesn't supply its own successUrl/cancelUrl — lets
 // createCheckoutSession be called with nothing but an accessToken (e.g. from
@@ -60,9 +77,15 @@ export function getDefaultPriceId(): string {
 export function resolveDefaultRedirectUrls(): { successUrl: string; cancelUrl: string } | null {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
   if (!appUrl) return null;
+  // /dashboard/settings is not a real route — Settings is a tab rendered
+  // inside /dashboard itself (see components/SettingsTab.tsx), so redirect
+  // there instead. The `checkout` query param is inert today (nothing reads
+  // it yet) but is left in place for both the existing Settings/Billing flow
+  // and the new Beta Conversion Gate to build a "welcome back" toast on top
+  // of later without another redirect-URL change.
   return {
-    successUrl: `${appUrl}/dashboard/settings?checkout=success`,
-    cancelUrl: `${appUrl}/dashboard/settings?checkout=cancelled`,
+    successUrl: `${appUrl}/dashboard?checkout=success`,
+    cancelUrl: `${appUrl}/dashboard?checkout=cancelled`,
   };
 }
 
@@ -73,6 +96,7 @@ export interface BillingContext {
   agencyId: string;
   agencyName: string;
   stripeCustomerId: string | null;
+  isBetaUser: boolean;
 }
 
 export type BillingContextResult = BillingContext | { ok: false; error: string };
@@ -118,7 +142,7 @@ export async function resolveBillingContext(
 
   const { data: agency, error: agencyError } = await supabaseAdmin
     .from("agencies")
-    .select("id, name, stripe_customer_id")
+    .select("id, name, stripe_customer_id, is_beta_user")
     .eq("id", profile.agency_id)
     .maybeSingle();
 
@@ -134,6 +158,7 @@ export async function resolveBillingContext(
     agencyId: agency.id as string,
     agencyName: (agency.name as string) || "your agency",
     stripeCustomerId: (agency.stripe_customer_id as string) || null,
+    isBetaUser: Boolean(agency.is_beta_user),
   };
 }
 

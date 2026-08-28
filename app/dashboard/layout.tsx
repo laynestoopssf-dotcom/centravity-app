@@ -8,6 +8,8 @@ import { DashboardShellContext, type DashboardTabId } from "../../components/das
 import DashboardSidebar, { type DashboardSidebarPermissions } from "../../components/dashboard/DashboardSidebar";
 import DashboardTopHeader, { type DashboardShellUser } from "../../components/dashboard/DashboardTopHeader";
 import AiSupportChat from "../../components/dashboard/AiSupportChat";
+import BetaCompleteModal from "../../components/dashboard/BetaCompleteModal";
+import { isBetaAccessLocked } from "../../utils/billing";
 
 // =============================================================================
 // Persistent App Shell for everything under /dashboard.
@@ -64,6 +66,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const [activeTab, setActiveTab] = useState<DashboardTabId>("dashboard");
   const [shellData, setShellData] = useState<ShellData | null>(null);
+  // Beta Conversion Gate — deliberately its OWN independent, minimal fetch
+  // (profiles.role + agencies.beta_expires_at/subscription_status only)
+  // rather than folding into loadShellData below, for two reasons: (1)
+  // loadShellData only ever runs for isShellRoute (/dashboard, /dashboard/help)
+  // — see that effect's own guard — but the lockout has to apply to EVERY
+  // route this layout wraps, including /dashboard/cockpit and
+  // /dashboard/reveal; (2) it needs to resolve before ANY of this layout's
+  // children render (sidebar, page content, cockpit, reveal, AI chat), so
+  // gating it on the heavier custom_roles-derived permissions fetch would
+  // mean briefly flashing real dashboard content for a locked-out agency
+  // while that fetch is still in flight.
+  const [betaLock, setBetaLock] = useState<{ checked: boolean; locked: boolean; isOwner: boolean }>({
+    checked: false,
+    locked: false,
+    isOwner: false,
+  });
   // Only ever applies the role-based default ONCE per mount of this layout —
   // this effect re-runs any time `isShellRoute` flips (e.g. Cockpit -> back
   // to /dashboard), and without this guard that would silently snap an owner
@@ -182,6 +200,63 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, [isShellRoute, loadShellData]);
 
+  // Re-checked on every navigation within /dashboard/* (pathname changes) —
+  // cheap (two single-row selects), and means switching from e.g. Cockpit
+  // back to the main dashboard picks up a subscription that just synced in
+  // via the Stripe webhook without needing a hard refresh.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData.session?.user;
+      if (!user?.id) {
+        if (mounted) setBetaLock({ checked: true, locked: false, isOwner: false });
+        return;
+      }
+
+      const { data: profileRow, error: profileError } = await supabase
+        .from("profiles")
+        .select("role, agency_id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError || !profileRow?.agency_id) {
+        if (profileError) console.error("[DashboardLayout] beta-lock profile fetch failed", profileError);
+        if (mounted) setBetaLock({ checked: true, locked: false, isOwner: false });
+        return;
+      }
+
+      const { data: agencyRow, error: agencyError } = await supabase
+        .from("agencies")
+        .select("beta_expires_at, subscription_status")
+        .eq("id", profileRow.agency_id)
+        .maybeSingle();
+
+      if (agencyError) {
+        console.error("[DashboardLayout] beta-lock agency fetch failed", agencyError);
+        if (mounted) setBetaLock({ checked: true, locked: false, isOwner: false });
+        return;
+      }
+
+      if (mounted) {
+        setBetaLock({
+          checked: true,
+          locked: isBetaAccessLocked(agencyRow),
+          // Deliberately the same narrow, hardcoded 'owner' check as
+          // app/actions/stripeAdmin.ts's resolveBillingContext (no
+          // custom_roles override, no 'admin' inclusion) — this decides who
+          // sees a Subscribe button vs. an "ask your owner" message, and
+          // must match the server's own idea of who's actually allowed to
+          // start checkout.
+          isOwner: profileRow.role === "owner",
+        });
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [pathname]);
+
   // Re-resolve shell data on sign-out/sign-in so this doesn't keep showing a
   // stale agency/name (or the chrome at all) after app/dashboard/page.tsx's
   // own SIGNED_OUT handling drops it back to its login form.
@@ -209,6 +284,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Excluded only from the one-time post-onboarding "/dashboard/reveal"
   // celebration screen, which wants to stay a clean, chrome-free moment.
   const showAiChat = pathname !== "/dashboard/reveal";
+
+  // Beta Conversion Gate — takes over EVERY route this layout wraps (no
+  // sidebar, no page content, no AI chat) the instant the lockout check
+  // above resolves to locked. Checked before both branches below so it
+  // applies uniformly to shell routes (/dashboard, /dashboard/help) and
+  // full-screen routes (/dashboard/cockpit, /dashboard/reveal) alike.
+  // Renders nothing extra while `checked` is still false (initial fetch in
+  // flight) — same "don't flash a lockout state before we actually know"
+  // principle as `!shellData` below.
+  if (betaLock.checked && betaLock.locked) {
+    return (
+      <DashboardShellContext.Provider value={contextValue}>
+        <BetaCompleteModal isOwner={betaLock.isOwner} />
+      </DashboardShellContext.Provider>
+    );
+  }
 
   if (!isShellRoute || !shellData) {
     return (
