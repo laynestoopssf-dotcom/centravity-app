@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   resolveBillingContext,
   createCheckoutSessionForAgency,
-  getDefaultPriceId,
+  getPriceIdForAgency,
   resolveDefaultRedirectUrls,
 } from "../../../actions/stripeAdmin";
 
@@ -50,7 +50,10 @@ export async function POST(request: NextRequest) {
       agencyName: context.agencyName,
       email: context.email,
       existingCustomerId: context.stripeCustomerId,
-      priceId: getDefaultPriceId(),
+      // Beta-vs-standard pricing split — see app/api/stripe/create-checkout's
+      // header comment; this legacy route now shares the exact same pricing
+      // rule so it can never charge a different price than that one.
+      priceId: getPriceIdForAgency(context.isBetaUser),
       successUrl,
       cancelUrl,
     });

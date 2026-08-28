@@ -3,7 +3,7 @@
 import {
   resolveBillingContext,
   createCheckoutSessionForAgency,
-  getDefaultPriceId,
+  getPriceIdForAgency,
   resolveDefaultRedirectUrls,
 } from "./stripeAdmin";
 
@@ -52,7 +52,11 @@ export async function createCheckoutSession(
       agencyName: context.agencyName,
       email: context.email,
       existingCustomerId: context.stripeCustomerId,
-      priceId: getDefaultPriceId(),
+      // Same beta-vs-standard pricing split as the Beta Conversion Gate's
+      // /api/stripe/create-checkout — the Settings/Billing "Subscribe"
+      // button and the paywall modal must never charge two different
+      // prices for the same agency depending on which UI they clicked.
+      priceId: getPriceIdForAgency(context.isBetaUser),
       successUrl,
       cancelUrl,
     });
