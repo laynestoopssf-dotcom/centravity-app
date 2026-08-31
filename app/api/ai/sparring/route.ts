@@ -29,8 +29,23 @@ interface RawIncomingMessage {
   content?: string;
 }
 
-function buildSystemPrompt(line: SparringLine, firstName: string): string {
-  return `You are role-playing as a difficult, skeptical insurance PROSPECT in a live sales call with ${firstName}, an insurance producer practicing their objection-handling for ${line} insurance. This is a training simulation — ${firstName} knows you are an AI.
+// Optional — only present when this session was seeded from a real `not_sold` policy via
+// components/DashboardTab.tsx's "Send to Coaching" button (see
+// components/coaching/SparringRing.tsx's dealContext state). Grounds the AI's opening objection
+// in the actual deal instead of a generic one.
+interface RawDealContext {
+  premiumAmount?: number;
+  notes?: string;
+}
+
+function buildSystemPrompt(line: SparringLine, firstName: string, dealContext?: RawDealContext | null): string {
+  const scenarioParagraph = dealContext
+    ? `\n\nCONTEXT FOR THIS SPECIFIC SCENARIO: This roleplay is grounded in a REAL ${line} deal ${firstName} just lost, quoted around $${Math.round(dealContext.premiumAmount || 0).toLocaleString()}, that the prospect ultimately declined.${
+        dealContext.notes ? ` ${firstName}'s own notes on why the prospect said no: "${dealContext.notes}"` : ""
+      } Use these specifics — the price point${dealContext.notes ? " and the stated reason above" : ""} — to ground your very first objection in this exact scenario, as if reliving the real conversation, not a generic one.`
+    : "";
+
+  return `You are role-playing as a difficult, skeptical insurance PROSPECT in a live sales call with ${firstName}, an insurance producer practicing their objection-handling for ${line} insurance. This is a training simulation — ${firstName} knows you are an AI.${scenarioParagraph}
 
 RULES FOR EVERY TURN:
 1. Stay in character as the prospect — natural, a little guarded, throwing realistic ${line} insurance objections (price, trust, "I need to think about it", competitor quotes, timing, past bad experience, etc.). Never break character to talk about yourself as an AI.
@@ -56,6 +71,20 @@ export async function POST(request: NextRequest) {
     const productLine: SparringLine = (PRODUCT_LINES as readonly string[]).includes(requestedLine)
       ? (requestedLine as SparringLine)
       : "Life";
+    const rawDealContext = body?.dealContext;
+    const dealContext: RawDealContext | null =
+      rawDealContext && typeof rawDealContext === "object"
+        ? {
+            premiumAmount:
+              typeof rawDealContext.premiumAmount === "number" && Number.isFinite(rawDealContext.premiumAmount)
+                ? rawDealContext.premiumAmount
+                : undefined,
+            notes:
+              typeof rawDealContext.notes === "string" && rawDealContext.notes.trim().length > 0
+                ? rawDealContext.notes.trim().slice(0, 500)
+                : undefined,
+          }
+        : null;
 
     if (!accessToken) {
       return NextResponse.json({ error: "Unauthorized: missing session." }, { status: 401 });
@@ -91,7 +120,7 @@ export async function POST(request: NextRequest) {
       model: GEMINI_MODEL,
       contents: sanitizedMessages.length > 0 ? sanitizedMessages : [{ role: "user", parts: [{ text: "(begin the roleplay)" }] }],
       config: {
-        systemInstruction: buildSystemPrompt(productLine, firstName),
+        systemInstruction: buildSystemPrompt(productLine, firstName, dealContext),
         temperature: 0.7,
         maxOutputTokens: 300,
       },

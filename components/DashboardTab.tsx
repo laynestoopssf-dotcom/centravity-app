@@ -18,10 +18,14 @@ const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as con
 
 export default function DashboardTab({ 
   profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
-  offices, selectedOffice, setSelectedOffice, customTargets
+  offices, selectedOffice, setSelectedOffice, customTargets, onSendToSparring
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
   const [editPremium, setEditPremium] = useState<string>("");
+  // Inline "why didn't they buy" prompt shown only for the quoted -> not_sold transition, mirroring
+  // the existing editingPolicyId/editPremium pattern used for bound/issued's final-premium prompt.
+  const [notSoldPolicyId, setNotSoldPolicyId] = useState<string | null>(null);
+  const [notSoldNotes, setNotSoldNotes] = useState<string>("");
 
   // "Log Activity" split-button menu (Inbound/Outbound/Quote/Bound) - a single
   // prominent entry point that surfaces all four logging actions the tile
@@ -93,6 +97,16 @@ export default function DashboardTab({
       return;
     }
     setCoachingFlaggedIds((prev) => new Set(prev).add(pol.id));
+  };
+
+  // For a `not_sold` deal specifically, "Send to Coaching" does BOTH of its jobs at once: tag it
+  // in deal_autopsies like always (above) AND jump the producer straight into a live Sparring
+  // Ring session seeded with this exact deal's product line / premium / notes (see
+  // sendNotSoldDealToSparring in app/dashboard/page.tsx and the seedContext prop threaded through
+  // CoachingTab -> SparringRing) so they can practice the objection immediately, while it's fresh.
+  const handleSendToCoaching = (pol: any) => {
+    sendToCoaching(pol);
+    if (pol.status === 'not_sold') onSendToSparring?.(pol);
   };
 
   // Identifiers are blind-indexed server-side (see utils/crypto.ts - the pepper never reaches
@@ -330,9 +344,18 @@ export default function DashboardTab({
     if (newStatus === 'bound' || newStatus === 'issued') {
       setEditingPolicyId(id);
       setEditPremium(currentPremium.toString());
+    } else if (newStatus === 'not_sold') {
+      setNotSoldPolicyId(id);
+      setNotSoldNotes("");
     } else {
       updatePolicyStatus(id, newStatus);
     }
+  };
+
+  const submitNotSoldUpdate = (id: string) => {
+    updatePolicyStatus(id, 'not_sold', undefined, notSoldNotes.trim());
+    setNotSoldPolicyId(null);
+    setNotSoldNotes("");
   };
 
   const submitStatusUpdate = (id: string, newStatus: string) => {
@@ -1208,7 +1231,7 @@ export default function DashboardTab({
                 </td></tr>
               ) : (
                 paginatedPipelineRows.map((pol: any) => (
-                  <tr key={pol.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <tr key={pol.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${pol.status === 'not_sold' ? 'bg-amber-50/60 border-l-4 border-l-amber-400' : ''}`}>
                     <td className="p-4 text-sm font-semibold text-gray-500 whitespace-nowrap">{new Date(pol.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                     <td className="p-4 text-sm font-bold text-gray-700 whitespace-nowrap">
                       <div className="flex items-center gap-2">
@@ -1236,18 +1259,31 @@ export default function DashboardTab({
                            <button onClick={() => submitStatusUpdate(pol.id, 'issued')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded">Save Issued</button>
                            <button onClick={() => setEditingPolicyId(null)} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded">Cancel</button>
                         </div>
+                      ) : notSoldPolicyId === pol.id ? (
+                        <div className="flex items-center justify-end gap-2">
+                           <input
+                             type="text"
+                             autoFocus
+                             value={notSoldNotes}
+                             onChange={(e) => setNotSoldNotes(e.target.value)}
+                             placeholder="Why didn't they buy? (optional)"
+                             className="w-56 p-1.5 border border-gray-300 rounded text-sm outline-none"
+                           />
+                           <button onClick={() => submitNotSoldUpdate(pol.id)} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded">Save</button>
+                           <button onClick={() => { setNotSoldPolicyId(null); setNotSoldNotes(""); }} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded">Cancel</button>
+                        </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
-                          {pol.status === 'quoted' && (
+                          {(pol.status === 'quoted' || pol.status === 'not_sold') && (
                             coachingFlaggedIds.has(pol.id) ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 whitespace-nowrap">
                                 <GraduationCap size={13} /> Sent
                               </span>
                             ) : (
                               <button
-                                onClick={() => sendToCoaching(pol)}
+                                onClick={() => handleSendToCoaching(pol)}
                                 disabled={sendingToCoachingId === pol.id}
-                                title="Flag this deal in the Coaching tab so you can log the objection and get an AI talk-path"
+                                title={pol.status === 'not_sold' ? "Jump into a live Sparring Ring session seeded with this exact lost deal so you can practice it right now" : "Flag this deal in the Coaching tab so you can log the objection and get an AI talk-path"}
                                 className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap"
                               >
                                 <GraduationCap size={13} /> Send to Coaching
@@ -1257,12 +1293,13 @@ export default function DashboardTab({
                           <select 
                             value={pol.status} 
                             onChange={(e) => handleStatusUpdate(pol.id, e.target.value, pol.premium_amount)}
-                            className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer border ${pol.status === 'quoted' ? 'bg-purple-50 text-purple-700 border-purple-100' : pol.status === 'bound' ? 'bg-blue-50 text-blue-700 border-blue-100' : pol.status === 'not_taken' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}
+                            className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none cursor-pointer border ${pol.status === 'quoted' ? 'bg-purple-50 text-purple-700 border-purple-100' : pol.status === 'bound' ? 'bg-blue-50 text-blue-700 border-blue-100' : pol.status === 'not_taken' ? 'bg-red-50 text-red-700 border-red-100' : pol.status === 'not_sold' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}
                           >
                             <option value="quoted">Quoted</option>
                             <option value="bound">Bound (Pending)</option>
                             <option value="issued">Issued</option>
                             <option value="not_taken">Not Taken / Declined by Underwriting</option>
+                            <option value="not_sold">Not Sold</option>
                           </select>
                         </div>
                       )}

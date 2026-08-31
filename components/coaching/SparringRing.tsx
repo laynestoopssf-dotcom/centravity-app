@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useRef, useState } from "react";
-import { Swords, Send, RotateCcw, Loader2, Trophy, ArrowRight } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Swords, Send, RotateCcw, Loader2, Trophy, ArrowRight, X } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import { saveSparringSession } from "../../app/actions/sparring";
 import { useDashboardTab } from "../dashboard/DashboardShellContext";
@@ -43,13 +43,33 @@ interface GradeResult {
   score: number;
 }
 
-export default function SparringRing() {
+// Seeded from a real `not_sold` deal via DashboardTab.tsx's "Send to Coaching" button ->
+// app/dashboard/page.tsx's sendNotSoldDealToSparring -> CoachingTab.tsx - see the useEffect below
+// that consumes this the moment it arrives.
+export interface DealSeedContext {
+  productLine: string;
+  premiumAmount: number;
+  notes: string | null;
+}
+
+interface SparringRingProps {
+  seedContext?: DealSeedContext | null;
+  onSeedConsumed?: () => void;
+}
+
+export default function SparringRing({ seedContext, onSeedConsumed }: SparringRingProps) {
   const { setActiveTab } = useDashboardTab();
   const [productLine, setProductLine] = useState<SparringLine>("Life");
   const [messages, setMessages] = useState<SparringMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Set only when this session was seeded from a real lost deal (see DealSeedContext above) -
+  // echoed to /api/ai/sparring on every turn so the system prompt can ground the AI's opening
+  // objection in this exact scenario. Dismissible (the little X in the banner below) without
+  // ending the session, in case the producer wants to keep chatting generically afterwards.
+  const [dealContext, setDealContext] = useState<DealSeedContext | null>(null);
 
   // Grading is a distinct terminal action from the turn-by-turn chat above -
   // its own loading/error/result state so it can't be confused with (or
@@ -65,7 +85,19 @@ export default function SparringRing() {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
-  const callSparring = async (nextMessages: SparringMessage[]) => {
+  // `overrideLine`/`overrideDealContext` exist purely for the seeding effect below, which needs
+  // to kick off the very first request with a resolved product line + context BEFORE the
+  // corresponding setProductLine/setDealContext state updates have actually re-rendered (state
+  // setters are async - reading `productLine`/`dealContext` from closure in that same tick would
+  // still see the old values). Every other call site (startSession, sendMessage) omits them and
+  // falls back to current state, unchanged from before.
+  const callSparring = async (
+    nextMessages: SparringMessage[],
+    overrideLine?: SparringLine,
+    overrideDealContext?: DealSeedContext | null
+  ) => {
+    const line = overrideLine ?? productLine;
+    const context = overrideDealContext !== undefined ? overrideDealContext : dealContext;
     setLoading(true);
     setError(null);
     try {
@@ -79,7 +111,12 @@ export default function SparringRing() {
       const res = await fetch("/api/ai/sparring", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken, productLine, messages: nextMessages }),
+        body: JSON.stringify({
+          accessToken,
+          productLine: line,
+          messages: nextMessages,
+          dealContext: context ? { premiumAmount: context.premiumAmount, notes: context.notes } : undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.reply) {
@@ -104,6 +141,31 @@ export default function SparringRing() {
     setSaveWarning(null);
     callSparring([]);
   };
+
+  // Fires once per distinct seed handed down from CoachingTab. Resolves the deal's real
+  // product_line onto one of the 5 practiceable lines (falling back to "Commercial" for anything
+  // else, e.g. "Health" - not one of the 5 - or an agency's custom line), then immediately starts
+  // a session grounded in this exact lost deal, and tells the parent the seed has been consumed
+  // so it doesn't re-fire (e.g. if the producer navigates away and back to this inner tab).
+  useEffect(() => {
+    if (!seedContext) return;
+    const resolvedLine: SparringLine = (PRODUCT_LINES as readonly string[]).includes(seedContext.productLine)
+      ? (seedContext.productLine as SparringLine)
+      : "Commercial";
+    setProductLine(resolvedLine);
+    setDealContext(seedContext);
+    setMessages([]);
+    setError(null);
+    setGradeError(null);
+    setGradeResult(null);
+    setSaveWarning(null);
+    callSparring([], resolvedLine, seedContext);
+    onSeedConsumed?.();
+    // Deliberately only re-runs when the seed itself changes, not on every render - callSparring
+    // is stable enough in practice here and including it would re-fire this on unrelated state
+    // churn (e.g. the loading flag callSparring itself sets).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedContext]);
 
   const sendMessage = () => {
     const text = input.trim();
@@ -170,6 +232,7 @@ export default function SparringRing() {
     setGradeResult(null);
     setGradeError(null);
     setSaveWarning(null);
+    setDealContext(null);
     setActiveTab("dashboard");
   };
 
@@ -226,6 +289,24 @@ export default function SparringRing() {
           ))}
         </div>
       </div>
+
+      {dealContext && (
+        <div className="flex items-start justify-between gap-3 px-5 py-2.5 bg-amber-50 border-b border-amber-100">
+          <p className="text-xs font-semibold text-amber-800 leading-relaxed">
+            <span className="font-black uppercase tracking-wider text-[10px] mr-1.5">Real deal:</span>
+            Practicing a ${Math.round(dealContext.premiumAmount || 0).toLocaleString()} {dealContext.productLine} sale that was just marked Not Sold
+            {dealContext.notes ? <> — <span className="italic">&ldquo;{dealContext.notes}&rdquo;</span></> : null}
+          </p>
+          <button
+            type="button"
+            onClick={() => setDealContext(null)}
+            title="Stop grounding this session in that specific deal"
+            className="text-amber-500 hover:text-amber-700 shrink-0"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {gradeResult ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50/50">

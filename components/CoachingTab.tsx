@@ -71,7 +71,7 @@ interface CoachingSession {
   created_at: string;
 }
 
-export default function CoachingTab({ profile, team, agencySettings, pipeline, showToast }: any) {
+export default function CoachingTab({ profile, team, agencySettings, pipeline, showToast, pendingSparringSeed, onSparringSeedConsumed }: any) {
   // Same custom_roles-aware permission pattern as every other manager-gated
   // tab (canViewReports, canViewAgencyDash, etc. in app/dashboard/page.tsx) —
   // `manage_coaching` (see components/SettingsTab.tsx's AVAILABLE_PERMISSIONS/
@@ -82,6 +82,13 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
   const roleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
   const isManagerLevel = roleConfig?.permissions?.manage_coaching ?? isManagerLevelRole(profile?.role);
   const [innerTab, setInnerTab] = useState<InnerTab>(isManagerLevel ? "snapshot" : "autopsies");
+
+  // A `not_sold` deal sent over from the Scoreboard (see DashboardTab.tsx's "Send to Coaching"
+  // button + app/dashboard/page.tsx's sendNotSoldDealToSparring) jumps straight to the Sparring
+  // Ring inner tab, regardless of whatever tab this producer/manager happened to be on before.
+  useEffect(() => {
+    if (pendingSparringSeed) setInnerTab("sparring");
+  }, [pendingSparringSeed]);
 
   const producers = useMemo(() => {
     return [...(team || [])].sort((a: any, b: any) => (a.first_name || "").localeCompare(b.first_name || ""));
@@ -453,7 +460,9 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
         <DealAutopsyPanel profile={profile} team={team} isManagerLevel={isManagerLevel} showToast={showToast} />
       )}
 
-      {innerTab === "sparring" && <SparringRing />}
+      {innerTab === "sparring" && (
+        <SparringRing seedContext={pendingSparringSeed} onSeedConsumed={onSparringSeedConsumed} />
+      )}
 
       {innerTab === "sparringHistory" && (
         <SparringHistoryPanel

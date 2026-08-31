@@ -346,9 +346,10 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                               ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 
                                 pol.status === 'bound' ? 'bg-emerald-100 text-emerald-800' : 
                                 pol.status === 'not_taken' ? 'bg-red-100 text-red-800' :
+                                pol.status === 'not_sold' ? 'bg-amber-100 text-amber-800' :
                                 'bg-purple-100 text-purple-800'}`
                             }>
-                              {pol.status === 'not_taken' ? 'DECLINED' : pol.status.toUpperCase()}
+                              {pol.status === 'not_taken' ? 'DECLINED' : pol.status === 'not_sold' ? 'NOT SOLD' : pol.status.toUpperCase()}
                             </span>
                          </td>
                          <td className="px-6 py-4 text-right">

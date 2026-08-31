@@ -61,7 +61,7 @@ type Agency = { id: string; name: string; timezone?: string; production_days_per
 // - there is no plaintext name on this object, by design. Any "readable label"
 // shown for a policy row comes only from utils/identifierCache.ts's local,
 // browser-only cache (see components consuming this type), never from here.
-type Policy = { id: string; user_id: string; client_identifier_hash?: string | null; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken'; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
+type Policy = { id: string; user_id: string; client_identifier_hash?: string | null; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken' | 'not_sold'; notes?: string | null; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
 
 const DEFAULT_PRODUCT_LINES = [
@@ -88,7 +88,7 @@ export default function Home() {
   // sets this lives there) — see components/dashboard/DashboardShellContext.tsx
   // for why this moved out of a local useState. This page only ever reads
   // it now; every setActiveTab() call moved to DashboardSidebar.
-  const { activeTab, refreshShellUser } = useDashboardTab();
+  const { activeTab, setActiveTab, refreshShellUser } = useDashboardTab();
   
   const [offices, setOffices] = useState<any[]>([]);
   const [compPlans, setCompPlans] = useState<CompPlan[]>([]);
@@ -1970,13 +1970,18 @@ export default function Home() {
     }
   };
 
-  const updatePolicyStatus = async (policyId: string, newStatus: string, finalPremium?: number) => {
+  const updatePolicyStatus = async (policyId: string, newStatus: string, finalPremium?: number, notes?: string) => {
     if (!profile) return;
     try {
       const updateData: any = { 
         status: newStatus,
         logged_at: new Date().toISOString() 
       };
+      // Only ever written on the quoted -> not_sold transition (see the inline notes prompt in
+      // components/DashboardTab.tsx) - a short "why didn't they buy" note that flows straight into
+      // the seeded Sparring Ring context if the producer hits "Send to Coaching" (see
+      // sendNotSoldDealToSparring below).
+      if (newStatus === 'not_sold' && notes !== undefined) updateData.notes = notes || null;
       // issued_at is stamped the moment a policy actually becomes issued; written_at is left untouched
       // so it keeps reflecting whenever the policy was originally written/bound.
       if (newStatus === 'issued') updateData.issued_at = new Date().toISOString();
@@ -2000,13 +2005,24 @@ export default function Home() {
       if (finalPremium !== undefined && finalPremium !== null) updateData.premium_amount = finalPremium;
 
       await supabase.from('policies').update(updateData).eq('id', policyId);
-      const statusLabel = newStatus === 'not_taken' ? 'NOT TAKEN / DECLINED' : newStatus.toUpperCase();
+      const statusLabel = newStatus === 'not_taken' ? 'NOT TAKEN / DECLINED' : newStatus === 'not_sold' ? 'NOT SOLD' : newStatus.toUpperCase();
       showToast(`Policy marked as ${statusLabel}!`);
       
       fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
       fetchPipeline(selectedProducer, profile.agency_id);
       if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
     } catch (error: any) { console.error(error); showToast("Error updating policy: " + error.message, "error"); }
+  };
+
+  // One-shot "seed" for the Coaching tab's Sparring Ring, set by DashboardTab's "Send to
+  // Coaching" button ONLY for a `not_sold` deal (see onSendToSparring prop below) and consumed
+  // (cleared back to null) by CoachingTab the moment it hands it off to SparringRing, so
+  // navigating away and back to Coaching afterwards doesn't keep re-triggering a fresh session.
+  const [pendingSparringSeed, setPendingSparringSeed] = useState<{ productLine: string; premiumAmount: number; notes: string | null } | null>(null);
+
+  const sendNotSoldDealToSparring = (pol: Policy) => {
+    setPendingSparringSeed({ productLine: pol.product_line, premiumAmount: pol.premium_amount, notes: pol.notes ?? null });
+    setActiveTab('coaching');
   };
 
   // Opens the shared LogActivityModal (components/dashboard/LogActivityModal.tsx) for this tab.
@@ -3221,6 +3237,7 @@ export default function Home() {
           agencySettings={agencySettings} agencyStats={agencyStats}
           offices={offices} selectedOffice={selectedOffice} setSelectedOffice={setSelectedOffice} 
           customTargets={scoreboardCustomTargets}
+          onSendToSparring={sendNotSoldDealToSparring}
         />}
 
         {activeTab === 'agent' && isStrictOwner && <AgentDashboardTab />}
@@ -3237,7 +3254,7 @@ export default function Home() {
 
         {activeTab === 'reports' && canViewReports && <ReportsTab team={team} profile={profile} agencySettings={agencySettings} />}
 
-        {activeTab === 'coaching' && <CoachingTab profile={profile} team={team} offices={offices} agencySettings={agencySettings} pipeline={pipeline} showToast={showToast} />}
+        {activeTab === 'coaching' && <CoachingTab profile={profile} team={team} offices={offices} agencySettings={agencySettings} pipeline={pipeline} showToast={showToast} pendingSparringSeed={pendingSparringSeed} onSparringSeedConsumed={() => setPendingSparringSeed(null)} />}
         
         {activeTab === 'weekly' && canViewWeeklyRank && weeklyOverviewData && <WeeklyRankTab 
           weeklyOverviewData={weeklyOverviewData} 
