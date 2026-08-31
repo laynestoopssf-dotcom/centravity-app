@@ -15,6 +15,7 @@ import {
   Stethoscope,
   Swords,
   LineChart,
+  FlaskConical,
 } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { isManagerLevelRole } from "../utils/roles";
@@ -23,6 +24,7 @@ import { computeTrendAlerts } from "../utils/coachingAlerts";
 import DealAutopsyPanel from "./coaching/DealAutopsyPanel";
 import SparringRing from "./coaching/SparringRing";
 import SparringHistoryPanel from "./coaching/SparringHistoryPanel";
+import ObjectionSandboxPanel from "./coaching/ObjectionSandboxPanel";
 
 // =============================================================================
 // The Coaching Suite — referred to as both "app/coaching/page.tsx" and "the
@@ -52,9 +54,13 @@ import SparringHistoryPanel from "./coaching/SparringHistoryPanel";
 //      sessions, managers see the whole team's, both purely via RLS on
 //      sparring_sessions - no client-side role branching on which rows to
 //      fetch). See coaching/SparringHistoryPanel.tsx.
+//   5. Objection Sandbox — everyone. A fast, stateless "what do I say right
+//      now" tool for a producer mid-call: one objection in, three pivot
+//      scripts out via the generateObjectionPivots Server Action. Nothing
+//      here is persisted. See coaching/ObjectionSandboxPanel.tsx.
 // =============================================================================
 
-type InnerTab = "snapshot" | "autopsies" | "sparring" | "sparringHistory";
+type InnerTab = "snapshot" | "autopsies" | "sparring" | "sparringHistory" | "sandbox";
 
 interface CoachingSession {
   id: string;
@@ -230,6 +236,7 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
     { id: "autopsies", label: "Deal Autopsies", icon: Stethoscope, show: true },
     { id: "sparring", label: "Sparring Ring", icon: Swords, show: true },
     { id: "sparringHistory", label: "Sparring History", icon: History, show: true },
+    { id: "sandbox", label: "Objection Sandbox", icon: FlaskConical, show: true },
   ];
 
   return (
@@ -456,6 +463,8 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
           onStartSession={() => setInnerTab("sparring")}
         />
       )}
+
+      {innerTab === "sandbox" && <ObjectionSandboxPanel />}
     </div>
   );
 }
