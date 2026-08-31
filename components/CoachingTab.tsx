@@ -22,6 +22,7 @@ import { computeCoachingSnapshot } from "../utils/coachingMetrics";
 import { computeTrendAlerts } from "../utils/coachingAlerts";
 import DealAutopsyPanel from "./coaching/DealAutopsyPanel";
 import SparringRing from "./coaching/SparringRing";
+import SparringHistoryPanel from "./coaching/SparringHistoryPanel";
 
 // =============================================================================
 // The Coaching Suite — referred to as both "app/coaching/page.tsx" and "the
@@ -47,9 +48,13 @@ import SparringRing from "./coaching/SparringRing";
 //      a read-only feed of the whole team's. See coaching/DealAutopsyPanel.tsx.
 //   3. Sparring Ring     — everyone, self-serve AI objection practice. See
 //      coaching/SparringRing.tsx.
+//   4. Sparring History — everyone (producers see only their own graded
+//      sessions, managers see the whole team's, both purely via RLS on
+//      sparring_sessions - no client-side role branching on which rows to
+//      fetch). See coaching/SparringHistoryPanel.tsx.
 // =============================================================================
 
-type InnerTab = "snapshot" | "autopsies" | "sparring";
+type InnerTab = "snapshot" | "autopsies" | "sparring" | "sparringHistory";
 
 interface CoachingSession {
   id: string;
@@ -224,6 +229,7 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
     { id: "snapshot", label: "1-on-1 Snapshot", icon: LineChart, show: isManagerLevel },
     { id: "autopsies", label: "Deal Autopsies", icon: Stethoscope, show: true },
     { id: "sparring", label: "Sparring Ring", icon: Swords, show: true },
+    { id: "sparringHistory", label: "Sparring History", icon: History, show: true },
   ];
 
   return (
@@ -441,6 +447,15 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
       )}
 
       {innerTab === "sparring" && <SparringRing />}
+
+      {innerTab === "sparringHistory" && (
+        <SparringHistoryPanel
+          profile={profile}
+          team={team}
+          isManagerLevel={isManagerLevel}
+          onStartSession={() => setInnerTab("sparring")}
+        />
+      )}
     </div>
   );
 }
