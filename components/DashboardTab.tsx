@@ -104,8 +104,11 @@ export default function DashboardTab({
   // Ring session seeded with this exact deal's product line / premium / notes (see
   // sendNotSoldDealToSparring in app/dashboard/page.tsx and the seedContext prop threaded through
   // CoachingTab -> SparringRing) so they can practice the objection immediately, while it's fresh.
+  // Guards the deal_autopsies insert on NOT already being flagged (it may well already be - e.g.
+  // this exact deal was tagged earlier while it was still `quoted`) so this never double-inserts
+  // into the one-open-autopsy-per-policy unique index; the Sparring hand-off fires regardless.
   const handleSendToCoaching = (pol: any) => {
-    sendToCoaching(pol);
+    if (!coachingFlaggedIds.has(pol.id)) sendToCoaching(pol);
     if (pol.status === 'not_sold') onSendToSparring?.(pol);
   };
 
@@ -1274,7 +1277,20 @@ export default function DashboardTab({
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
-                          {(pol.status === 'quoted' || pol.status === 'not_sold') && (
+                          {pol.status === 'not_sold' ? (
+                            // Always actionable, never collapses into an inert "Sent" badge - even
+                            // if this exact deal was already flagged earlier (e.g. while it was
+                            // still `quoted`), the producer can still jump into a fresh Sparring
+                            // Ring session for it.
+                            <button
+                              onClick={() => handleSendToCoaching(pol)}
+                              disabled={sendingToCoachingId === pol.id}
+                              title="Jump into a live Sparring Ring session seeded with this exact lost deal so you can practice it right now"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-50 transition-colors whitespace-nowrap"
+                            >
+                              <GraduationCap size={13} /> {coachingFlaggedIds.has(pol.id) ? "Practice This Objection" : "Send to Coaching"}
+                            </button>
+                          ) : pol.status === 'quoted' && (
                             coachingFlaggedIds.has(pol.id) ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 whitespace-nowrap">
                                 <GraduationCap size={13} /> Sent
@@ -1283,7 +1299,7 @@ export default function DashboardTab({
                               <button
                                 onClick={() => handleSendToCoaching(pol)}
                                 disabled={sendingToCoachingId === pol.id}
-                                title={pol.status === 'not_sold' ? "Jump into a live Sparring Ring session seeded with this exact lost deal so you can practice it right now" : "Flag this deal in the Coaching tab so you can log the objection and get an AI talk-path"}
+                                title="Flag this deal in the Coaching tab so you can log the objection and get an AI talk-path"
                                 className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap"
                               >
                                 <GraduationCap size={13} /> Send to Coaching
