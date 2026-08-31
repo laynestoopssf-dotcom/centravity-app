@@ -26,7 +26,11 @@ import { useDashboardTab } from "../dashboard/DashboardShellContext";
 // failure never costs the producer the grade they already earned.
 // =============================================================================
 
-const PRODUCT_LINES = ["Life", "Commercial"] as const;
+// Mirrors app/api/ai/sparring/route.ts's own PRODUCT_LINES exactly - that
+// route's system prompt is a generic template that interpolates whichever
+// line string it's given (no per-product branching), so keeping this list in
+// sync is the only thing that actually gates which products are practiceable.
+const PRODUCT_LINES = ["Life", "Commercial", "Auto", "Fire", "Umbrella"] as const;
 type SparringLine = (typeof PRODUCT_LINES)[number];
 
 interface SparringMessage {
@@ -171,40 +175,55 @@ export default function SparringRing() {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-      <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-rose-50 to-orange-50 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-bold text-gray-900 flex items-center gap-2">
-          <Swords size={20} className="text-rose-600" /> AI Objection Simulator — Sparring Ring
-        </h3>
-        <div className="flex items-center gap-2">
-          <select
-            value={productLine}
-            onChange={(e) => setProductLine(e.target.value as SparringLine)}
-            disabled={messages.length > 0}
-            className="text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 bg-white outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {PRODUCT_LINES.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-          {messages.length > 0 && !gradeResult && (
+      <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-rose-50 to-orange-50 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-bold text-gray-900 flex items-center gap-2">
+            <Swords size={20} className="text-rose-600" /> AI Objection Simulator — Sparring Ring
+          </h3>
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && !gradeResult && (
+              <button
+                onClick={finishAndGrade}
+                disabled={isGrading || loading}
+                className="flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors"
+              >
+                {isGrading ? <Loader2 size={14} className="animate-spin" /> : <Trophy size={14} />}
+                {isGrading ? "Grading..." : "Finish & Grade Session"}
+              </button>
+            )}
             <button
-              onClick={finishAndGrade}
-              disabled={isGrading || loading}
-              className="flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors"
+              onClick={startSession}
+              disabled={loading || isGrading}
+              className="flex items-center gap-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors"
             >
-              {isGrading ? <Loader2 size={14} className="animate-spin" /> : <Trophy size={14} />}
-              {isGrading ? "Grading..." : "Finish & Grade Session"}
+              <RotateCcw size={14} /> {messages.length === 0 ? "Start Session" : "New Session"}
             </button>
-          )}
-          <button
-            onClick={startSession}
-            disabled={loading || isGrading}
-            className="flex items-center gap-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors"
-          >
-            <RotateCcw size={14} /> {messages.length === 0 ? "Start Session" : "New Session"}
-          </button>
+          </div>
+        </div>
+
+        {/* Responsive button grid rather than a <select> - every option is visible at a
+            glance, and the active pick is obvious without opening a dropdown. Locked once
+            a session starts (same reasoning the old <select disabled> had): switching
+            products mid-conversation would leave the transcript arguing about a different
+            line than the one it's graded/saved against. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-0.5">Product:</span>
+          {PRODUCT_LINES.map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setProductLine(l)}
+              disabled={messages.length > 0}
+              aria-pressed={productLine === l}
+              className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                productLine === l
+                  ? "bg-rose-600 text-white border-rose-600"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-rose-300 hover:text-rose-600"
+              }`}
+            >
+              {l}
+            </button>
+          ))}
         </div>
       </div>
 

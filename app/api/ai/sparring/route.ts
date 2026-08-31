@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 2000;
 
-const PRODUCT_LINES = ["Life", "Commercial", "Auto", "Fire", "Health"] as const;
+const PRODUCT_LINES = ["Life", "Commercial", "Auto", "Fire", "Umbrella"] as const;
 type SparringLine = (typeof PRODUCT_LINES)[number];
 
 interface RawIncomingMessage {
