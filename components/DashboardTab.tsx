@@ -11,6 +11,8 @@ import IdentifierChip from './ui/IdentifierChip';
 import FormattedNumberInput from './ui/FormattedNumberInput';
 import ProfileAvatar from './ui/ProfileAvatar';
 import DashboardSetupWidget from './DashboardSetupWidget';
+import RetentionLoggingWidget from './RetentionLoggingWidget';
+import RetentionMetricsTile from './dashboard/RetentionMetricsTile';
 
 /** Sort-key helper only now - actual on-screen rendering goes through <IdentifierChip> instead, which keeps the plaintext out of the DOM by default (see components/ui/IdentifierChip.tsx). */
 const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
@@ -764,6 +766,24 @@ export default function DashboardTab({
           estimatedCommission={estimatedTeamCommission}
           ownerCommission={estimatedOwnerCommission}
         />
+      )}
+
+      {/* PREMIUM RESCUED (Owner/Manager) — sits right alongside the Sales Revenue cards above,
+          its own row so retention $ isn't confused with sales premium/commission. Gated the same
+          way DashboardMetrics is (isManagerLevelRole), since retention_events RLS only grants
+          agency-wide SELECT to owner/admin/manager roles anyway (see the migration). */}
+      {isManagerLevelRole(profile?.role) && (
+        <RetentionMetricsTile agencyId={profile?.agency_id} officeId={activeOfficeVal} />
+      )}
+
+      {/* PREMIUM RESCUED LOGGER (Service & Retention) — deliberately keyed off the actual signed-in
+          user's role (profile.role), not `isService`/activeProfile (which follows whichever
+          producer a manager might be viewing via selectedProducer) - same convention as
+          handleLaunchLogger above. Sits as the very first thing a service rep sees on their
+          Scoreboard, ahead of the sales-oriented KPI tiles/chart below, since retention - not
+          sales pacing - is their actual job. */}
+      {profile?.role === 'service' && (
+        <RetentionLoggingWidget profile={profile} agencySettings={agencySettings} />
       )}
 
       {/* PRIMARY ACTIVITY-LOGGING PAIR — "Log Activity" (opens the same four
