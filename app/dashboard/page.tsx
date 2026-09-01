@@ -2535,7 +2535,10 @@ export default function Home() {
     }
     const prodDays = agencySettings?.production_days_per_week || 5;
 
-    const leaderboard = team.map(member => {
+    // Owner/admin excluded from this producer leaderboard - their production still rolls into
+    // agency-wide totals everywhere those are computed straight from policies/activities, just
+    // not into a ranked "who's #1 this week" list the rest of the team is compared against.
+    const leaderboard = team.filter(member => !isOwnerLevelRole(member.role)).map(member => {
       let wTouches = 0, wQuotes = 0, wBoundApps = 0, prevTouches = 0, prevQuotes = 0, prevBoundApps = 0, pAndCPremium = 0, lAndHPremium = 0;
       let quotesByLine = { Auto: 0, Fire: 0, Life: 0, Health: 0, Commercial: 0 };
 
@@ -2708,7 +2711,12 @@ export default function Home() {
       }, 0);
     };
 
-    const leaderboard = team.map(member => {
+    // NOTE: this map runs over the FULL team (owner included) because `totals` below is mutated
+    // as a side effect inside this same callback (totals.monthBound++, etc.) - that's the real
+    // "macro agency revenue" the owner's production must keep rolling up into. Owner/admin is
+    // filtered OUT of the returned `leaderboard` array itself, right before the return statement
+    // further down, so only the ranking (not the totals) excludes them.
+    const perMemberOverviewRows = team.map(member => {
       let tTouches = 0, tQuotes = 0, mBound = 0, mPremium = 0, mQuotes = 0, mTouches = 0;
       let lines = { Auto: 0, Fire: 0, Life: 0, Health: 0, Commercial: 0 };
       let mtdLineAgg = makeLineAgg();
@@ -2904,6 +2912,10 @@ export default function Home() {
       };
     });
 
+    // Owner/admin excluded here (not from perMemberOverviewRows/totals above) - see the note at
+    // the top of this memo. Their production already counted toward every `totals` figure above.
+    const leaderboard = perMemberOverviewRows.filter(row => !isOwnerLevelRole(row.role));
+
     return { 
       totals, 
       agencyAvgPremium: { ytd: agencyAvgPremiumYtd, mtd: agencyAvgPremiumMtd, r30: agencyAvgPremiumR30 },
@@ -2923,7 +2935,11 @@ export default function Home() {
 
     let totals = { monthWritten: 0, monthIssued: 0, monthPremium: 0, monthQuotes: 0 };
     
-    const leaderboard = team.map(member => {
+    // NOTE: runs over the FULL team (owner included) - `totals` below is mutated as a side
+    // effect inside this callback (totals.monthQuotes++, etc.), and the owner's Life production
+    // must keep rolling up into that macro total. Owner/admin is filtered out of the returned
+    // `leaderboard` array only, right before the final return statement below.
+    const perMemberLifeRows = team.map(member => {
       let mWritten = 0, mIssued = 0, mPremium = 0, mQuotes = 0;
       let ytdApps = 0, ytdPrem = 0;
       
@@ -2968,7 +2984,11 @@ export default function Home() {
        // "Not Taken/Declined" is a terminal outcome, not a pending one - exclude it alongside issued.
        return parentLine === 'Life' && p.status !== 'issued' && p.status !== 'not_taken';
     });
-    return { totals, leaderboard: leaderboard.sort((a, b) => b.lifePremium - a.lifePremium), pendingPipeline };
+    // Owner/admin excluded here (not from perMemberLifeRows/totals above) - see the note at the
+    // top of this memo. Their Life production already counted toward every `totals` figure above.
+    const lifeLeaderboard = perMemberLifeRows.filter(row => !isOwnerLevelRole(row.role));
+
+    return { totals, leaderboard: lifeLeaderboard.sort((a, b) => b.lifePremium - a.lifePremium), pendingPipeline };
   }, [filteredPolicies, team, profile, overviewMonth, agencySettings, canViewLifeModule]);
 
   // NOTE: the old ytdOverviewData/revenueOverviewData useMemos (YTD Projections

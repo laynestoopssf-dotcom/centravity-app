@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse, CreditCard, ToggleLeft, UserPlus, Mail, Send, Ban, Loader2 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { isOwnerLevelRole } from '../utils/roles';
 import { DEFAULT_COMMISSION_RATES, resolveCommissionRates, type LifeSubType, type HealthSubType } from '../utils/commissionRates';
 import { createCheckoutSession } from '../app/actions/billing';
 import { createTeamInvite, resendTeamInviteEmail } from '../app/actions/teamInvites';
@@ -1587,8 +1588,14 @@ export default function SettingsTab({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {team.map((member: any) => {
+          {(() => {
+            // Owner/admin get their own "Agency Leadership" section, separate from the
+            // rank-and-file producer grid below — same card, same click-to-edit behavior,
+            // just visually pulled out so an owner's personal goals/production tracking
+            // (which the Scoreboard and Commission tab now also bucket separately, see
+            // components/DashboardTab.tsx and components/CommissionTab.tsx) doesn't read
+            // as "just another row" mixed into the team roster.
+            const renderMemberCard = (member: any) => {
               const memberOffice = offices.find((o: any) => o.id === member.office_id);
               const memberPlan = compPlans.find((p: any) => p.id === member.comp_plan_id);
               const isService = member.role === 'service';
@@ -1631,9 +1638,37 @@ export default function SettingsTab({
                   </div>
                 </button>
               );
-            })}
-            {team.length === 0 && <p className="text-sm text-gray-400 col-span-full py-6 text-center">No active team members yet.</p>}
-          </div>
+            };
+
+            const leadership = team.filter((m: any) => isOwnerLevelRole(m.role));
+            const producers = team.filter((m: any) => !isOwnerLevelRole(m.role));
+
+            return (
+              <>
+                {leadership.length > 0 && (
+                  <div className="mb-8">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield size={14} className="text-purple-500" />
+                      <h4 className="text-xs font-bold text-purple-700 uppercase tracking-wider">Agency Owner</h4>
+                      <span className="text-[10px] text-gray-400">Personal goals & production, tracked separately from team averages</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {leadership.map(renderMemberCard)}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 mb-3">
+                  <Users size={14} className="text-gray-400" />
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Producers / Team</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {producers.map(renderMemberCard)}
+                  {producers.length === 0 && <p className="text-sm text-gray-400 col-span-full py-6 text-center">No active team members yet.</p>}
+                </div>
+              </>
+            );
+          })()}
 
           {/* Archived (soft-deleted) team members - hidden from every active list/leaderboard/
               selector, but reactivatable here since their historical sales data was never touched. */}

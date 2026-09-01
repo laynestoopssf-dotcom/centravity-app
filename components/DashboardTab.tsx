@@ -3,7 +3,7 @@ import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { supabase } from '../utils/supabase';
 import { resolveParentLine } from '../utils/productLines';
-import { isManagerLevelRole } from '../utils/roles';
+import { isManagerLevelRole, isOwnerLevelRole } from '../utils/roles';
 import DashboardMetrics from './dashboard/DashboardMetrics';
 import { hashSearchIdentifier } from '../utils/crypto';
 import { getCachedIdentifier, cacheIdentifier } from '../utils/identifierCache';
@@ -224,12 +224,31 @@ export default function DashboardTab({
   // card; falls back to this one profile's own commissionData.total when a
   // single producer is selected (or teamCommissions hasn't resolved yet) so
   // the card never silently shows $0 for someone with real numbers.
+  // Owner/admin production skews a "team" average - it's tracked in its own Owner Production
+  // bucket instead (estimatedOwnerCommission just below, with matching splits in
+  // CommissionTab.tsx and the roster/leaderboards in app/dashboard/page.tsx) rather than being
+  // blended into this "Team Commissions" total.
   const estimatedTeamCommission = useMemo(() => {
     if (teamCommissions) {
-      return Object.values(teamCommissions).reduce((sum: number, m: any) => sum + (Number(m?.total) || 0), 0);
+      return Object.entries(teamCommissions).reduce((sum: number, [memberId, m]: [string, any]) => {
+        const member = (team || []).find((t: any) => t.id === memberId);
+        if (member && isOwnerLevelRole(member.role)) return sum;
+        return sum + (Number(m?.total) || 0);
+      }, 0);
     }
-    return Number(commissionData?.total) || 0;
-  }, [teamCommissions, commissionData]);
+    return isOwnerLevelRole(profile?.role) ? 0 : (Number(commissionData?.total) || 0);
+  }, [teamCommissions, commissionData, team, profile]);
+
+  const estimatedOwnerCommission = useMemo(() => {
+    if (teamCommissions) {
+      return Object.entries(teamCommissions).reduce((sum: number, [memberId, m]: [string, any]) => {
+        const member = (team || []).find((t: any) => t.id === memberId);
+        if (member && isOwnerLevelRole(member.role)) return sum + (Number(m?.total) || 0);
+        return sum;
+      }, 0);
+    }
+    return isOwnerLevelRole(profile?.role) ? (Number(commissionData?.total) || 0) : 0;
+  }, [teamCommissions, commissionData, team, profile]);
 
   // Production Roster: groups the selected date window's bound/issued policies by team member,
   // so managers can see exactly who wrote what without leaving the main dashboard.
@@ -325,6 +344,7 @@ export default function DashboardTab({
           userId: uid,
           name: member ? `${member.first_name} ${member.last_name}` : 'Unknown Producer',
           avatarUrl: member?.avatar_url || null,
+          role: member?.role || null,
           apps: 0,
           premium: 0,
           counts: { Auto: 0, Fire: 0, Life: 0, Health: 0, Commercial: 0 },
@@ -341,6 +361,13 @@ export default function DashboardTab({
 
     return Array.from(byUser.values()).sort((a, b) => b.apps - a.apps);
   }, [rosterPolicies, team, agencySettings]);
+
+  // Owner/admin production still counts toward macro agency revenue (rosterPolicies/agencyStats
+  // are policy-driven, not role-filtered) but is pulled out of this ranked roster into its own
+  // "Owner Production" callout so it doesn't read as just another (often outlier) row in a
+  // producer leaderboard.
+  const ownerProductionRows = useMemo(() => productionRoster.filter((r: any) => isOwnerLevelRole(r.role)), [productionRoster]);
+  const producerProductionRows = useMemo(() => productionRoster.filter((r: any) => !isOwnerLevelRole(r.role)), [productionRoster]);
 
   if (!profile) return null;
 
@@ -735,6 +762,7 @@ export default function DashboardTab({
           monthlyPremium={agencyStats?.monthPotentialPremium || 0}
           monthlyPremiumGoal={monthlyPremiumGoal}
           estimatedCommission={estimatedTeamCommission}
+          ownerCommission={estimatedOwnerCommission}
         />
       )}
 
@@ -1104,10 +1132,31 @@ export default function DashboardTab({
               <option value="lastWeek">Last Week</option>
               <option value="month">Current Month</option>
             </select>
-            <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm whitespace-nowrap">{productionRoster.length} {productionRoster.length === 1 ? 'Producer' : 'Producers'} On The Board</span>
+            <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm whitespace-nowrap">{producerProductionRows.length} {producerProductionRows.length === 1 ? 'Producer' : 'Producers'} On The Board</span>
           </div>
         </div>
-        {productionRoster.length === 0 ? (
+
+        {/* OWNER PRODUCTION — pulled out of the ranked roster below (still rolls into agency-wide
+            revenue everywhere else) so an owner's own numbers read as personal tracking, not a
+            leaderboard entry the rest of the team is implicitly compared against. */}
+        {ownerProductionRows.length > 0 && (
+          <div className="p-4 bg-purple-50/50 border-b border-purple-100">
+            <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-2">Owner Production (tracked separately)</p>
+            <div className="flex flex-wrap gap-4">
+              {ownerProductionRows.map((row: any) => (
+                <div key={row.userId} className="flex items-center gap-2.5 bg-white border border-purple-100 rounded-xl px-4 py-2.5 shadow-sm">
+                  <ProfileAvatar src={row.avatarUrl} name={row.name} size="xs" />
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">{row.name}</p>
+                    <p className="text-xs text-gray-500"><span className="font-black text-purple-600">{row.apps}</span> apps · <span className="font-bold text-gray-700">${Math.round(row.premium).toLocaleString()}</span> premium</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {producerProductionRows.length === 0 ? (
           <div className="p-10 text-center">
             <p className="text-gray-400 font-bold">{rosterLoading ? 'Loading...' : "No production yet for this window. Let's get on the board! 🚀"}</p>
           </div>
@@ -1128,7 +1177,7 @@ export default function DashboardTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {productionRoster.map((row: any) => (
+                {producerProductionRows.map((row: any) => (
                   <React.Fragment key={row.userId}>
                     <tr
                       onClick={() => setExpandedRosterUserId(prev => prev === row.userId ? null : row.userId)}

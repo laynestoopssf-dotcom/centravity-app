@@ -16,12 +16,17 @@ export interface DashboardMetricsProps {
   // goal column; annual/12 is the agency's existing convention for turning
   // an annual target into a monthly pace everywhere else in the app.
   monthlyPremiumGoal: number;
-  // Sum of every team member's estimated commission (issued + pipeline +
-  // bonuses) for the current month — see teamCommissions in
+  // Sum of every non-owner/admin team member's estimated commission (issued +
+  // pipeline + bonuses) for the current month — see teamCommissions in
   // app/dashboard/page.tsx, the same per-producer comp-plan math CommissionTab
-  // already renders, just totaled across the whole roster instead of shown
-  // per person.
+  // already renders, just totaled across the roster (owner/admin excluded —
+  // see ownerCommission below) instead of shown per person.
   estimatedCommission: number;
+  // The owner/admin's own estimated commission, tracked in its own bucket so
+  // their (often outlier) production doesn't skew "Team Commissions" above —
+  // see components/DashboardTab.tsx's estimatedOwnerCommission. Optional/0
+  // for agencies where the owner isn't drawing a comp-plan commission.
+  ownerCommission?: number;
 }
 
 const formatCurrency = (value: number): string => {
@@ -29,7 +34,7 @@ const formatCurrency = (value: number): string => {
   return `$${rounded.toLocaleString()}`;
 };
 
-export default function DashboardMetrics({ monthlyPremium, monthlyPremiumGoal, estimatedCommission }: DashboardMetricsProps) {
+export default function DashboardMetrics({ monthlyPremium, monthlyPremiumGoal, estimatedCommission, ownerCommission = 0 }: DashboardMetricsProps) {
   const pacingPct = monthlyPremiumGoal > 0 ? (monthlyPremium / monthlyPremiumGoal) * 100 : 0;
   const pacingBarPct = Math.max(0, Math.min(100, pacingPct));
   const pacingLabel = monthlyPremiumGoal > 0 ? `${Math.round(pacingPct)}%` : "—";
@@ -78,13 +83,16 @@ export default function DashboardMetrics({ monthlyPremium, monthlyPremiumGoal, e
 
       <div className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <p className="min-w-0 truncate text-xs font-bold text-gray-400 uppercase tracking-wider">Estimated Commissions</p>
+          <p className="min-w-0 truncate text-xs font-bold text-gray-400 uppercase tracking-wider">Team Commissions</p>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
             <Wallet size={18} />
           </div>
         </div>
         <p className="text-2xl sm:text-3xl font-black text-gray-900 truncate">{formatCurrency(estimatedCommission)}</p>
-        <p className="text-xs text-gray-400 mt-1.5">Earned month-to-date (est.)</p>
+        <p className="text-xs text-gray-400 mt-1.5">Earned month-to-date (est.) — producers only</p>
+        {ownerCommission > 0 && (
+          <p className="text-[11px] font-bold text-purple-600 mt-1 truncate">+ {formatCurrency(ownerCommission)} Owner (tracked separately)</p>
+        )}
       </div>
     </div>
   );

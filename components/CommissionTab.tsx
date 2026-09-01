@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, TrendingUp, Users, ArrowRightCircle, Sparkles, Target, ClipboardList, X, Gift } from 'lucide-react';
 import { resolveParentLine } from '../utils/productLines';
-import { isManagerLevelRole } from '../utils/roles';
+import { isManagerLevelRole, isOwnerLevelRole } from '../utils/roles';
 import { getCachedIdentifier } from '../utils/identifierCache';
 import IdentifierChip from './ui/IdentifierChip';
 import ProfileAvatar from './ui/ProfileAvatar';
@@ -116,14 +116,30 @@ export default function CommissionTab({
   };
 
   // --- TEAM OVERVIEW CALCS ---
-  const totalTeamBase = team.reduce((sum: number, m: any) => sum + Number(m.monthly_base_salary || 0), 0);
-  const totalTeamIssued = teamCommissions ? Object.values(teamCommissions).reduce((sum: number, c: any) => sum + (c.issuedComm || 0), 0) : 0;
-  const totalTeamPipeline = teamCommissions ? Object.values(teamCommissions).reduce((sum: number, c: any) => sum + (c.pipelineComm || 0), 0) : 0;
-  const totalTeamBonuses = teamCommissions ? Object.values(teamCommissions).reduce((sum: number, c: any) => sum + (c.bonusTotal || 0), 0) : 0;
+  // Owner/admin production is real payroll and still needs to be tracked - it's just no longer
+  // blended into the "Team Payroll" macro cards or the producer tile grid below, so an owner who
+  // also writes business doesn't skew what looks like a rank-and-file team average. See the
+  // matching split in components/DashboardTab.tsx (estimatedTeamCommission/ownerCommission) and
+  // components/SettingsTab.tsx's Team Management roster.
+  const leadershipTeam = team.filter((m: any) => isOwnerLevelRole(m.role));
+  const producerTeam = team.filter((m: any) => !isOwnerLevelRole(m.role));
+
+  const totalTeamBase = producerTeam.reduce((sum: number, m: any) => sum + Number(m.monthly_base_salary || 0), 0);
+  const totalTeamIssued = teamCommissions ? producerTeam.reduce((sum: number, m: any) => sum + (teamCommissions[m.id]?.issuedComm || 0), 0) : 0;
+  const totalTeamPipeline = teamCommissions ? producerTeam.reduce((sum: number, m: any) => sum + (teamCommissions[m.id]?.pipelineComm || 0), 0) : 0;
+  const totalTeamBonuses = teamCommissions ? producerTeam.reduce((sum: number, m: any) => sum + (teamCommissions[m.id]?.bonusTotal || 0), 0) : 0;
   
   const agencySecuredComm = totalTeamIssued + totalTeamBonuses;
   const agencySecuredPayroll = totalTeamBase + agencySecuredComm;
   const agencyExpectedPayroll = agencySecuredPayroll + totalTeamPipeline;
+
+  // Owner's own equivalent figures, tracked separately - shown in its own callout above the
+  // producer tile grid rather than folded into the macro cards above.
+  const ownerBase = leadershipTeam.reduce((sum: number, m: any) => sum + Number(m.monthly_base_salary || 0), 0);
+  const ownerIssued = teamCommissions ? leadershipTeam.reduce((sum: number, m: any) => sum + (teamCommissions[m.id]?.issuedComm || 0), 0) : 0;
+  const ownerPipeline = teamCommissions ? leadershipTeam.reduce((sum: number, m: any) => sum + (teamCommissions[m.id]?.pipelineComm || 0), 0) : 0;
+  const ownerBonuses = teamCommissions ? leadershipTeam.reduce((sum: number, m: any) => sum + (teamCommissions[m.id]?.bonusTotal || 0), 0) : 0;
+  const ownerExpectedTotal = ownerBase + ownerIssued + ownerBonuses + ownerPipeline;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-12">
@@ -193,13 +209,29 @@ export default function CommissionTab({
             <div className="bg-[#111827] rounded-xl shadow-lg border border-gray-800 border-l-4 border-l-purple-500 p-6">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Expected Payroll</p>
               <p className="text-4xl font-black text-purple-400">${agencyExpectedPayroll.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-xs font-bold text-gray-500 mt-1">Pre-Tax Agency Output</p>
+              <p className="text-xs font-bold text-gray-500 mt-1">Producer team only</p>
             </div>
           </div>
 
-          {/* INDIVIDUAL TEAM TILES */}
+          {/* OWNER PRODUCTION — tracked separately from the "Team Payroll" macro cards above so an
+              owner who also writes business isn't blended into the team's average payout. Their
+              production still rolls into agency-wide revenue everywhere that's computed straight
+              from policies (agencyStats, RevenueTab, etc.) - this is purely a display split. */}
+          {leadershipTeam.length > 0 && (
+            <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-1">Owner Production (tracked separately)</p>
+                <p className="text-sm text-gray-600">
+                  {leadershipTeam.map((m: any) => `${m.first_name} ${m.last_name}`).join(', ')} · Base ${ownerBase.toLocaleString()} + Issued ${ownerIssued.toLocaleString()} + Bonus ${ownerBonuses.toLocaleString()} + Pipeline ${ownerPipeline.toLocaleString()}
+                </p>
+              </div>
+              <p className="text-2xl font-black text-purple-700 shrink-0">${ownerExpectedTotal.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
+            </div>
+          )}
+
+          {/* INDIVIDUAL PRODUCER TILES — owner/admin excluded (see Owner Production callout above) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {team.map((member: any) => {
+            {producerTeam.map((member: any) => {
                // Safely pull data and fallback to 0 if a producer lacks a comp plan
                const rawComm = teamCommissions?.[member.id] || {};
                const comm = {
