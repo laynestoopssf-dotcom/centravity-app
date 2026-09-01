@@ -53,6 +53,7 @@ const emptyPermissions: DashboardSidebarPermissions = {
   canViewLifeModule: false,
   canViewReports: false,
   isOwner: false,
+  isBookkeeper: false,
 };
 
 interface ShellData {
@@ -153,16 +154,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
     const isOwnerOrManager = isManagerLevelRole(profileRow.role);
     const isOwnerLevel = isOwnerLevelRole(profileRow.role);
+    const isBookkeeper = profileRow.role === "bookkeeper";
     const canViewAgencyDash = roleConfig?.permissions?.view_agency_dash ?? isOwnerOrManager;
-    const canViewTeamComm = roleConfig?.permissions?.view_team_comm ?? isOwnerOrManager;
+    // Bookkeeper needs the Agency Payroll view (Commission tab) even though
+    // it isn't a manager-level role - explicit OR here means this stays
+    // correct even for an agency whose custom_roles JSON predates the
+    // 'bookkeeper' role (so roleConfig is undefined and this falls through
+    // to the default).
+    const canViewTeamComm = roleConfig?.permissions?.view_team_comm ?? (isOwnerOrManager || isBookkeeper);
     const canManageSettings = roleConfig?.permissions?.manage_settings ?? isOwnerLevel;
 
-    // Owners land on their Agent Dashboard master command center by
-    // default; everyone else (Team Members, Managers, etc.) lands on the
-    // Team Scoreboard, same as before this tab existed.
+    // Owners land on their Agent Dashboard master command center by default;
+    // Bookkeepers land directly on Commissions (the only tab they can see);
+    // everyone else (Team Members, Managers, etc.) lands on the Team
+    // Scoreboard, same as before this tab existed.
     if (!hasSetDefaultTabRef.current) {
       hasSetDefaultTabRef.current = true;
-      setActiveTab(profileRow.role === "owner" ? "agent" : "dashboard");
+      setActiveTab(profileRow.role === "owner" ? "agent" : isBookkeeper ? "commission" : "dashboard");
     }
 
     setShellData({
@@ -185,6 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         // 'admin' inclusion. See DashboardSidebarPermissions.isOwner and
         // components/AgentDashboardTab.tsx's header comment for why.
         isOwner: profileRow.role === "owner",
+        isBookkeeper,
       },
     });
   }, []);

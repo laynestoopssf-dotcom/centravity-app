@@ -1,7 +1,8 @@
-// Mirrors agency_invites.role's check constraint (scripts/add_agency_invites_table.sql)
-// and profiles.role's values minus 'owner' — see DEFAULT_ROLES in
-// components/SettingsTab.tsx for the same four options presented elsewhere.
-export type TeamInviteRole = "admin" | "manager" | "producer" | "service";
+// Mirrors agency_invites.role's check constraint (scripts/add_agency_invites_table.sql,
+// widened by 20260901060000_add_bookkeeper_invite_role.sql) and profiles.role's values
+// minus 'owner' — see DEFAULT_ROLES in components/SettingsTab.tsx for the same five
+// options presented elsewhere.
+export type TeamInviteRole = "admin" | "manager" | "producer" | "service" | "bookkeeper";
 
 export interface CreateTeamInvitePayload {
   accessToken: string;

@@ -43,7 +43,7 @@ interface VerifiedInvite {
   agencyName: string;
 }
 
-const ROLE_LABELS: Record<string, string> = { admin: "Admin", manager: "Manager", producer: "Producer", service: "Service & Retention" };
+const ROLE_LABELS: Record<string, string> = { admin: "Admin", manager: "Manager", producer: "Producer", service: "Service & Retention", bookkeeper: "Bookkeeper" };
 
 function AcceptInviteCatcher() {
   const searchParams = useSearchParams();

@@ -98,7 +98,14 @@ const DEFAULT_ROLES = [
   // is for this role elsewhere.
   { id: 'manager', name: 'Manager', isSystem: true, permissions: { view_agency_dash: true, view_weekly_rank: true, view_agency_mtd: true, view_life_module: true, view_team_comm: true, view_reports: true, edit_historical: true, delete_records: false, manage_settings: false, manage_coaching: true } },
   { id: 'producer', name: 'Producer', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false, manage_coaching: false } },
-  { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false, manage_coaching: false } }
+  { id: 'service', name: 'Service', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: false, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false, manage_coaching: false } },
+  // Highly-restricted, payroll-only role - view_team_comm: true is the ONE permission this
+  // role needs (the Agency Payroll overview inside the Commission tab), everything else stays
+  // false. The whole rest of the nav (Scoreboard, Pipeline, Ledger, Reports, Coaching,
+  // Settings, Retention) is hidden outright for 'bookkeeper' regardless of these toggles - see
+  // isBookkeeper in components/dashboard/DashboardSidebar.tsx and app/dashboard/layout.tsx,
+  // not a custom_roles-configurable permission like the rest of this list.
+  { id: 'bookkeeper', name: 'Bookkeeper', isSystem: true, permissions: { view_agency_dash: false, view_weekly_rank: false, view_agency_mtd: false, view_life_module: false, view_team_comm: true, view_reports: false, edit_historical: false, delete_records: false, manage_settings: false, manage_coaching: false } }
 ];
 
 // `date` inputs need a plain local "YYYY-MM-DD" string. Reading that back out of a stored
@@ -218,13 +225,14 @@ export default function SettingsTab({
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
 
-  const ROLE_LABELS: Record<string, string> = { owner: 'Owner', admin: 'Admin', manager: 'Manager', producer: 'Producer', service: 'Service & Retention' };
+  const ROLE_LABELS: Record<string, string> = { owner: 'Owner', admin: 'Admin', manager: 'Manager', producer: 'Producer', service: 'Service & Retention', bookkeeper: 'Bookkeeper' };
   const ROLE_BADGE_CLASSES: Record<string, string> = {
     owner: 'bg-purple-100 text-purple-700',
     admin: 'bg-fuchsia-100 text-fuchsia-700',
     manager: 'bg-indigo-100 text-indigo-700',
     producer: 'bg-blue-100 text-blue-700',
     service: 'bg-emerald-100 text-emerald-700',
+    bookkeeper: 'bg-amber-100 text-amber-700',
   };
 
   // Role Builder State
@@ -1752,6 +1760,7 @@ export default function SettingsTab({
                   <option value="manager">Manager</option>
                   <option value="admin">Admin</option>
                   <option value="service">Service &amp; Retention</option>
+                  <option value="bookkeeper">Bookkeeper</option>
                 </select>
               </div>
 

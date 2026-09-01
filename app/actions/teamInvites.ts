@@ -40,7 +40,7 @@ import type {
 // verifyWaitlistInvite's shape in app/actions/waitlist.ts exactly.
 // =============================================================================
 
-const VALID_ROLES: TeamInviteRole[] = ["admin", "manager", "producer", "service"];
+const VALID_ROLES: TeamInviteRole[] = ["admin", "manager", "producer", "service", "bookkeeper"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function requireOwnerLevelCaller(

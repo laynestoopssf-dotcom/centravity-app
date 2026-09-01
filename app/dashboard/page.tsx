@@ -2299,7 +2299,11 @@ export default function Home() {
   const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
   
   const canViewAgencyDash = userRoleConfig?.permissions?.view_agency_dash ?? isManagerLevelRole(profile?.role);
-  const canViewTeamComm = userRoleConfig?.permissions?.view_team_comm ?? isManagerLevelRole(profile?.role);
+  // Bookkeeper needs the Agency Payroll view even though it isn't a
+  // manager-level role - mirrors the same OR added in app/dashboard/layout.tsx
+  // and components/CommissionTab.tsx; keep all three in sync.
+  const isBookkeeper = profile?.role === 'bookkeeper';
+  const canViewTeamComm = userRoleConfig?.permissions?.view_team_comm ?? (isManagerLevelRole(profile?.role) || isBookkeeper);
   const canManageSettings = userRoleConfig?.permissions?.manage_settings ?? isOwnerLevelRole(profile?.role);
   // Strictly the literal agency owner (no custom_roles override, no 'admin'
   // carve-out) — gates the "Agent Dashboard" tab. See
@@ -3196,7 +3200,7 @@ export default function Home() {
       {/* COMPACT-VIEW QUICK ACTIONS DOCK — see components/dashboard/QuickActionsBar.tsx
           for why lg:hidden (not md:hidden) and why service reps get different
           labels/activity types wired to the last two buttons. */}
-      {profile && (
+      {profile && !isBookkeeper && (
         <QuickActionsBar
           isService={profile.role === 'service'}
           onLogInboundCall={logInboundCall}
@@ -3242,7 +3246,7 @@ export default function Home() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && <DashboardTab
+        {activeTab === 'dashboard' && !isBookkeeper && <DashboardTab
           profile={profile} team={team} archivedTeam={archivedTeam} stats={stats} chartData={chartData} pipeline={pipeline} commissionData={commissionData} teamCommissions={teamCommissions}
           dailyQuoteRate={stats.todayTouches > 0 ? ((stats.todayQuotes / stats.todayTouches) * 100).toFixed(1) : "0.0"} 
           dailyCloseRate={stats.todayQuotes > 0 ? ((stats.todayBound / stats.todayQuotes) * 100).toFixed(1) : "0.0"} 
@@ -3264,7 +3268,7 @@ export default function Home() {
 
         {activeTab === 'agent' && isStrictOwner && <AgentDashboardTab />}
 
-        {activeTab === 'performance' && <MyPerformanceTab 
+        {activeTab === 'performance' && !isBookkeeper && <MyPerformanceTab 
           profile={profile} stats={stats} chartData={chartData} agencySettings={agencySettings} 
           team={team} selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} 
           offices={offices} selectedOffice={selectedOffice} setSelectedOffice={setSelectedOffice}
@@ -3272,23 +3276,23 @@ export default function Home() {
 
         {activeTab === 'commission' && <CommissionTab profile={profile} stats={stats} commissionData={commissionData} manualBonuses={manualBonuses} addManualBonus={addManualBonus} deleteManualBonus={deleteManualBonus} commissionMonth={commissionMonth} setCommissionMonth={setCommissionMonth} team={team} selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} teamCommissions={teamCommissions} monthPolicies={monthPolicies} agencySettings={agencySettings} />}
         
-        {activeTab === 'ledger' && <LedgerTab profile={profile} team={team} agencySettings={agencySettings} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} deleteActivitiesBulk={deleteActivitiesBulk} deletePoliciesBulk={deletePoliciesBulk} updateLedgerActivity={updateLedgerActivity} updateLedgerPolicy={updateLedgerPolicy} />}
+        {activeTab === 'ledger' && !isBookkeeper && <LedgerTab profile={profile} team={team} agencySettings={agencySettings} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} deleteActivitiesBulk={deleteActivitiesBulk} deletePoliciesBulk={deletePoliciesBulk} updateLedgerActivity={updateLedgerActivity} updateLedgerPolicy={updateLedgerPolicy} />}
 
-        {activeTab === 'reports' && canViewReports && <ReportsTab team={team} profile={profile} agencySettings={agencySettings} />}
+        {activeTab === 'reports' && canViewReports && !isBookkeeper && <ReportsTab team={team} profile={profile} agencySettings={agencySettings} />}
 
-        {activeTab === 'coaching' && <CoachingTab profile={profile} team={team} offices={offices} agencySettings={agencySettings} pipeline={pipeline} showToast={showToast} pendingSparringSeed={pendingSparringSeed} onSparringSeedConsumed={() => setPendingSparringSeed(null)} />}
+        {activeTab === 'coaching' && !isBookkeeper && <CoachingTab profile={profile} team={team} offices={offices} agencySettings={agencySettings} pipeline={pipeline} showToast={showToast} pendingSparringSeed={pendingSparringSeed} onSparringSeedConsumed={() => setPendingSparringSeed(null)} />}
         
-        {activeTab === 'weekly' && canViewWeeklyRank && weeklyOverviewData && <WeeklyRankTab 
+        {activeTab === 'weekly' && canViewWeeklyRank && !isBookkeeper && weeklyOverviewData && <WeeklyRankTab 
           weeklyOverviewData={weeklyOverviewData} 
           selectedWeekStart={selectedWeekStart} 
           setSelectedWeekStart={setSelectedWeekStart} 
           profile={profile} 
           agencySettings={agencySettings} 
         />}
-        {activeTab === 'agency' && canViewAgencyMtd && agencyOverviewData && <AgencyOverviewTab agencyOverviewData={agencyOverviewData} expandedProducerId={expandedProducerId} setExpandedProducerId={setExpandedProducerId} whatIfCommission={whatIfCommission} setWhatIfCommission={setWhatIfCommission} generateCoachingInsight={generateCoachingInsight} isGeneratingAi={isGeneratingAi} aiInsights={aiInsights} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} agencySettings={agencySettings} dateFilterMode={dateFilterMode} setDateFilterMode={setDateFilterMode} />}
-        {activeTab === 'life' && canViewLifeModule && lifeOverviewData && <LifeTab lifeOverviewData={lifeOverviewData} team={team} updatePolicyStatus={updatePolicyStatus} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} />}
+        {activeTab === 'agency' && canViewAgencyMtd && !isBookkeeper && agencyOverviewData && <AgencyOverviewTab agencyOverviewData={agencyOverviewData} expandedProducerId={expandedProducerId} setExpandedProducerId={setExpandedProducerId} whatIfCommission={whatIfCommission} setWhatIfCommission={setWhatIfCommission} generateCoachingInsight={generateCoachingInsight} isGeneratingAi={isGeneratingAi} aiInsights={aiInsights} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} agencySettings={agencySettings} dateFilterMode={dateFilterMode} setDateFilterMode={setDateFilterMode} />}
+        {activeTab === 'life' && canViewLifeModule && !isBookkeeper && lifeOverviewData && <LifeTab lifeOverviewData={lifeOverviewData} team={team} updatePolicyStatus={updatePolicyStatus} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} />}
         
-        {activeTab === 'settings' && canManageSettings && (
+        {activeTab === 'settings' && canManageSettings && !isBookkeeper && (
           <SettingsTab 
             profile={profile} team={team} setTeam={setTeam} offices={offices} compPlans={compPlans} 
             handleAddLocation={handleAddLocation} handleUpdateLocation={handleUpdateLocation} handleDeleteLocation={handleDeleteLocation} 
@@ -3310,7 +3314,7 @@ export default function Home() {
             handleCsvUpload={handleCsvUpload}
           />
         )}
-        {activeTab === 'feedback' && <FeedbackTab profile={profile} showToast={showToast} />}
+        {activeTab === 'feedback' && !isBookkeeper && <FeedbackTab profile={profile} showToast={showToast} />}
         {activeTab === 'profile' && profile && (
           <MyProfileTab
             profile={profile}

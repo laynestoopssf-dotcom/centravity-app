@@ -4,8 +4,14 @@
 // `profiles.role` is a free-text column (no DB-level enum backs it), holding
 // 'owner' (the agency creator, exactly one per agency — see
 // app/actions/onboarding.ts's saveStep1Foundation), 'manager', 'producer',
-// 'service', or 'admin' (all four selectable when inviting a team member —
-// see TeamMemberRole/ROLE_ID_MAP in app/actions/onboarding.ts).
+// 'service', 'admin', or 'bookkeeper' (all selectable when inviting a team
+// member — see TeamInviteRole/VALID_ROLES in app/actions/teamInvites.ts and
+// the invite dropdown in components/SettingsTab.tsx). 'bookkeeper' is a
+// highly-restricted, payroll-only role — unlike every other role here, its
+// nav access isn't composed from the isOwnerLevelRole/isManagerLevelRole
+// tiers below at all; it's hardcoded to just the Commission tab (+ My
+// Profile for its own password) in components/dashboard/DashboardSidebar.tsx
+// and app/dashboard/layout.tsx.
 //
 // An agency can also override any non-owner role's permissions via
 // agencies.custom_roles (a per-agency JSON column — see the role management

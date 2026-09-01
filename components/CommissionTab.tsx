@@ -118,9 +118,13 @@ export default function CommissionTab({
   // --- DYNAMIC RBAC CHECK ---
   // Find the active user's role settings in the JSON array. Fallback to false if not found.
   const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
-  const canViewTeamComm = userRoleConfig 
-    ? userRoleConfig.permissions?.view_team_comm 
-    : isManagerLevelRole(profile?.role); // Fallback just in case
+  // Bookkeeper needs the Agency Payroll view (that's this role's entire purpose) even
+  // though it isn't a manager-level role - mirrors the same OR in app/dashboard/page.tsx
+  // and app/dashboard/layout.tsx; keep all three in sync.
+  const isBookkeeper = profile?.role === 'bookkeeper';
+  const canViewTeamComm = userRoleConfig
+    ? userRoleConfig.permissions?.view_team_comm
+    : (isManagerLevelRole(profile?.role) || isBookkeeper); // Fallback just in case
 
   const baseSalary = Number(activeProfile?.monthly_base_salary || 0);
   const earnedCash = commissionData.issuedComm + commissionData.bonusTotal;
@@ -233,7 +237,9 @@ export default function CommissionTab({
               {team.filter((m:any) => m.id !== profile.id).map((m: any) => (
                 <option key={m.id} value={m.id}>👤 {m.first_name} {m.last_name}</option>
               ))}
-              <option value={profile.id}>👤 My Personal Commission</option>
+              {/* Bookkeeper has no comp plan of their own (payroll-only role) - only the
+                  agency-wide payroll view is meaningful for them. */}
+              {!isBookkeeper && <option value={profile.id}>👤 My Personal Commission</option>}
             </select>
           )}
           <div className="flex items-center gap-2 px-2 border-l border-gray-200">

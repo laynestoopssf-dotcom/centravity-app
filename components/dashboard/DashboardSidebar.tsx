@@ -35,6 +35,13 @@ export interface DashboardSidebarPermissions {
   // components/AgentDashboardTab.tsx for why the Agent Dashboard is the one
   // deliberate exception, same as Stripe billing.
   isOwner: boolean;
+  // Strictly `role === 'bookkeeper'` — a highly-restricted, payroll-only role
+  // (see utils/roles.ts's header comment). Unlike every other flag above,
+  // this collapses the ENTIRE nav down to just Commissions + My Profile (kept
+  // for their own password) instead of composing from the individual
+  // canView* flags, so it's checked directly below rather than via a
+  // permission default.
+  isBookkeeper: boolean;
 }
 
 interface NavItem {
@@ -86,6 +93,7 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
     canViewLifeModule,
     canViewReports,
     isOwner,
+    isBookkeeper,
   } = permissions;
 
   const primaryItems: NavItem[] = [
@@ -93,7 +101,9 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
       tab: "dashboard",
       label: canViewAgencyDash ? "Team Scoreboard" : "My Scoreboard",
       icon: BarChart3,
-      show: true,
+      // Bookkeeper is the one role whose nav isn't composed from canView*
+      // flags at all - see DashboardSidebarPermissions.isBookkeeper.
+      show: !isBookkeeper,
     },
     {
       tab: "commission",
@@ -112,18 +122,19 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
       tab: "performance",
       label: canViewAgencyDash ? "Team Performance" : "My Performance",
       icon: Award,
-      show: true,
+      show: !isBookkeeper,
     },
-    { tab: "weekly", label: "Weekly Rank", icon: CalendarDays, show: canViewWeeklyRank },
-    { tab: "agency", label: "Agency MTD", icon: Briefcase, show: canViewAgencyMtd },
-    { tab: "life", label: "Life Module", icon: HeartPulse, show: canViewLifeModule },
-    { tab: "ledger", label: "Data Ledger", icon: BookOpen, show: true },
-    { tab: "reports", label: "Reports", icon: FileBarChart, show: canViewReports },
+    { tab: "weekly", label: "Weekly Rank", icon: CalendarDays, show: canViewWeeklyRank && !isBookkeeper },
+    { tab: "agency", label: "Agency MTD", icon: Briefcase, show: canViewAgencyMtd && !isBookkeeper },
+    { tab: "life", label: "Life Module", icon: HeartPulse, show: canViewLifeModule && !isBookkeeper },
+    { tab: "ledger", label: "Data Ledger", icon: BookOpen, show: !isBookkeeper },
+    { tab: "reports", label: "Reports", icon: FileBarChart, show: canViewReports && !isBookkeeper },
     // Ungated like Data Ledger - every role gets in, not just managers: Deal
     // Autopsies and the Sparring Ring (see components/CoachingTab.tsx) are
     // producer-facing self-serve tools, only the 1-on-1 Snapshot half of the
-    // tab is manager-only, gated INSIDE the component itself.
-    { tab: "coaching", label: "Coaching", icon: GraduationCap, show: true },
+    // tab is manager-only, gated INSIDE the component itself. Bookkeeper is
+    // still excluded - it isn't a sales/coaching role.
+    { tab: "coaching", label: "Coaching", icon: GraduationCap, show: !isBookkeeper },
   ];
 
   const renderButton = (item: NavItem) => {
@@ -218,14 +229,18 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
         >
           <UserCircle size={18} /> My Profile
         </button>
-        <button
-          onClick={() => goToTab("feedback")}
-          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
-            isOnTabbedShell && activeTab === "feedback" ? "bg-purple-500/15 text-purple-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
-          }`}
-        >
-          <MessageSquare size={18} /> Community Board
-        </button>
+        {/* Bookkeeper keeps only Commissions + My Profile (for their own
+            password) - see DashboardSidebarPermissions.isBookkeeper. */}
+        {!isBookkeeper && (
+          <button
+            onClick={() => goToTab("feedback")}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+              isOnTabbedShell && activeTab === "feedback" ? "bg-purple-500/15 text-purple-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+            }`}
+          >
+            <MessageSquare size={18} /> Community Board
+          </button>
+        )}
         {/* A real Next.js <Link> (client-side nav, no new tab/window), not a
             setActiveTab call - Help & FAQ is its own route (/dashboard/help),
             not one of app/dashboard/page.tsx's SPA tabs. Still highlighted
@@ -233,14 +248,16 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
             still keeps this whole sidebar mounted around it - see
             app/dashboard/layout.tsx's `isShellRoute` for why that's true here
             but not for e.g. Executive Cockpit below. */}
-        <Link
-          href="/dashboard/help"
-          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
-            pathname === "/dashboard/help" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
-          }`}
-        >
-          <LifeBuoy size={18} /> Help &amp; FAQ
-        </Link>
+        {!isBookkeeper && (
+          <Link
+            href="/dashboard/help"
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+              pathname === "/dashboard/help" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+            }`}
+          >
+            <LifeBuoy size={18} /> Help &amp; FAQ
+          </Link>
+        )}
         {/* Pinned dead-last, below even Community Board/Help & FAQ — an
             occasional-use destination, not a daily-driver tab. Team roster
             management lives inside it (Team Management section) rather than
