@@ -89,23 +89,32 @@ function countBusinessDaysInRange(start: Date, end: Date, productionDaysPerWeek:
 
 export async function GET(request: NextRequest) {
   try {
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) {
-      console.error("[cron/simulate-demo] CRON_SECRET is not configured");
-      return NextResponse.json({ error: "Server is misconfigured." }, { status: 500 });
+    // Checked together, up front, before the auth comparison below - none of these three depend
+    // on who's calling, so there's no reason to make a caller guess "which one" by trying
+    // requests: a misconfigured deployment tells you exactly which Vercel env var(s) it's missing
+    // in both the server log AND the response body (names only, never values - safe to return,
+    // and this is exactly what silently stalled the daily demo-data cron for ~4 days straight
+    // undetected until someone finally hit this route by hand and read the response).
+    const missingEnvVars: string[] = [];
+    if (!process.env.CRON_SECRET) missingEnvVars.push("CRON_SECRET");
+    if (!process.env.DEMO_AGENCY_ID) missingEnvVars.push("DEMO_AGENCY_ID");
+    if (!process.env.DEMO_OFFICE_ID) missingEnvVars.push("DEMO_OFFICE_ID");
+    if (missingEnvVars.length > 0) {
+      console.error(`[cron/simulate-demo] missing required env var(s) on this deployment: ${missingEnvVars.join(", ")} — refusing to run.`);
+      return NextResponse.json(
+        { error: "Server is misconfigured.", missingEnvVars },
+        { status: 500 }
+      );
     }
 
+    const cronSecret = process.env.CRON_SECRET as string;
     const authHeader = request.headers.get("authorization");
     if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
-    const demoAgencyId = process.env.DEMO_AGENCY_ID;
-    const demoOfficeId = process.env.DEMO_OFFICE_ID;
-    if (!demoAgencyId || !demoOfficeId) {
-      console.error("[cron/simulate-demo] DEMO_AGENCY_ID / DEMO_OFFICE_ID not configured — refusing to run.");
-      return NextResponse.json({ error: "Demo agency not configured." }, { status: 500 });
-    }
+    const demoAgencyId = process.env.DEMO_AGENCY_ID as string;
+    const demoOfficeId = process.env.DEMO_OFFICE_ID as string;
 
     const now = new Date();
     const dayStart = new Date(now);
