@@ -10,6 +10,7 @@ import { getCachedIdentifier, cacheIdentifier } from '../utils/identifierCache';
 import IdentifierChip from './ui/IdentifierChip';
 import FormattedNumberInput from './ui/FormattedNumberInput';
 import ProfileAvatar from './ui/ProfileAvatar';
+import DashboardSetupWidget from './DashboardSetupWidget';
 
 /** Sort-key helper only now - actual on-screen rendering goes through <IdentifierChip> instead, which keeps the plaintext out of the DOM by default (see components/ui/IdentifierChip.tsx). */
 const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
@@ -652,6 +653,14 @@ export default function DashboardTab({
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-12">
+      {/* PROGRESSIVE SETUP — dismissible checklist for the 3 things onboarding
+          intentionally leaves for later (agency timezone, per-producer daily
+          targets, comp plans). Sits at the very top, above everything else on
+          the Scoreboard including the revenue/activity chart further down.
+          Self-gates to owner/manager-level roles and to profiles.hide_setup_widget
+          inside the component itself. */}
+      <DashboardSetupWidget profile={profile} agencySettings={agencySettings} offices={offices} team={team} />
+
       {/* LOCATION FILTER — pinned above everything else on the Scoreboard so a
           multi-location owner's very first decision is "which office am I
           looking at". Defaults to All Locations (combined agency-wide), same
