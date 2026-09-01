@@ -395,6 +395,34 @@ export default function SettingsTab({
   const updateCustomBonus = (index: number, field: string, value: any) => { const updated = [...(editingPlan.rules.custom_bonuses || [])]; updated[index] = { ...updated[index], [field]: value }; setEditingPlan((prev: any) => ({ ...prev, rules: { ...prev.rules, custom_bonuses: updated } })); };
   const removeCustomBonus = (index: number) => { const updated = [...(editingPlan.rules.custom_bonuses || [])]; updated.splice(index, 1); setEditingPlan((prev: any) => ({ ...prev, rules: { ...prev.rules, custom_bonuses: updated } })); };
   const updateTeamMember = (id: string, field: string, value: any) => { setTeam((prev: any[]) => prev.map(m => m.id === id ? { ...m, [field]: value } : m)); };
+
+  // Daily-goal inputs (Team Management edit panel) auto-populate their Weekly (x5) and, for
+  // Apps only, Monthly (x20) counterparts on every keystroke — a "Daily: 4" entry instantly
+  // suggests "Weekly: 20" / "Monthly: 80" instead of an owner hand-computing them. Weekly and
+  // Monthly stay on their own plain updateTeamMember onChange handlers below, so typing into
+  // either afterward freely overrides the suggestion — this only ever writes a fresh guess
+  // when the Daily field itself changes. Touches/Quotes have no monthly_target_* column (see
+  // the Life/Annual note further down this file), so only the Apps (bound) field cascades to
+  // monthly.
+  const DAILY_TO_WEEKLY_MULTIPLIER = 5;
+  const DAILY_TO_MONTHLY_MULTIPLIER = 20;
+  const updateDailyTargetWithCascade = (
+    id: string,
+    field: 'daily_target_touchpoints' | 'daily_target_quotes' | 'daily_target_bound',
+    value: number
+  ) => {
+    setTeam((prev: any[]) => prev.map(m => {
+      if (m.id !== id) return m;
+      const next = { ...m, [field]: value };
+      if (field === 'daily_target_touchpoints') next.weekly_target_touchpoints = value * DAILY_TO_WEEKLY_MULTIPLIER;
+      if (field === 'daily_target_quotes') next.weekly_target_quotes = value * DAILY_TO_WEEKLY_MULTIPLIER;
+      if (field === 'daily_target_bound') {
+        next.weekly_target_bound = value * DAILY_TO_WEEKLY_MULTIPLIER;
+        next.monthly_target_bound = value * DAILY_TO_MONTHLY_MULTIPLIER;
+      }
+      return next;
+    }));
+  };
   
   const updateBulkData = (line: string, field: string, value: string) => {
     setBulkData((prev: any) => ({ ...prev, [line]: { ...(prev[line] || { quotes: "", bound: "", issued: "", prem: "" }), [field]: value } }));
@@ -1788,9 +1816,10 @@ export default function SettingsTab({
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Daily Goals</h4>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Touches</label><input type="number" value={member.daily_target_touchpoints ?? 0} onChange={e => updateTeamMember(member.id, 'daily_target_touchpoints', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Complex Res.' : 'Quotes'}</label><input type="number" value={member.daily_target_quotes ?? 0} onChange={e => updateTeamMember(member.id, 'daily_target_quotes', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Cross-Sells' : 'Apps'}</label><input type="number" value={member.daily_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'daily_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Touches</label><input type="number" value={member.daily_target_touchpoints ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_touchpoints', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Complex Res.' : 'Quotes'}</label><input type="number" value={member.daily_target_quotes ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_quotes', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Cross-Sells' : 'Apps'}</label><input type="number" value={member.daily_target_bound ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <p className="text-[10px] text-gray-400 leading-snug pt-1">Weekly (×5) and, for Apps, Monthly (×20) auto-fill from these as you type — still freely editable for a custom stretch goal.</p>
                 </div>
                 
                 <div className="space-y-4">
