@@ -773,7 +773,7 @@ export default function DashboardTab({
           way DashboardMetrics is (isManagerLevelRole), since retention_events RLS only grants
           agency-wide SELECT to owner/admin/manager roles anyway (see the migration). */}
       {isManagerLevelRole(profile?.role) && (
-        <RetentionMetricsTile agencyId={profile?.agency_id} officeId={activeOfficeVal} />
+        <RetentionMetricsTile agencyId={profile?.agency_id} officeId={activeOfficeVal} team={team} />
       )}
 
       {/* PREMIUM RESCUED LOGGER (Service & Retention) — deliberately keyed off the actual signed-in

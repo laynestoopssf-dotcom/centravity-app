@@ -5,11 +5,14 @@
 // (profiles.role === 'service' — see utils/roles.ts's header comment; the
 // "Service & Retention" label the invite/role UI shows is purely a display
 // string, never the stored value). Meant to be the FOCAL POINT of a service
-// rep's Scoreboard: one product-line dropdown, one dollar input, two big
-// outcome buttons. Writes directly to `retention_events`
-// (supabase/migrations/20260901020000_add_retention_events.sql) - a
-// net-new table, independent of the existing complex_res/cross_sell
-// activity types and the ytd_lapse_cancel_* baseline rate columns.
+// rep's Scoreboard: a fixed product-line checkbox group (a single save/cancel
+// call often covers a bundled household, e.g. Auto + Home/Renters together),
+// one dollar input, two big outcome buttons, and the rep's own MTD stats.
+// Writes directly to `retention_events`
+// (supabase/migrations/20260901020000_add_retention_events.sql +
+// 20260901030000_retention_events_multi_product_lines.sql) - a net-new
+// table, independent of the existing complex_res/cross_sell activity types
+// and the ytd_lapse_cancel_* baseline rate columns.
 //
 // Deliberately keyed off `profile.role` (the actual signed-in user), not
 // whichever producer a manager might be viewing via selectedProducer -
@@ -17,18 +20,15 @@
 // convention as DashboardTab's handleLaunchLogger.
 // =============================================================================
 
-import { useState } from "react";
-import { CheckCircle2, ShieldAlert, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, LifeBuoy, Percent, ShieldAlert, XCircle } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import FormattedNumberInput from "./ui/FormattedNumberInput";
 
-const DEFAULT_LINES = [
-  { name: "Auto", parent: "Auto" },
-  { name: "Fire", parent: "Fire" },
-  { name: "Commercial", parent: "Commercial" },
-  { name: "Life", parent: "Life" },
-  { name: "Health", parent: "Health" },
-];
+// Fixed checkbox options — deliberately NOT sourced from agencySettings.custom_product_lines,
+// per the household-bundle use case this widget is for (a save/cancel call often covers more
+// than one policy at once, e.g. Auto + Home/Renters together).
+const RETENTION_LINES = ["Auto", "Home/Renters", "Life", "Health", "Commercial"];
 
 type Outcome = "saved" | "cancelled";
 
@@ -37,19 +37,44 @@ interface RetentionLoggingWidgetProps {
   agencySettings: any;
 }
 
-export default function RetentionLoggingWidget({ profile, agencySettings }: RetentionLoggingWidgetProps) {
-  const availableLines: { name: string; parent: string }[] = agencySettings?.custom_product_lines?.length
-    ? agencySettings.custom_product_lines
-    : DEFAULT_LINES;
-  // De-dupe by name (a custom line set can list the same product name under multiple
-  // sub-categories for other flows - this widget only needs a single flat picker).
-  const lineOptions = Array.from(new Set(availableLines.map(l => l.name)));
+const formatCurrency = (value: number): string => `$${Math.round(value || 0).toLocaleString()}`;
 
-  const [productLine, setProductLine] = useState(lineOptions[0] || "Auto");
+export default function RetentionLoggingWidget({ profile, agencySettings }: RetentionLoggingWidgetProps) {
+  const [selectedLines, setSelectedLines] = useState<string[]>([]);
   const [premiumAtRisk, setPremiumAtRisk] = useState<number | "">("");
   const [submitting, setSubmitting] = useState<Outcome | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [lastLogged, setLastLogged] = useState<{ outcome: Outcome; productLine: string; premium: number } | null>(null);
+  const [lastLogged, setLastLogged] = useState<{ outcome: Outcome; lines: string[]; premium: number } | null>(null);
+
+  const [personalEvents, setPersonalEvents] = useState<{ premium_at_risk: number; outcome: string }[] | null>(null);
+
+  const fetchPersonalStats = useCallback(async () => {
+    if (!profile?.id) return;
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const { data, error: fetchErr } = await supabase.from("retention_events")
+      .select("premium_at_risk, outcome")
+      .eq("team_member_id", profile.id)
+      .gte("created_at", startOfMonth);
+    if (fetchErr) {
+      console.error("[RetentionLoggingWidget] personal stats fetch failed", fetchErr);
+      return;
+    }
+    setPersonalEvents(data || []);
+  }, [profile?.id]);
+
+  useEffect(() => { fetchPersonalStats(); }, [fetchPersonalStats]);
+
+  const { personalRescued, personalSaveRatePct, personalLoggedCount } = useMemo(() => {
+    const rows = personalEvents || [];
+    const saved = rows.filter(r => r.outcome === "saved");
+    const rescued = saved.reduce((sum, r) => sum + (Number(r.premium_at_risk) || 0), 0);
+    const rate = rows.length > 0 ? (saved.length / rows.length) * 100 : 0;
+    return { personalRescued: rescued, personalSaveRatePct: rate, personalLoggedCount: rows.length };
+  }, [personalEvents]);
+
+  const toggleLine = (line: string) => {
+    setSelectedLines((prev) => prev.includes(line) ? prev.filter(l => l !== line) : [...prev, line]);
+  };
 
   const logOutcome = async (outcome: Outcome) => {
     setError(null);
@@ -57,8 +82,12 @@ export default function RetentionLoggingWidget({ profile, agencySettings }: Rete
       setError("Missing profile info — try refreshing the page.");
       return;
     }
+    if (selectedLines.length === 0) {
+      setError("Select at least one product line before logging an outcome.");
+      return;
+    }
     if (premiumAtRisk === "" || Number(premiumAtRisk) <= 0) {
-      setError("Enter the premium at risk before logging an outcome.");
+      setError("Enter the household premium at risk before logging an outcome.");
       return;
     }
 
@@ -68,14 +97,16 @@ export default function RetentionLoggingWidget({ profile, agencySettings }: Rete
         agency_id: profile.agency_id,
         office_id: profile.office_id || null,
         team_member_id: profile.id,
-        product_line: productLine,
+        product_lines: selectedLines,
         premium_at_risk: Number(premiumAtRisk),
         outcome,
       }]);
       if (insertErr) throw insertErr;
 
-      setLastLogged({ outcome, productLine, premium: Number(premiumAtRisk) });
+      setLastLogged({ outcome, lines: selectedLines, premium: Number(premiumAtRisk) });
       setPremiumAtRisk("");
+      setSelectedLines([]);
+      fetchPersonalStats();
     } catch (err: any) {
       console.error("[RetentionLoggingWidget] log failed", err);
       setError(err?.message || "Failed to log this event — try again.");
@@ -92,28 +123,59 @@ export default function RetentionLoggingWidget({ profile, agencySettings }: Rete
         </div>
         <h2 className="text-xl font-bold text-gray-900">Premium Rescued</h2>
       </div>
-      <p className="text-sm text-gray-500 mb-5">Log every save/loss decision the moment a customer threatens to cancel.</p>
+      <p className="text-sm text-gray-500 mb-4">Log every save/loss decision the moment a customer threatens to cancel.</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-        <div>
-          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Product Line</label>
-          <select
-            value={productLine}
-            onChange={(e) => setProductLine(e.target.value)}
-            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm cursor-pointer"
-          >
-            {lineOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
+      {/* Personal MTD stats — the rep's own numbers, distinct from the agency-wide
+          Retention Leaderboard the Owner/Manager sees on RetentionMetricsTile. */}
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="flex items-center gap-2.5 bg-indigo-50/60 border border-indigo-100 rounded-xl px-4 py-2.5">
+          <LifeBuoy size={16} className="text-indigo-600 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">My Premium Rescued (MTD)</p>
+            <p className="text-base font-black text-gray-900 truncate">{personalEvents === null ? "…" : formatCurrency(personalRescued)}</p>
+          </div>
         </div>
-        <div>
-          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Premium at Risk</label>
-          <FormattedNumberInput
-            value={premiumAtRisk}
-            onChange={setPremiumAtRisk}
-            placeholder="$0"
-            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
-          />
+        <div className="flex items-center gap-2.5 bg-emerald-50/60 border border-emerald-100 rounded-xl px-4 py-2.5">
+          <Percent size={16} className="text-emerald-600 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">My Save Rate (MTD)</p>
+            <p className="text-base font-black text-gray-900 truncate">{personalEvents === null ? "…" : personalLoggedCount > 0 ? `${Math.round(personalSaveRatePct)}%` : "—"}</p>
+          </div>
         </div>
+      </div>
+
+      <div className="mb-5">
+        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Product Line(s) — select all that apply</label>
+        <div className="flex flex-wrap gap-2">
+          {RETENTION_LINES.map((line) => {
+            const active = selectedLines.includes(line);
+            return (
+              <button
+                key={line}
+                type="button"
+                onClick={() => toggleLine(line)}
+                aria-pressed={active}
+                className={`px-3.5 py-2 rounded-xl border text-sm font-bold transition-colors ${
+                  active
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                    : "bg-gray-50 border-gray-200 text-gray-600 hover:border-indigo-300"
+                }`}
+              >
+                {line}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mb-5">
+        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Household Premium at Risk</label>
+        <FormattedNumberInput
+          value={premiumAtRisk}
+          onChange={setPremiumAtRisk}
+          placeholder="$0"
+          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+        />
       </div>
 
       {error && <p className="text-xs font-bold text-red-600 mb-4">{error}</p>}
@@ -139,7 +201,7 @@ export default function RetentionLoggingWidget({ profile, agencySettings }: Rete
 
       {lastLogged && (
         <p className={`mt-4 text-xs font-bold text-center ${lastLogged.outcome === "saved" ? "text-emerald-600" : "text-red-600"}`}>
-          Logged: {lastLogged.outcome === "saved" ? "Saved" : "Cancelled"} — {lastLogged.productLine} (${lastLogged.premium.toLocaleString()})
+          Logged: {lastLogged.outcome === "saved" ? "Saved" : "Cancelled"} — {lastLogged.lines.join(" + ")} ({formatCurrency(lastLogged.premium)})
         </p>
       )}
     </div>
