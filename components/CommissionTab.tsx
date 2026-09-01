@@ -1,14 +1,59 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, TrendingUp, Users, ArrowRightCircle, Sparkles, Target, ClipboardList, X, Gift } from 'lucide-react';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole, isOwnerLevelRole } from '../utils/roles';
-import { getCachedIdentifier } from '../utils/identifierCache';
+import { encryptIdentifierForAgency, decryptIdentifier } from '../utils/e2ee';
 import IdentifierChip from './ui/IdentifierChip';
 import ProfileAvatar from './ui/ProfileAvatar';
 import { formatDollars } from '../utils/formatNumber';
 
-/** Local-cache label if this browser typed it, else a neutral placeholder - the DB never has a readable name to fall back to (see utils/identifierCache.ts). */
-const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
+// manual_bonuses.client_description is a single `text` column (see
+// 20260901040000_manual_bonuses_freeform_description.sql), but AES-GCM needs both the
+// ciphertext AND its one-time IV to decrypt - these two helpers pack/unpack that pair into one
+// JSON string so the column stays a plain text field while still round-tripping through the
+// exact same utils/e2ee.ts encrypt/decrypt calls the quote/bind pipeline uses on policies.
+function packEncryptedDescription(payload: { ciphertext: string | null; iv: string | null }): string | null {
+  if (!payload.ciphertext || !payload.iv) return null;
+  return JSON.stringify({ c: payload.ciphertext, iv: payload.iv });
+}
+
+function unpackEncryptedDescription(raw: string | null | undefined): { ciphertext: string; iv: string } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.c && parsed?.iv) return { ciphertext: parsed.c, iv: parsed.iv };
+  } catch {
+    // Pre-encryption rows (logged before this change) hold plain text, not JSON - handled by
+    // ClaimedBonusDescription falling back to rendering `raw` as-is when this returns null.
+  }
+  return null;
+}
+
+/** Renders a claimed spiff's reference/description, decrypting client-side with the agency's
+ * shared E2EE key (utils/e2ee.ts) - same mechanism as IdentifierChip, minus the click-to-reveal
+ * step, since this isn't a searchable/hashed identifier and any authorized agency member's
+ * browser can already fetch the same key. */
+function ClaimedBonusDescription({ raw, agencyId }: { raw: string | null | undefined; agencyId: string | null | undefined }) {
+  const [plaintext, setPlaintext] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unpacked = unpackEncryptedDescription(raw);
+    if (!unpacked) {
+      // Not an encrypted payload - either empty, or a legacy plaintext row from before this
+      // change. Show it as-is rather than a confusing blank.
+      setPlaintext(raw || null);
+      return;
+    }
+    let cancelled = false;
+    decryptIdentifier(unpacked.ciphertext, unpacked.iv, agencyId).then((result) => {
+      if (!cancelled) setPlaintext(result);
+    });
+    return () => { cancelled = true; };
+  }, [raw, agencyId]);
+
+  if (!plaintext) return null;
+  return <span className="text-gray-400 font-medium"> — {plaintext}</span>;
+}
 
 export default function CommissionTab({ 
   profile, stats, commissionData, manualBonuses, 
@@ -21,32 +66,49 @@ export default function CommissionTab({
   const [newBonusName, setNewBonusName] = useState("");
   const [newBonusAmount, setNewBonusAmount] = useState("");
 
-  // Spiff/bonus claims (Google Review, Personal Referral, Referral, etc.) require verifying which
-  // customer earned the reward before the payout is awarded, instead of firing instantly on click.
-  // The claim links directly to that customer's policy row (a real FK, policy_id) rather than
-  // asking the producer to type the name in again - there is zero free-text PII entry point here,
-  // by design. See 20260805020000_add_manual_bonuses_policy_id.sql for why.
+  // Spiff/bonus claims (Google Review, Personal Referral, Referral, etc.) require noting which
+  // customer/win earned the reward before the payout is awarded, instead of firing instantly on
+  // click. This used to link to that customer's policy row (a real FK, policy_id) instead of
+  // letting the producer type a name - see 20260805020000_add_manual_bonuses_policy_id.sql for
+  // why - but now takes a freeform reference/description instead so a claim isn't blocked on
+  // there being a matching bound/issued policy for the producer/month. That text is encrypted
+  // client-side with the agency's shared E2EE key before it ever reaches Supabase - the exact
+  // same utils/e2ee.ts mechanism the quote/bind pipeline uses for policy identifiers - so
+  // client_description (20260901040000_manual_bonuses_freeform_description.sql) only ever holds
+  // ciphertext, never plaintext.
   const [pendingBonus, setPendingBonus] = useState<{ name: string; amount: number } | null>(null);
-  const [bonusPolicyId, setBonusPolicyId] = useState("");
+  const [bonusDescription, setBonusDescription] = useState("");
   const [isSubmittingBonus, setIsSubmittingBonus] = useState(false);
+  const [bonusError, setBonusError] = useState<string | null>(null);
 
   const openBonusModal = (bonus: { name: string; amount: number }) => {
     setPendingBonus(bonus);
-    setBonusPolicyId("");
+    setBonusDescription("");
+    setBonusError(null);
   };
 
   const closeBonusModal = () => {
     setPendingBonus(null);
-    setBonusPolicyId("");
+    setBonusDescription("");
     setIsSubmittingBonus(false);
+    setBonusError(null);
   };
 
   const submitBonusClaim = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pendingBonus || !bonusPolicyId) return;
+    if (!pendingBonus || !bonusDescription.trim()) return;
 
+    setBonusError(null);
     setIsSubmittingBonus(true);
-    await addManualBonus(pendingBonus.name, pendingBonus.amount, bonusPolicyId);
+    const encrypted = await encryptIdentifierForAgency(bonusDescription.trim(), profile?.agency_id);
+    const packed = packEncryptedDescription(encrypted);
+    if (!packed) {
+      setIsSubmittingBonus(false);
+      setBonusError("Couldn't encrypt this note - check your connection and try again.");
+      return;
+    }
+
+    await addManualBonus(pendingBonus.name, pendingBonus.amount, packed);
     closeBonusModal();
   };
 
@@ -451,7 +513,7 @@ export default function CommissionTab({
                             <div>
                               <p className="font-bold text-gray-800 text-xs">
                                 {bonus.bonus_name}
-                                {bonus.policy_id && <span className="text-gray-400 font-medium"> — <IdentifierChip policyId={bonus.policy_id} /></span>}
+                                <ClaimedBonusDescription raw={bonus.client_description} agencyId={profile?.agency_id} />
                               </p>
                               <p className="text-[10px] text-gray-400">{new Date(bonus.logged_at).toLocaleDateString()}</p>
                             </div>
@@ -599,27 +661,24 @@ export default function CommissionTab({
               <button type="button" onClick={closeBonusModal} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
-            <p className="text-sm text-gray-500 mb-4">Which customer earned this? Linking the claim to their policy keeps the spiff log auditable without ever writing their name down.</p>
-
             <form onSubmit={submitBonusClaim} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Linked Policy</label>
-                <select required autoFocus value={bonusPolicyId} onChange={e => setBonusPolicyId(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-600">
-                  <option value="" disabled>Select the customer&apos;s policy...</option>
-                  {userPolicies.map((pol: any) => (
-                    <option key={pol.id} value={pol.id}>
-                      {displayIdentifier(pol.id, pol.client_identifier_hash)} — {pol.product_line} — ${Number(pol.premium_amount).toLocaleString()} — {new Date(pol.logged_at).toLocaleDateString()}
-                    </option>
-                  ))}
-                </select>
-                {userPolicies.length === 0 && (
-                  <p className="text-xs text-amber-600 font-medium mt-1.5">No bound/issued policies this month for this producer. Switch the month above to find the customer&apos;s policy first.</p>
-                )}
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Reference / Description</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={bonusDescription}
+                  onChange={e => setBonusDescription(e.target.value)}
+                  placeholder="e.g., Auto Cross-sell or Client Initials"
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-600"
+                />
+                {bonusError && <p className="text-xs font-bold text-red-600 mt-1.5">{bonusError}</p>}
               </div>
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={closeBonusModal} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
-                <button type="submit" disabled={isSubmittingBonus || !bonusPolicyId} className="flex-1 py-3 px-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={isSubmittingBonus || !bonusDescription.trim()} className="flex-1 py-3 px-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   {isSubmittingBonus ? 'Awarding...' : `Confirm & Award ${formatDollars(pendingBonus.amount)}`}
                 </button>
               </div>

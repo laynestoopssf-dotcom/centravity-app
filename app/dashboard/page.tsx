@@ -760,19 +760,21 @@ export default function Home() {
     setChartData(newChartData);
   };
 
-  const addManualBonus = async (name: string, amount: number, policyId?: string | null) => {
+  const addManualBonus = async (name: string, amount: number, clientDescription?: string | null) => {
     if (!profile) return;
     const targetUserId = selectedProducer === 'all' ? profile.id : selectedProducer;
-    // Spiffs like Google Review / Personal Referral / Referral bonuses are verified against a
-    // customer before payout - that's now a real FK to the customer's policy row (policy_id),
-    // never a name typed into bonus_name. See 20260805020000_add_manual_bonuses_policy_id.sql.
+    // Spiffs like Google Review / Personal Referral / Referral bonuses take a freeform reference
+    // note rather than requiring an exact linked policy - see
+    // 20260901040000_manual_bonuses_freeform_description.sql for why that FK was dropped.
+    // clientDescription arrives here ALREADY client-side E2EE-encrypted by CommissionTab.tsx
+    // (utils/e2ee.ts, same mechanism as policy identifiers) - this function never sees plaintext.
 
     try {
       const { data, error } = await supabase.from('manual_bonuses').insert([{
         agency_id: profile.agency_id,
         user_id: targetUserId,
         bonus_name: name,
-        policy_id: policyId || null,
+        client_description: clientDescription || null,
         amount: amount
       }]).select().single();
       
