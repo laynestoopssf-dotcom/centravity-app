@@ -71,11 +71,15 @@ const ANNUAL_GOALS: AnnualGoals = {
   Health: { apps: 30, premium: 25_000 },
 };
 
+// Kept in sync with app/api/cron/simulate-demo/route.ts's own PRODUCER_NAME_WEIGHTS -
+// see that file's comment for why these 3 were renamed from the original Casey
+// Rivera/Taylor Brooks/Sam Whitfield placeholders (the manager, Jordan Price, was left
+// as-is).
 const PRODUCER_NAME_WEIGHTS: { firstName: string; lastName: string; weight: number; closeRate: number; quoteRate: number }[] = [
   { firstName: "Jordan", lastName: "Price", weight: 0.2, closeRate: 0.22, quoteRate: 0.32 },
-  { firstName: "Casey", lastName: "Rivera", weight: 0.3, closeRate: 0.26, quoteRate: 0.34 },
-  { firstName: "Taylor", lastName: "Brooks", weight: 0.28, closeRate: 0.23, quoteRate: 0.3 },
-  { firstName: "Sam", lastName: "Whitfield", weight: 0.22, closeRate: 0.2, quoteRate: 0.28 },
+  { firstName: "Graysen", lastName: "Denlinger", weight: 0.3, closeRate: 0.26, quoteRate: 0.34 },
+  { firstName: "Alex", lastName: "Baklamov", weight: 0.28, closeRate: 0.23, quoteRate: 0.3 },
+  { firstName: "Stormy", lastName: "Monroe", weight: 0.22, closeRate: 0.2, quoteRate: 0.28 },
 ];
 
 const PRODUCTION_DAYS_PER_WEEK = 5;

@@ -89,12 +89,20 @@ interface RosterMember {
 // never resolve/deliver — so the existing hourly eod_brief Edge Function
 // (which emails every agency owner by real address) always fails closed for
 // this owner instead of ever reaching a real inbox. Zero changes needed there.
+// NOTE: display names below (Graysen/Alex/Stormy) were renamed from the original
+// Casey Rivera/Taylor Brooks/Sam Whitfield placeholders to match specific real
+// producer names for sales-pitch authenticity - see the matching rename in
+// app/api/cron/simulate-demo/route.ts and scripts/backfill_demo_gap_days.ts.
+// Login emails were deliberately left as the original casey.rivera/taylor.brooks/
+// sam.whitfield addresses (this script only ever runs once, at initial creation -
+// the live accounts already exist under those emails; renaming them here too would
+// just create a mismatch against the real seeded accounts' logins for no benefit).
 const ROSTER: RosterMember[] = [
   { firstName: "Morgan", lastName: "Ellis", email: "morgan.ellis@centravitydemo.invalid", role: "owner" },
   { firstName: "Jordan", lastName: "Price", email: "jordan.price@centravitydemo.invalid", role: "manager", weight: 0.2, closeRate: 0.22, quoteRate: 0.32 },
-  { firstName: "Casey", lastName: "Rivera", email: "casey.rivera@centravitydemo.invalid", role: "producer", weight: 0.3, closeRate: 0.26, quoteRate: 0.34 },
-  { firstName: "Taylor", lastName: "Brooks", email: "taylor.brooks@centravitydemo.invalid", role: "producer", weight: 0.28, closeRate: 0.23, quoteRate: 0.3 },
-  { firstName: "Sam", lastName: "Whitfield", email: "sam.whitfield@centravitydemo.invalid", role: "producer", weight: 0.22, closeRate: 0.2, quoteRate: 0.28 },
+  { firstName: "Graysen", lastName: "Denlinger", email: "casey.rivera@centravitydemo.invalid", role: "producer", weight: 0.3, closeRate: 0.26, quoteRate: 0.34 },
+  { firstName: "Alex", lastName: "Baklamov", email: "taylor.brooks@centravitydemo.invalid", role: "producer", weight: 0.28, closeRate: 0.23, quoteRate: 0.3 },
+  { firstName: "Stormy", lastName: "Monroe", email: "sam.whitfield@centravitydemo.invalid", role: "producer", weight: 0.22, closeRate: 0.2, quoteRate: 0.28 },
   { firstName: "Riley", lastName: "Chen", email: "riley.chen@centravitydemo.invalid", role: "service" },
   { firstName: "Avery", lastName: "Nguyen", email: "avery.nguyen@centravitydemo.invalid", role: "service" },
 ];

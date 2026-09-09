@@ -49,11 +49,20 @@ const ANNUAL_GOALS: AnnualGoals = {
   Health: { apps: 30, premium: 25_000 },
 };
 
+// Producer 1 (weight 0.2) is the demo agency's 'manager' profile; the other three are
+// 'producer' profiles - see resolveProducers()/PRODUCER_NAME_WEIGHTS matching-by-name
+// below. Renamed from the original Jordan Price/Casey Rivera/Taylor Brooks/Sam
+// Whitfield placeholders to match specific real producer names for sales-pitch
+// authenticity - keep this in sync with scripts/backfill_demo_gap_days.ts and
+// scripts/seed_demo_agency.ts (same "kept in sync manually" reasoning as
+// ANNUAL_GOALS above), and with the actual profiles.first_name/last_name rows for the
+// demo agency's 3 producer-role members (the manager, Jordan Price, was left as-is -
+// only the 3 explicitly requested first names were renamed).
 const PRODUCER_NAME_WEIGHTS: { firstName: string; lastName: string; weight: number; closeRate: number; quoteRate: number }[] = [
   { firstName: "Jordan", lastName: "Price", weight: 0.2, closeRate: 0.22, quoteRate: 0.32 },
-  { firstName: "Casey", lastName: "Rivera", weight: 0.3, closeRate: 0.26, quoteRate: 0.34 },
-  { firstName: "Taylor", lastName: "Brooks", weight: 0.28, closeRate: 0.23, quoteRate: 0.3 },
-  { firstName: "Sam", lastName: "Whitfield", weight: 0.22, closeRate: 0.2, quoteRate: 0.28 },
+  { firstName: "Graysen", lastName: "Denlinger", weight: 0.3, closeRate: 0.26, quoteRate: 0.34 },
+  { firstName: "Alex", lastName: "Baklamov", weight: 0.28, closeRate: 0.23, quoteRate: 0.3 },
+  { firstName: "Stormy", lastName: "Monroe", weight: 0.22, closeRate: 0.2, quoteRate: 0.28 },
 ];
 
 const PRODUCTION_DAYS_PER_WEEK = 5;
