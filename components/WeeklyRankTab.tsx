@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Trophy, PhoneCall, FileText, ShieldCheck, Calendar, Users } from "lucide-react";
 import ProfileAvatar from "./ui/ProfileAvatar";
+import { isOwnerLevelRole } from "../utils/roles";
 
 const getPacingColor = (pacing: number) => {
   if (pacing >= 100) return "bg-green-500";
@@ -147,6 +148,33 @@ export default function WeeklyRankTab({ weeklyOverviewData, selectedWeekStart, s
           </select>
         </div>
       </header>
+
+      {/* AGENCY OWNER — pulled out of touchesRank/quotesRank/appsRank entirely (see
+          weeklyOverviewData's ownerRows split in app/dashboard/page.tsx), so an owner/admin's own
+          weekly numbers never get mixed into a ranked list the rest of the team is compared
+          against. Visibility to non-owner viewers is gated by agencies.owner_visible_on_leaderboards
+          - the owner/admin themselves can always see this section regardless of that toggle. */}
+      {weeklyOverviewData?.ownerRows?.length > 0 && (agencySettings?.owner_visible_on_leaderboards || isOwnerLevelRole(profile?.role)) && (
+        <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-5">
+          <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider mb-3">Agency Owner (tracked separately)</p>
+          <div className="flex flex-wrap gap-4">
+            {weeklyOverviewData.ownerRows.map((member: any) => (
+              <div key={member.id} className="flex items-center gap-2.5 bg-white border border-purple-100 rounded-xl px-4 py-2.5 shadow-sm">
+                <ProfileAvatar src={member.avatar_url} name={`${member.first_name} ${member.last_name}`} size="xs" />
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{member.first_name} {member.last_name}</p>
+                  <p className="text-xs text-gray-500">
+                    <span className="font-black text-purple-600">{member.wTouches}</span> touches ·{" "}
+                    <span className="font-black text-purple-600">{member.wQuotes}</span> quotes ·{" "}
+                    <span className="font-black text-purple-600">{member.wBoundApps}</span> apps ·{" "}
+                    <span className="font-bold text-gray-700">${((member.pAndCPremium || 0) + (member.lAndHPremium || 0)).toLocaleString()}</span> premium
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* TOUCHES TABLE */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

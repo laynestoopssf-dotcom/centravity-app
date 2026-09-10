@@ -1164,11 +1164,21 @@ export default function DashboardTab({
             <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-2">Owner Production (tracked separately)</p>
             <div className="flex flex-wrap gap-4">
               {ownerProductionRows.map((row: any) => (
-                <div key={row.userId} className="flex items-center gap-2.5 bg-white border border-purple-100 rounded-xl px-4 py-2.5 shadow-sm">
+                <div key={row.userId} className="flex items-start gap-2.5 bg-white border border-purple-100 rounded-xl px-4 py-2.5 shadow-sm">
                   <ProfileAvatar src={row.avatarUrl} name={row.name} size="xs" />
                   <div>
                     <p className="text-sm font-bold text-gray-900">{row.name}</p>
-                    <p className="text-xs text-gray-500"><span className="font-black text-purple-600">{row.apps}</span> apps · <span className="font-bold text-gray-700">${Math.round(row.premium).toLocaleString()}</span> premium</p>
+                    <p className="text-xs text-gray-500 mb-2"><span className="font-black text-purple-600">{row.apps}</span> apps · <span className="font-bold text-gray-700">${Math.round(row.premium).toLocaleString()}</span> premium</p>
+                    {/* Per-product-line breakdown - mirrors the Auto/Fire/Life/Health/Commercial
+                        columns in the producer table below (row.counts.*), so the owner's own
+                        production callout shows the exact same level of detail. */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Auto <span className="text-gray-800">{row.counts.Auto}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Fire <span className="text-gray-800">{row.counts.Fire}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Life <span className="text-gray-800">{row.counts.Life}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Health <span className="text-gray-800">{row.counts.Health}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Commercial <span className="text-gray-800">{row.counts.Commercial}</span></span>
+                    </div>
                   </div>
                 </div>
               ))}

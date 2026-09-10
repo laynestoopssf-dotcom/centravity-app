@@ -1655,10 +1655,30 @@ export default function SettingsTab({
               <>
                 {leadership.length > 0 && (
                   <div className="mb-8">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Shield size={14} className="text-purple-500" />
-                      <h4 className="text-xs font-bold text-purple-700 uppercase tracking-wider">Agency Owner</h4>
-                      <span className="text-[10px] text-gray-400">Personal goals & production, tracked separately from team averages</span>
+                    <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Shield size={14} className="text-purple-500" />
+                        <h4 className="text-xs font-bold text-purple-700 uppercase tracking-wider">Agency Owner</h4>
+                        <span className="text-[10px] text-gray-400">Personal goals & production, tracked separately from team averages</span>
+                      </div>
+                      {/* Global visibility toggle: does the rest of the team get to see the Owner's
+                          isolated "Agency Owner" section on Agency MTD / Weekly Rank? The owner/admin
+                          can always see their own section regardless (see isOwnerLevelRole checks in
+                          AgencyOverviewTab.tsx / WeeklyRankTab.tsx). Saved via the page-level
+                          "Save All Global Settings" button (handleSaveTeamTargets), same as every
+                          other agencySettings toggle on this page. */}
+                      <label className="relative inline-flex items-center gap-2.5 cursor-pointer shrink-0 bg-purple-50/60 border border-purple-100 rounded-full pl-3 pr-1 py-1">
+                        <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Team Can See My Production</span>
+                        <span className="relative inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={agencySettings?.owner_visible_on_leaderboards || false}
+                            onChange={e => setAgencySettings({ ...agencySettings, owner_visible_on_leaderboards: e.target.checked })}
+                          />
+                          <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                        </span>
+                      </label>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {leadership.map(renderMemberCard)}
