@@ -230,6 +230,19 @@ export default function DashboardTab({
   // bucket instead (estimatedOwnerCommission just below, with matching splits in
   // CommissionTab.tsx and the roster/leaderboards in app/dashboard/page.tsx) rather than being
   // blended into this "Team Commissions" total.
+  // BUGFIX: in the fallback (single-producer) branch below, commissionData.total belongs to
+  // whichever producer is actually selected via `selectedProducer` (app/dashboard/page.tsx's
+  // commissionData useMemo keys off `selectedProducer === 'all' ? profile.id : selectedProducer`)
+  // - NOT necessarily the logged-in viewer. The old code branched on `profile?.role` (the
+  // viewer's own role), so an owner/admin viewer selecting a specific producer from the dropdown
+  // would see that producer's own commission mislabeled as "+ $X Owner (tracked separately)",
+  // changing every time a different team member was selected. `fallbackTargetRole` resolves the
+  // role of whoever commissionData actually represents, so the Team/Owner split is correct
+  // regardless of who's logged in or who they're viewing.
+  const fallbackTargetRole = selectedProducer === 'all'
+    ? profile?.role
+    : (team || []).find((t: any) => t.id === selectedProducer)?.role;
+
   const estimatedTeamCommission = useMemo(() => {
     if (teamCommissions) {
       return Object.entries(teamCommissions).reduce((sum: number, [memberId, m]: [string, any]) => {
@@ -238,8 +251,8 @@ export default function DashboardTab({
         return sum + (Number(m?.total) || 0);
       }, 0);
     }
-    return isOwnerLevelRole(profile?.role) ? 0 : (Number(commissionData?.total) || 0);
-  }, [teamCommissions, commissionData, team, profile]);
+    return isOwnerLevelRole(fallbackTargetRole) ? 0 : (Number(commissionData?.total) || 0);
+  }, [teamCommissions, commissionData, team, profile, selectedProducer, fallbackTargetRole]);
 
   const estimatedOwnerCommission = useMemo(() => {
     if (teamCommissions) {
@@ -249,8 +262,8 @@ export default function DashboardTab({
         return sum;
       }, 0);
     }
-    return isOwnerLevelRole(profile?.role) ? (Number(commissionData?.total) || 0) : 0;
-  }, [teamCommissions, commissionData, team, profile]);
+    return isOwnerLevelRole(fallbackTargetRole) ? (Number(commissionData?.total) || 0) : 0;
+  }, [teamCommissions, commissionData, team, profile, selectedProducer, fallbackTargetRole]);
 
   // Production Roster: groups the selected date window's bound/issued policies by team member,
   // so managers can see exactly who wrote what without leaving the main dashboard.
