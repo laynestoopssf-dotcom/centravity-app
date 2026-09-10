@@ -342,12 +342,25 @@ export default function AgentDashboardTab() {
 
       const runRateTotalPremium = (netYtdPremium / daysPassed) * daysInYear;
       const runRateLifeApps = Math.round((netYtdLifeApps / daysPassed) * daysInYear);
+      // NET (lapse/cancellation-adjusted) run rates - "gain pacing". Deliberately left untouched:
+      // components/RevenueTab.tsx's 2027 AEC Pacing Scorecard reads these same 4 fields straight
+      // through calculateRev() below (runRateAutoApps: ytdNode.runRateAutoApps, etc.) because AEC
+      // bonus eligibility is legitimately based on net policy-in-force growth, not raw apps written.
       const runRateAutoApps = Math.round((netYtdAutoApps / daysPassed) * daysInYear);
       const runRateFireApps = Math.round((netYtdFireApps / daysPassed) * daysInYear);
       const runRateCommercialApps = Math.round((netYtdCommercialApps / daysPassed) * daysInYear);
       const runRateHealthApps = Math.round((netYtdHealthApps / daysPassed) * daysInYear);
 
-      return { name, totals, targets: agencyTargets, globalMultiplier, netYtdPremium, netYtdLifeApps, netYtdAutoApps, netYtdFireApps, netYtdCommercialApps, netYtdHealthApps, runRateTotalPremium, runRateLifeApps, runRateAutoApps, runRateFireApps, runRateCommercialApps, runRateHealthApps, daysPassed, daysInYear, travelStatus };
+      // GROSS (raw production, lapse/cancellation completely ignored) run rates - "production
+      // pacing". Powers components/YtdTab.tsx's "{name} Projections (Apps)" section only, so that
+      // section tracks total apps written against the total production goal, independent of the
+      // gain-pacing numbers above that AEC still relies on.
+      const runRateGrossAutoApps = Math.round((totals.ytdAutoApps / daysPassed) * daysInYear);
+      const runRateGrossFireApps = Math.round((totals.ytdFireApps / daysPassed) * daysInYear);
+      const runRateGrossCommercialApps = Math.round((totals.ytdCommercialApps / daysPassed) * daysInYear);
+      const runRateGrossHealthApps = Math.round((totals.ytdHealthApps / daysPassed) * daysInYear);
+
+      return { name, totals, targets: agencyTargets, globalMultiplier, netYtdPremium, netYtdLifeApps, netYtdAutoApps, netYtdFireApps, netYtdCommercialApps, netYtdHealthApps, runRateTotalPremium, runRateLifeApps, runRateAutoApps, runRateFireApps, runRateCommercialApps, runRateHealthApps, runRateGrossAutoApps, runRateGrossFireApps, runRateGrossCommercialApps, runRateGrossHealthApps, daysPassed, daysInYear, travelStatus };
     };
 
     const filteredPolicies = officeFilter === "all" ? policies : policies.filter((p) => p.office_id === officeFilter);
