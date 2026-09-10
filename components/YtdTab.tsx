@@ -51,7 +51,15 @@ export default function YtdTab({ ytdOverviewData, agencySettings }: any) {
               <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-lg relative overflow-hidden flex-1 flex flex-col justify-center">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Luggage size={100} /></div>
                 <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-6"><Luggage size={16} className="text-blue-600"/> Next Year&apos;s Carry-Over</h4>
-                <div className="mb-4"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Secured Balance</p><p className="text-3xl font-black text-gray-900">${Math.round(locData.travelStatus.carryOverCred).toLocaleString()}</p><p className="text-xs text-gray-500 font-medium leading-tight mt-1">From pro-rated monthly life policies already issued.</p></div>
+                <div className="mb-4">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Secured Balance</p>
+                  <p className="text-3xl font-black text-gray-900">${Math.round(locData.travelStatus.carryOverCred).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 font-medium leading-tight mt-1">From pro-rated monthly life policies already issued.</p>
+                  {/* Same Secured Balance above, unchanged - this just also folds in 'bound' (carrier
+                      hasn't issued yet, but the sale is made) monthly-pay Life policies, since those
+                      dollars are effectively locked in even before the issued paperwork clears. */}
+                  <p className="text-xs font-bold text-blue-600 mt-2">Incl. Bound Policies: ${Math.round(locData.travelStatus.carryOverCredWithBound).toLocaleString()}</p>
+                </div>
                 <div className="pt-4 border-t border-gray-100"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Pipeline Potential</p><p className="text-xl font-bold text-green-600">+${Math.round(locData.travelStatus.pendingCarryOver).toLocaleString()}</p><p className="text-[10px] text-gray-400 font-medium leading-tight mt-1">If all active pipeline policies issue today.</p></div>
               </div>
             </div>

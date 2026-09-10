@@ -196,6 +196,10 @@ export default function AgentDashboardTab() {
     const calculateStats = (pols: any[], name: string, specificOffice?: any) => {
       const totals = { ytdBound: 0, ytdPremium: 0, ytdLifeApps: 0, ytdLifePremium: 0, ytdAutoApps: 0, ytdFireApps: 0, ytdCommercialApps: 0, ytdHealthApps: 0, ytdHealthPremium: 0 };
       let issuedLifeCred = 0, carryOverCred = 0, pendingLifeCred = 0, pendingCarryOver = 0, pendingLifeApps = 0, issuedHealthCred = 0, pendingHealthCred = 0;
+      // Bound-only slice of pendingCarryOver (which otherwise blends 'bound' + 'quoted' together) -
+      // powers the "Including Bound Policies" sub-line the owner asked for alongside the existing
+      // issued-only Secured Balance, without changing what Secured Balance itself means.
+      let boundOnlyCarryOver = 0;
 
       pols.forEach((pol) => {
         const logDate = new Date(pol.bound_at || pol.written_at || pol.logged_at);
@@ -225,6 +229,7 @@ export default function AgentDashboardTab() {
               if (pol.status !== "quoted") pendingLifeApps++;
               if (isAnnual) { earnedThisYear = prem; carryOver = 0; } else { earnedThisYear = (prem / 12) * currentMonthRemaining; carryOver = prem - earnedThisYear; }
               pendingLifeCred += earnedThisYear; pendingCarryOver += carryOver;
+              if (pol.status === "bound") boundOnlyCarryOver += carryOver;
             }
           } else if (parentLine === "Health") {
             if (pol.status === "issued") issuedHealthCred += prem;
@@ -277,7 +282,7 @@ export default function AgentDashboardTab() {
 
       const targetTier = currentTierIndex < travelTiers.length - 1 ? travelTiers[currentTierIndex + 1] : travelTiers[travelTiers.length - 1];
       const currentTierName = currentTierIndex >= 0 ? travelTiers[currentTierIndex].name : "Not Qualified";
-      const travelStatus = { currentTierName, targetTierName: targetTier.name, issuedLifeApps: totals.ytdLifeApps, pendingLifeApps, targetLifeApps: targetTier.apps, issuedLifeCred, pendingLifeCred, targetLifeCred: targetTier.lifeCred, issuedTotalCred: issuedLifeCred + issuedHealthCred, pendingTotalCred: pendingLifeCred + pendingHealthCred, targetTotalCred: targetTier.totalCred, carryOverCred, pendingCarryOver };
+      const travelStatus = { currentTierName, targetTierName: targetTier.name, issuedLifeApps: totals.ytdLifeApps, pendingLifeApps, targetLifeApps: targetTier.apps, issuedLifeCred, pendingLifeCred, targetLifeCred: targetTier.lifeCred, issuedTotalCred: issuedLifeCred + issuedHealthCred, pendingTotalCred: pendingLifeCred + pendingHealthCred, targetTotalCred: targetTier.totalCred, carryOverCred, pendingCarryOver, carryOverCredWithBound: carryOverCred + boundOnlyCarryOver };
 
       const targetLifeApps = specificOffice ? (specificOffice.annual_target_life_apps || 0) : offices.reduce((sum, o) => sum + (o.annual_target_life_apps || 0), 0);
       const targetPremium = specificOffice ? (specificOffice.annual_target_premium || 0) : offices.reduce((sum, o) => sum + (o.annual_target_premium || 0), 0);
