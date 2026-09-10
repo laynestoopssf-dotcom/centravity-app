@@ -2317,16 +2317,27 @@ export default function Home() {
   const canViewReports = userRoleConfig?.permissions?.view_reports ?? isManagerLevelRole(profile?.role);
 
   // Powers Settings -> Conversion Metrics (see SettingsTab.tsx). Reuses the same
-  // agency-wide YTD `agencyActivities`/`agencyPolicies` fetch that feeds Agency MTD
-  // (fetchAgencyOverview) instead of issuing a dedicated query - same trade-off as
-  // that tab: if an owner has browsed Agency MTD to a past month right before opening
-  // Settings, this reflects that month's fetch window rather than a hard "now" YTD,
-  // which self-corrects the next time fetchAgencyOverview() runs (e.g. tab reload,
-  // any write action). Quotes = 'quote'/'complex_res' activities; bound = policies
-  // with status in ('bound','issued'), dated by bound_at (falling back to
-  // written_at/logged_at) - identical definitions to the Agency Overview engine
-  // below, so this number always agrees with what "Agency MTD" would show for the
-  // full year.
+  // agency-wide YTD `agencyPolicies` fetch that feeds Agency MTD (fetchAgencyOverview)
+  // instead of issuing a dedicated query - same trade-off as that tab: if an owner has
+  // browsed Agency MTD to a past month right before opening Settings, this reflects
+  // that month's fetch window rather than a hard "now" YTD, which self-corrects the
+  // next time fetchAgencyOverview() runs (e.g. tab reload, any write action).
+  //
+  // Quotes = EVERY policies row dated (by logged_at) in the window, regardless of its
+  // current `status` - matching the exact "quoted" denominator convention already
+  // established in utils/coachingMetrics.ts's rangeCloseRate (a policy row is created
+  // the moment a quote happens, so its mere existence *is* the quote event; whether it
+  // later becomes bound/issued/not_taken/not_sold doesn't erase that it was quoted).
+  // Bound = policies with status in ('bound','issued'), dated by bound_at (falling back
+  // to written_at/logged_at).
+  //
+  // NOTE: this intentionally does NOT reuse `agencyActivities`/'quote' activity rows for
+  // the numerator - that array is fetched by fetchAgencyOverview() over only a ~2-month
+  // window (firstDayOfPrevMonth..endOfTargetMonth, sized for the month-scoped Agency MTD
+  // tab), so computing a full-YTD count from it silently undercounted (e.g. 46 instead
+  // of the true ~2,556 YTD quotes) while `agencyPolicies` below is already correctly
+  // fetched from Jan 1 with no status filter - that mismatch is what previously produced
+  // "840 bound / 46 quotes" => an impossible 1826% close rate.
   const conversionMetricsData = useMemo(() => {
     const now = new Date();
     const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -2336,12 +2347,11 @@ export default function Home() {
     const byMember: Record<string, { ytdQuotes: number; ytdBound: number; r30Quotes: number; r30Bound: number }> = {};
     team.forEach((m) => { byMember[m.id] = { ytdQuotes: 0, ytdBound: 0, r30Quotes: 0, r30Bound: 0 }; });
 
-    agencyActivities.forEach((act: any) => {
-      if (act.activity_type !== 'quote' && act.activity_type !== 'complex_res') return;
-      const d = new Date(act.logged_at);
+    agencyPolicies.forEach((pol: any) => {
+      const d = new Date(pol.logged_at);
       if (d < startOfYear) return;
       agencyYtdQuotes++;
-      const entry = byMember[act.user_id];
+      const entry = byMember[pol.user_id];
       if (entry) {
         entry.ytdQuotes++;
         if (d >= r30Start) entry.r30Quotes++;
@@ -2374,7 +2384,7 @@ export default function Home() {
       agencyYtdBound,
       memberRates,
     };
-  }, [team, agencyActivities, agencyPolicies]);
+  }, [team, agencyPolicies]);
 
   // --- USE MEMO DATA ENGINES ---
   const filteredActivities = useMemo(() => {
