@@ -177,6 +177,13 @@ export default function Home() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [pipeline, setPipeline] = useState<Policy[]>([]);
   const [team, setTeam] = useState<Profile[]>([]);
+  // Last-known-good snapshot of `team` exactly as it came back from the DB (set every time
+  // fetchTeam resolves) - NOT re-rendered off of, purely a diffing baseline. handleSaveTeamTargets
+  // compares each member's current in-memory `team` fields against this baseline before deciding
+  // whether to fire a per-member profiles update, so a global agency-level save (e.g. toggling a
+  // Corporate Targets switch) can never blindly re-write - and potentially clobber with a stale
+  // browser snapshot - a team member's goals/salary that were never actually touched this session.
+  const teamBaselineRef = useRef<Profile[]>([]);
   const [archivedTeam, setArchivedTeam] = useState<Profile[]>([]);
   const [teamInvites, setTeamInvites] = useState<any[]>([]);
   const [monthPolicies, setMonthPolicies] = useState<any[]>([]);
@@ -915,7 +922,13 @@ export default function Home() {
       console.error('[Settings] fetchTeam failed', error);
       return;
     }
-    if (data) setTeam(data);
+    if (data) {
+      setTeam(data);
+      // Refresh the diffing baseline alongside `team` itself every time we get a fresh read from
+      // the DB (initial load, or after handleSaveTeamTargets's own post-save refetch below) - see
+      // teamBaselineRef's declaration for why this exists.
+      teamBaselineRef.current = data;
+    }
   };
 
   // Loaded on-demand for Settings > Team Management's "Archived" section, so an owner/manager can
@@ -1933,7 +1946,64 @@ export default function Home() {
       }
     }
 
-    await Promise.all(team.map(async (member: any) => {
+    // BUGFIX (data-loss): this used to unconditionally re-save EVERY team member's full set of
+    // goals/salary/role/office/comp-plan fields on every single call to this function - including
+    // when the owner had only touched an unrelated agency-level toggle (Corporate Targets, Global
+    // Settings, etc.) and never opened a single member's edit panel. Since `team` is only ever
+    // fetched once per page load (fetchTeam, called from fetchProfile), any member whose row had
+    // been updated elsewhere since that fetch (another admin's browser tab, the onboarding wizard,
+    // a comp-plan reassignment, etc.) would have their newer DB values silently clobbered back to
+    // this owner's stale in-memory snapshot the moment they saved ANYTHING on this page - reading
+    // to the "wiped back to old/default values" symptom.
+    //
+    // Fix: diff each member's relevant fields against teamBaselineRef (the exact data returned by
+    // the last fetchTeam call) and only send a profiles update for members that actually changed
+    // in THIS browser session. A member nobody touched is never written to at all, so their
+    // current DB row - whatever it is - is always explicitly preserved.
+    const PROFILE_TARGET_FIELDS = [
+      'role', 'office_id', 'comp_plan_id', 'is_floater', 'on_vacation',
+      'daily_target_touchpoints', 'daily_target_quotes', 'daily_target_bound',
+      'weekly_target_touchpoints', 'weekly_target_quotes', 'weekly_target_bound',
+      'monthly_target_bound', 'monthly_target_premium',
+      'annual_target_life_apps', 'annual_target_life_premium',
+      'monthly_base_salary',
+    ] as const;
+
+    const baselineById = new Map((teamBaselineRef.current || []).map((m: any) => [m.id, m]));
+    const normalize = (v: any) => (v === undefined ? null : v);
+    const dirtyMembers = team.filter((member: any) => {
+      const baseline = baselineById.get(member.id);
+      // No baseline on record (e.g. a brand-new member added this session, before any fetchTeam
+      // has run since) - save it to be safe rather than silently dropping a real new hire's setup.
+      if (!baseline) return true;
+      return PROFILE_TARGET_FIELDS.some(field => {
+        const current = normalize((member as any)[field]);
+        const original = normalize((baseline as any)[field]);
+        // comp_plan_id treats '' and null as equivalent (see the `=== '' ? null` normalization
+        // already applied at write-time below).
+        if (field === 'comp_plan_id') return (current || null) !== (original || null);
+        return current !== original;
+      });
+    });
+
+    // Sanitize every count/goal field to a whole number before it ever reaches Postgres.
+    // daily_target_touchpoints/quotes/bound, weekly_target_touchpoints/quotes/bound,
+    // monthly_target_bound/premium, and annual_target_life_apps/premium are ALL `integer`
+    // columns (confirmed live against the DB - none of them are numeric/decimal). None of them
+    // are conceptually fractional either (you can't log "1.8 touches" or target "1.8 apps/day"),
+    // so a decimal reaching this payload is always unintentional input, not a real use case to
+    // preserve - e.g. someone typing "1.8" into a plain <input type="number"> Daily/Weekly/Monthly
+    // goal field (those have no `step` restriction, so browsers happily accept a decimal point)
+    // used to reach Supabase as a raw float/string and blow up the whole per-member save with
+    // "invalid input syntax for type integer" - taking every OTHER field for that member down
+    // with it in the same failed request. Math.round(Number(...)) keeps the UI free to accept
+    // whatever a manager types, while guaranteeing what's actually sent is always a clean integer.
+    // monthly_base_salary is deliberately excluded - it's a genuine `numeric` column (confirmed
+    // live) meant to support fractional dollars (e.g. $3,500.50/mo), so it's only coerced to a
+    // number, never rounded.
+    const toInt = (v: any) => Math.round(Number(v) || 0);
+
+    await Promise.all(dirtyMembers.map(async (member: any) => {
       const m: any = member;
       try {
         const { error: profileErr } = await (supabase.from('profiles') as any).update({
@@ -1942,21 +2012,21 @@ export default function Home() {
             comp_plan_id: m.comp_plan_id === '' ? null : m.comp_plan_id,
             is_floater: m.is_floater,
             on_vacation: m.on_vacation ?? false,
-            daily_target_touchpoints: m.daily_target_touchpoints,
-            daily_target_quotes: m.daily_target_quotes,
-            daily_target_bound: m.daily_target_bound,
-            weekly_target_touchpoints: m.weekly_target_touchpoints,
-            weekly_target_quotes: m.weekly_target_quotes,
-            weekly_target_bound: m.weekly_target_bound,
-            monthly_target_bound: m.monthly_target_bound,
-            monthly_target_premium: m.monthly_target_premium,
+            daily_target_touchpoints: toInt(m.daily_target_touchpoints),
+            daily_target_quotes: toInt(m.daily_target_quotes),
+            daily_target_bound: toInt(m.daily_target_bound),
+            weekly_target_touchpoints: toInt(m.weekly_target_touchpoints),
+            weekly_target_quotes: toInt(m.weekly_target_quotes),
+            weekly_target_bound: toInt(m.weekly_target_bound),
+            monthly_target_bound: toInt(m.monthly_target_bound),
+            monthly_target_premium: toInt(m.monthly_target_premium),
             // Life goals are annual-only now — monthly_target_life_apps/premium dropped
             // (scripts/drop_profile_monthly_life_goals.sql). annual_target_life_* is what
             // every pacing consumer actually reads; a monthly pace is derived from it
             // on-demand (annual / 12) wherever one's needed, never stored separately.
-            annual_target_life_apps: m.annual_target_life_apps,
-            annual_target_life_premium: m.annual_target_life_premium,
-            monthly_base_salary: m.monthly_base_salary
+            annual_target_life_apps: toInt(m.annual_target_life_apps),
+            annual_target_life_premium: toInt(m.annual_target_life_premium),
+            monthly_base_salary: Number(m.monthly_base_salary) || 0
         }).eq('id', m.id);
 
         if (profileErr) throw new Error(profileErr.message);
@@ -1965,6 +2035,12 @@ export default function Home() {
         memberErrors.push(`${m.first_name} ${m.last_name}: ${error.message}`);
       }
     }));
+
+    // Re-sync `team` (and its baseline) straight from the DB after any writes actually happened,
+    // so the baseline never drifts stale across repeated saves within the same Settings session.
+    if (dirtyMembers.length > 0 && profile?.agency_id) {
+      await fetchTeam(profile.agency_id);
+    }
 
     if (!agencyError && memberErrors.length === 0) {
       showToast("Agency Targets & Permissions updated successfully!");
