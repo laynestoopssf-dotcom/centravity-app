@@ -279,6 +279,28 @@ export default function Home() {
     }
   }, [selectedProducer, profile, commissionMonth, globalOfficeFilter, selectedOffice, agencySettings]);
 
+  // BUG FIX (Active Pipeline staleness) - REGRESSION NOTE: this used to just be `activeTab` bolted
+  // onto the DEPENDENCY ARRAY of the effect above. That's exactly what broke Weekly Rank: editing
+  // an already-mounted component's existing `useEffect` to change the LENGTH of its dependency
+  // array (6 items -> 7) is a hard React rule violation the instant Fast Refresh swaps in the
+  // edited module on a page that's already open - "The final argument passed to useEffect changed
+  // size between renders" - which forces React to abandon the render and Next.js to force a full
+  // reload to recover. Mid-reload (or if you happened to be sitting on the Weekly tab when it
+  // fired), the page can render with `weeklyOverviewData`/`team`/`agencySettings` still mid-flight,
+  // i.e. "blank". A hook's dependency array must have a byte-for-byte STABLE length for the life of
+  // the component, so the fix isn't to add a dependency to that effect - it's to give the "refresh
+  // when you land on the Dashboard tab" behavior its OWN dedicated effect below, whose array is a
+  // fixed size from the moment this file is first loaded and never changes shape on a future edit
+  // to this file. Same net effect (pipeline refreshes when you return to the Dashboard tab,
+  // matching the Ledger tab's own refresh-on-arrival effect right below), zero risk of ever
+  // retriggering this exact class of Fast-Refresh crash again.
+  useEffect(() => {
+    if (activeTab === 'dashboard' && profile) {
+      if ((profile.role === 'producer' || profile.role === 'service') && selectedProducer === 'all') return;
+      fetchPipeline(selectedProducer, profile.agency_id);
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     if (activeTab === 'ledger' && profile) {
       fetchLedgerData();
@@ -1171,16 +1193,39 @@ export default function Home() {
         .order('logged_at', { ascending: false })
         .limit(10000); 
         
+      // BUG FIX (data visibility mismatch): policies were fetched (and windowed) purely on
+      // `logged_at`, but `logged_at` is NOT a stable "when did this actually happen" timestamp
+      // once a policy moves past 'quoted' - it's whatever it was when the row was first logged,
+      // which can be days/weeks before it's actually bound/issued. Every other surface on this
+      // dashboard (Today's Production roster/scoreboard, Weekly Rank, Agency MTD) already keys a
+      // bound/issued policy's real date off `bound_at || written_at || logged_at` for exactly this
+      // reason - see e.g. the `boundDate` note in fetchDashboardData above. The Ledger never did,
+      // so a policy that showed as bound "today" everywhere else could silently fall outside the
+      // Ledger's SQL `gte('logged_at', startDate)` floor and vanish from it entirely (confirmed
+      // live: a policy bound today with a `logged_at` from weeks earlier). Quotes have no
+      // bound_at/written_at yet, so `logged_at` remains correct - and the only meaningful date -
+      // for them.
+      //
+      // Fix: cast a wider net on the SQL floor (mirrors the Roster's own -60 day widen) using
+      // whichever of logged_at/written_at/bound_at is the OLDEST candidate for each window's real
+      // start, then apply the precise bound_at||written_at||logged_at effective-date window
+      // client-side before setting ledgerPolicies, so a query only ever needs to scan generously
+      // rather than perfectly.
+      const LEDGER_SQL_FLOOR_BUFFER_DAYS = 60;
+      const sqlFloor = new Date(startDate);
+      sqlFloor.setDate(sqlFloor.getDate() - LEDGER_SQL_FLOOR_BUFFER_DAYS);
+
       let policyQuery = supabase.from('policies')
         .select('*, profiles(first_name, last_name)')
         .eq('agency_id', targetAgency)
-        .gte('logged_at', startDate.toISOString())
+        .gte('logged_at', sqlFloor.toISOString())
         .order('logged_at', { ascending: false })
         .limit(10000);
 
       if (useCustomEnd) {
         activityQuery = activityQuery.lte('logged_at', endDate.toISOString());
-        policyQuery = policyQuery.lte('logged_at', endDate.toISOString());
+        // No .lte() widen needed on the policy query's upper bound - the effective-date window
+        // applied client-side below already re-checks the exact endDate boundary precisely.
       }
 
       const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
@@ -1205,13 +1250,25 @@ export default function Home() {
       if (aErr) console.error("Activity Fetch Error:", aErr);
       if (pErr) console.error("Policy Fetch Error:", pErr);
 
+      // Precise client-side re-check against the effective date (bound_at || written_at ||
+      // logged_at for bound/issued rows; logged_at for everything else, since 'quoted' rows have
+      // no bound_at/written_at yet) - the SQL query above only guarantees a wide enough net, not
+      // the exact window.
+      const effectiveDate = (p: any) => new Date(p.bound_at || p.written_at || p.logged_at);
+      const windowedPolicies = (pData || []).filter((p: any) => {
+        const d = effectiveDate(p);
+        if (d < startDate) return false;
+        if (useCustomEnd && d > endDate) return false;
+        return true;
+      });
+
       const enrichedActivities = (aData || []).map((act: any) => {
         const user = team.find(t => t.id === act.user_id) || (profile.id === act.user_id ? profile : null);
         return { ...act, profiles: { first_name: user ? user.first_name : 'Unknown', last_name: user ? user.last_name : 'User' } };
       });
 
       setLedgerActivities(enrichedActivities);
-      setLedgerPolicies(pData || []);
+      setLedgerPolicies(windowedPolicies);
     } catch (err) {
       console.error("Ledger Fetch Error:", err);
     } finally {

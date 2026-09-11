@@ -443,10 +443,22 @@ export default function DashboardTab({
     return nameForUser(p.user_id).toLowerCase().includes(term);
   };
 
+  // BUG FIX (audit finding): 'not_sold' is a terminal outcome exactly like 'issued'/'not_taken' -
+  // the deal is closed, one way or the other, and it doesn't belong cluttering the "still in
+  // play" Active view. It used to be fetched by fetchPipeline's archive query (matches
+  // `not.status.in.(quoted,bound)`) but wasn't listed in EITHER filter's status check below, so it
+  // fell through the first `if` in activePipeline (neither 'issued' nor 'not_taken', so not
+  // excluded) and rendered as if it were still an open, working deal - the opposite failure mode
+  // from a policy going missing, but the same root cause: a status this app already understands
+  // (see the `Policy` status union in app/dashboard/page.tsx) not being accounted for consistently
+  // across every filter that branches on it.
+  const TERMINAL_STATUSES = ['issued', 'not_taken', 'not_sold'];
+
   const activePipeline = (pipeline || []).filter((p: any) => {
-    // "Not Taken / Rejected / Declined by UW" is a terminal outcome like Issued - it belongs in the
-    // Archive, not the working pipeline, so it doesn't clutter the list of policies still in play.
-    if (p.status === 'issued' || p.status === 'not_taken') return false;
+    // "Not Taken / Rejected / Declined by UW" and "Not Sold" are terminal outcomes like Issued -
+    // they belong in the Archive, not the working pipeline, so they don't clutter the list of
+    // policies still in play.
+    if (TERMINAL_STATUSES.includes(p.status)) return false;
     if (p.product_line === 'Complex Resolution') {
        const logDate = new Date(p.logged_at);
        const today = new Date();
@@ -459,7 +471,7 @@ export default function DashboardTab({
   });
 
   const archivedPipeline = (pipeline || []).filter((p: any) => {
-    if (p.status !== 'issued' && p.status !== 'not_taken' && p.product_line !== 'Complex Resolution') return false;
+    if (!TERMINAL_STATUSES.includes(p.status) && p.product_line !== 'Complex Resolution') return false;
     
     if (p.product_line === 'Complex Resolution') {
        const logDate = new Date(p.logged_at);
