@@ -20,7 +20,7 @@ const displayIdentifier = (policyId: string, hash?: string | null) => getCachedI
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
 export default function DashboardTab({ 
-  profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
+  profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, whatIfLoading, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
   offices, selectedOffice, setSelectedOffice, customTargets, onSendToSparring
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -1069,11 +1069,20 @@ export default function DashboardTab({
                 />
               </div>
               <p className="text-[10px] text-gray-500 mb-3 uppercase tracking-wider font-bold">You will need:</p>
-              <div className="grid grid-cols-3 gap-3">
-                 <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Touches</div><div className="text-xl font-black text-blue-400">{isFinite(reqTouches) && reqTouches > 0 ? Math.ceil(reqTouches).toLocaleString() : '0'}</div></div>
-                 <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{isService ? 'Resolutions' : 'Quotes'}</div><div className="text-xl font-black text-purple-400">{isFinite(reqQuotes) && reqQuotes > 0 ? Math.ceil(reqQuotes).toLocaleString() : '0'}</div></div>
-                 <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{isService ? 'Cross-Sells' : 'Apps'}</div><div className="text-xl font-black text-emerald-400">{isFinite(reqApps) && reqApps > 0 ? Math.ceil(reqApps).toLocaleString() : '0'}</div></div>
-              </div>
+              {whatIfLoading ? (
+                // RACE-CONDITION GUARD: comp plans are still loading - show an explicit loading
+                // state instead of a real-looking number that might briefly be wrong (see
+                // personalWhatIf's guard in app/dashboard/page.tsx for the full rationale).
+                <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center text-xs font-bold text-gray-400 animate-pulse">
+                  Syncing comp plan data…
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Touches</div><div className="text-xl font-black text-blue-400">{isFinite(reqTouches) && reqTouches > 0 ? Math.ceil(reqTouches).toLocaleString() : '0'}</div></div>
+                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{isService ? 'Resolutions' : 'Quotes'}</div><div className="text-xl font-black text-purple-400">{isFinite(reqQuotes) && reqQuotes > 0 ? Math.ceil(reqQuotes).toLocaleString() : '0'}</div></div>
+                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{isService ? 'Cross-Sells' : 'Apps'}</div><div className="text-xl font-black text-emerald-400">{isFinite(reqApps) && reqApps > 0 ? Math.ceil(reqApps).toLocaleString() : '0'}</div></div>
+                </div>
+              )}
            </div>
 
            {bonusConfig?.team_bonus_active && (

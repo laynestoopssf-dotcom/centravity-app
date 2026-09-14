@@ -92,6 +92,12 @@ export default function Home() {
   
   const [offices, setOffices] = useState<any[]>([]);
   const [compPlans, setCompPlans] = useState<CompPlan[]>([]);
+  // RACE-CONDITION GUARD: `compPlans.length === 0` can't distinguish "still fetching" from "this
+  // agency genuinely has zero comp plans configured" - both look identical to every commissionPerApp
+  // consumer below. This flips true once fetchCompPlans() has settled at least once, so the What-If
+  // engines (personalWhatIf, agencyOverviewData) can defer their math until it's safe to tell a real
+  // "no plan assigned" apart from "haven't loaded yet".
+  const [compPlansLoaded, setCompPlansLoaded] = useState(false);
   const [manualBonuses, setManualBonuses] = useState<any[]>([]); 
   
   const [globalOfficeFilter, setGlobalOfficeFilter] = useState('all');
@@ -496,6 +502,9 @@ export default function Home() {
     console.log('[Settings] fetchCompPlans', { agencyId, error, count: data?.length ?? 0 });
     if (error) console.error('[Settings] fetchCompPlans failed', error);
     if (data) setCompPlans(data);
+    // Mark the fetch settled regardless of success/empty/error, so `compPlansLoaded` reliably means
+    // "safe to trust compPlans.length now" instead of spinning forever on a failed request.
+    setCompPlansLoaded(true);
   };
 
   // Office filtering must key off each team member's CURRENT assigned office (team.office_id),
@@ -2544,6 +2553,87 @@ export default function Home() {
     }));
   }, [agencyPolicies, globalOfficeFilter, dateFilterMode]);
 
+  // AGENCY EFFECTIVE RATE ENGINE - the fallback basis for any producer's What-If commissionPerApp
+  // when they have no resolvable comp plan (comp_plan_id is null, or points at a plan not currently
+  // present in `compPlans`). This used to fall back to a disconnected, hardcoded 10%/$85 constant
+  // with zero relationship to how this agency actually pays commission - producers WITH a plan were
+  // blended against their own real per-line rate table (e.g. 2% P&C / 20% Life here), while
+  // producers WITHOUT one got an arbitrary guess, so two people's What-If numbers silently ran
+  // through two different formulas with no shared basis (the root cause of the "5,000 vs 12 apps"
+  // report). This computes, per product line, the REAL premium-weighted average rate actually
+  // realized this window by every team member who DOES have a resolvable plan (base rates only - no
+  // accelerator bumps, since this is meant to be a stable agency-wide anchor, not a mirror of any
+  // one person's unlocked tier) - so a no-plan producer is compared against "what this agency
+  // actually pays for this line", applied to THEIR OWN real product mix, not a flat guess.
+  const agencyEffectiveRates = useMemo(() => {
+    const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
+    const getParentLine = (line: string) => resolveParentLine(line, lines);
+
+    const now = new Date();
+    const targetYear = now.getFullYear();
+    const r30Start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+
+    const zeroByLine = () => ({ Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 });
+    const earnedYtd = zeroByLine(), premiumYtd = zeroByLine();
+    const earnedR30 = zeroByLine(), premiumR30 = zeroByLine();
+
+    team.forEach(member => {
+      const plan = compPlans.find(p => p.id === member.comp_plan_id);
+      if (!plan) return; // Only real, resolvable plans feed the agency baseline - see header comment.
+      const baseRates = plan.rules?.base_rates || plan.rules?.baseRates || {};
+      const rates: Record<string, number> = {
+        Auto: Number(baseRates.auto_nb) || 0,
+        Fire: Number(baseRates.fire_nb) || 0,
+        Commercial: Number(baseRates.commercial_nb) || 0,
+        Life: Number(baseRates.life_nb) || 0,
+        Health: Number(baseRates.health_nb) || 0,
+      };
+
+      agencyPolicies.forEach((pol: any) => {
+        if (pol.user_id !== member.id) return;
+        if (pol.is_renewal) return;
+        if (pol.status !== 'bound' && pol.status !== 'issued') return;
+        const parentLine = getParentLine(pol.product_line);
+        if (!(PARENT_CATEGORIES as readonly string[]).includes(parentLine)) return;
+        const premium = Number(pol.premium_amount) || 0;
+        const rate = rates[parentLine] || 0;
+        const d = new Date(pol.bound_at || pol.written_at || pol.logged_at);
+        if (d.getFullYear() === targetYear) {
+          premiumYtd[parentLine as keyof typeof premiumYtd] += premium;
+          earnedYtd[parentLine as keyof typeof earnedYtd] += premium * (rate / 100);
+        }
+        if (d >= r30Start) {
+          premiumR30[parentLine as keyof typeof premiumR30] += premium;
+          earnedR30[parentLine as keyof typeof earnedR30] += premium * (rate / 100);
+        }
+      });
+    });
+
+    const blendedRate = (earned: Record<string, number>, premium: Record<string, number>) => {
+      const totalEarned = PARENT_CATEGORIES.reduce((s, l) => s + earned[l], 0);
+      const totalPremium = PARENT_CATEGORIES.reduce((s, l) => s + premium[l], 0);
+      // Absolute last-resort floor - only reachable if literally nobody agency-wide with a real
+      // plan has bound anything in this window yet (e.g. a brand-new agency with zero history).
+      return totalPremium > 0 ? (totalEarned / totalPremium) * 100 : 10;
+    };
+
+    const buildRatesMap = (earned: Record<string, number>, premium: Record<string, number>, blended: number) =>
+      PARENT_CATEGORIES.reduce((acc, line) => {
+        acc[line] = premium[line] > 0 ? (earned[line] / premium[line]) * 100 : blended;
+        return acc;
+      }, {} as Record<typeof PARENT_CATEGORIES[number], number>);
+
+    const ytdBlended = blendedRate(earnedYtd, premiumYtd);
+    const r30Blended = blendedRate(earnedR30, premiumR30);
+
+    return {
+      ytd: buildRatesMap(earnedYtd, premiumYtd, ytdBlended),
+      r30: buildRatesMap(earnedR30, premiumR30, r30Blended),
+      ytdBlended,
+      r30Blended,
+    };
+  }, [team, compPlans, agencyPolicies, agencySettings]);
+
   const commissionData = useMemo(() => {
     const activeUserId = selectedProducer === 'all' ? profile?.id : selectedProducer;
     const activeProfile = (selectedProducer === 'all' || selectedProducer === profile?.id) ? profile : team.find(t => t.id === activeUserId);
@@ -2574,9 +2664,17 @@ export default function Home() {
 
   const blendedCommRate = useMemo(() => {
     const totalPrem = stats.monthAutoPrem + stats.monthFirePrem + stats.monthCommPrem + stats.monthLifePrem + stats.monthHealthPrem;
-    const commRates = (commissionData as any)?.rates || { auto: 10, fire: 10, comm: 10, life: 10, health: 10 };
-    
-    let rate = 10;
+    // FIX (unify fallback): previously a flat {auto:10,fire:10,...} guess whenever the active
+    // producer had no resolvable comp plan. Now it's this agency's own real, premium-weighted
+    // average rate per line over the last 30 days (see agencyEffectiveRates above) - the same
+    // whole-number-percent convention every other rate in this file uses (divided by 100 below).
+    const fallbackRates = {
+      auto: agencyEffectiveRates.r30.Auto, fire: agencyEffectiveRates.r30.Fire, comm: agencyEffectiveRates.r30.Commercial,
+      life: agencyEffectiveRates.r30.Life, health: agencyEffectiveRates.r30.Health,
+    };
+    const commRates = (commissionData as any)?.rates || fallbackRates;
+
+    let rate = agencyEffectiveRates.r30Blended;
     if (totalPrem > 0) {
        const weightedComm = 
          (stats.monthAutoPrem * (commRates.auto || 0)) +
@@ -2586,18 +2684,28 @@ export default function Home() {
          (stats.monthHealthPrem * (commRates.health || 0));
        rate = weightedComm / totalPrem;
     } else {
-       rate = commRates.auto || 10;
+       rate = commRates.auto || agencyEffectiveRates.r30Blended || 10;
     }
     
-    if (rate === 0) rate = 10; 
+    if (rate === 0) rate = agencyEffectiveRates.r30Blended || 10;
     return rate / 100;
-  }, [stats, commissionData]);
+  }, [stats, commissionData, agencyEffectiveRates]);
 
   // Dynamic per-app dollar value for the Dashboard tab's personal "What-If" calculator.
   // Replaces the old flat $850 fallback: scans this month's agency-wide bound/issued policies
   // (mapped through custom_product_lines) so the fallback always reflects real production,
   // and only drops to a tiny hardcoded floor if the agency has zero bound volume at all this month.
   const personalWhatIf = useMemo(() => {
+    // RACE-CONDITION GUARD: compPlans hasn't finished its initial fetch yet. Without this, every
+    // producer - including ones who DO have a real plan - would transiently fall through
+    // commissionData's `compPlans.length === 0` branch and get bucketed into the no-plan fallback
+    // for one render before snapping to their real number the instant compPlans arrives. Deferring
+    // here means the UI can show an explicit loading state instead of a real-looking number that's
+    // silently wrong for a split second.
+    if (!compPlansLoaded) {
+      return { reqApps: 0, reqQuotes: 0, reqTouches: 0, commissionPerApp: 0, isLoading: true };
+    }
+
     const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
     const getParentLine = (line: string) => resolveParentLine(line, lines);
 
@@ -2614,6 +2722,9 @@ export default function Home() {
 
     const ownAvgPremiumPerApp = stats.monthBound > 0 ? stats.monthPremium / stats.monthBound : dynamicAvgPremiumPerApp;
     const commissionPerApp = ownAvgPremiumPerApp * blendedCommRate;
+    // Last-resort floor only - unreachable in normal operation now that blendedCommRate's own
+    // no-plan fallback is driven by agencyEffectiveRates instead of a flat constant; this only
+    // guards a literal 0/NaN if the agency has zero premium history at all (brand-new agency).
     const safeCommissionPerApp = commissionPerApp > 0 ? commissionPerApp : 85;
 
     const closeRateDec = stats.monthQuotes > 0 ? (stats.monthBound / stats.monthQuotes) : 0.20;
@@ -2623,8 +2734,8 @@ export default function Home() {
     const reqQuotes = Math.max(1, Math.ceil(reqApps / closeRateDec));
     const reqTouches = Math.max(1, Math.ceil(reqQuotes / quoteRateDec));
 
-    return { reqApps, reqQuotes, reqTouches, commissionPerApp: safeCommissionPerApp };
-  }, [monthPolicies, agencySettings, stats, blendedCommRate, whatIfCommission]);
+    return { reqApps, reqQuotes, reqTouches, commissionPerApp: safeCommissionPerApp, isLoading: false };
+  }, [monthPolicies, agencySettings, stats, blendedCommRate, whatIfCommission, compPlansLoaded]);
 
   const teamCommissions = useMemo(() => {
     if (selectedProducer !== 'all' || !profile || !canViewTeamComm) return null;
@@ -2757,6 +2868,11 @@ export default function Home() {
 
   const agencyOverviewData = useMemo(() => {
     if (!profile || !canViewAgencyMtd) return null;
+    // RACE-CONDITION GUARD: defer the entire per-member What-If pass until compPlans has actually
+    // settled - see personalWhatIf's identical guard above for the full rationale. Reuses this
+    // memo's existing "return null while not ready" convention (same as the canViewAgencyMtd check
+    // right above), which AgencyOverviewTab.tsx already renders nothing for.
+    if (!compPlansLoaded) return null;
 
     const linesDict = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
     const getParentLine = (line: string) => resolveParentLine(line, linesDict);
@@ -3000,6 +3116,7 @@ export default function Home() {
       // Cross-reference the producer's assigned comp plan accelerators against their own production
       // to see if they've unlocked bumped base P&C/Life rates, for each engine independently.
       const plan = compPlans.find(p => p.id === member.comp_plan_id);
+      const hasResolvablePlan = !!plan;
       const rules = plan?.rules || {};
       const baseRates = rules.base_rates || rules.baseRates || {};
       const accelerators = rules.accelerators || [];
@@ -3008,22 +3125,46 @@ export default function Home() {
       // Financial Services bucket (Rule 4) = Life + Health premium combined, not Life alone.
       const ytdFinancialServicesPremium = ytdLifePremium + (ytdLineAgg.Health?.premium || 0);
       const ytdPncPremium = (ytdLineAgg.Auto?.premium || 0) + (ytdLineAgg.Fire?.premium || 0) + (ytdLineAgg.Commercial?.premium || 0);
-      const ytdRates = resolveAcceleratedRates(baseRates, accelerators, {
-        lifeHealthApps: ytdLifeHealthApps, lifePremium: ytdFinancialServicesPremium, pncPremium: ytdPncPremium, totalPremium: ytdPremium, totalApps: ytdBound
-      });
 
       const r30LifeHealthApps = (r30LineAgg.Life?.apps || 0) + (r30LineAgg.Health?.apps || 0);
       const r30FinancialServicesPremium = r30LineAgg.Life.premium + r30LineAgg.Health.premium;
       const r30PncPremium = r30LineAgg.Auto.premium + r30LineAgg.Fire.premium + r30LineAgg.Commercial.premium;
-      const r30Rates = resolveAcceleratedRates(baseRates, accelerators, {
-        lifeHealthApps: r30LifeHealthApps, lifePremium: r30FinancialServicesPremium, pncPremium: r30PncPremium, totalPremium: r30Premium, totalApps: r30Bound
-      });
 
-      const ytdCommissionPerApp = commissionPerApp(memberYtdAvgPremium, ytdRates, ytdLineAgg, agencyYtdLines, ytdBound);
-      const r30CommissionPerApp = commissionPerApp(memberR30AvgPremium, r30Rates, r30LineAgg, agencyR30Lines, r30Bound);
+      // FIX (unify fallback): a producer without a resolvable plan no longer gets a flat 10%/$85
+      // guess - they're compared against agencyEffectiveRates (this agency's own real,
+      // premium-weighted average rate per line), applied to THEIR OWN real product mix exactly
+      // like everyone else below. Accelerators never apply here since there's no plan to
+      // accelerate against.
+      const ytdRates = hasResolvablePlan
+        ? resolveAcceleratedRates(baseRates, accelerators, {
+            lifeHealthApps: ytdLifeHealthApps, lifePremium: ytdFinancialServicesPremium, pncPremium: ytdPncPremium, totalPremium: ytdPremium, totalApps: ytdBound
+          })
+        : agencyEffectiveRates.ytd;
 
-      const safeYtdCommissionPerApp = ytdCommissionPerApp > 0 ? ytdCommissionPerApp : (agencyAvgPremiumYtd.Blended * 0.10) || 85;
-      const safeR30CommissionPerApp = r30CommissionPerApp > 0 ? r30CommissionPerApp : (agencyAvgPremiumR30.Blended * 0.10) || 85;
+      const r30Rates = hasResolvablePlan
+        ? resolveAcceleratedRates(baseRates, accelerators, {
+            lifeHealthApps: r30LifeHealthApps, lifePremium: r30FinancialServicesPremium, pncPremium: r30PncPremium, totalPremium: r30Premium, totalApps: r30Bound
+          })
+        : agencyEffectiveRates.r30;
+
+      // FIX (harden denominator): `ytdBound`/`r30Bound` count EVERY bound/issued policy agency-wide
+      // regardless of product line (correctly so - they also drive the close-rate math above, which
+      // must include every close). But `commissionPerApp`'s `mix` fractions are numerators keyed by
+      // the 5 PARENT_CATEGORIES only - using ytdBound/r30Bound as that denominator meant any policy
+      // whose product_line failed to resolve to one of the 5 categories inflated the denominator
+      // without ever contributing a numerator, silently deflating mix (and therefore commissionPerApp)
+      // for anyone with unmapped-line volume. Use the actual mapped-apps count instead.
+      const ytdMappedApps = PARENT_CATEGORIES.reduce((sum, line) => sum + ytdLineAgg[line].apps, 0);
+      const r30MappedApps = PARENT_CATEGORIES.reduce((sum, line) => sum + r30LineAgg[line].apps, 0);
+
+      const ytdCommissionPerApp = commissionPerApp(memberYtdAvgPremium, ytdRates, ytdLineAgg, agencyYtdLines, ytdMappedApps);
+      const r30CommissionPerApp = commissionPerApp(memberR30AvgPremium, r30Rates, r30LineAgg, agencyR30Lines, r30MappedApps);
+
+      // Last-resort floor only - unreachable in normal operation now that the no-plan case is
+      // driven by agencyEffectiveRates above; only guards literal 0/NaN if the agency has zero
+      // premium history at all (e.g. a brand-new agency with nothing bound yet).
+      const safeYtdCommissionPerApp = ytdCommissionPerApp > 0 ? ytdCommissionPerApp : 85;
+      const safeR30CommissionPerApp = r30CommissionPerApp > 0 ? r30CommissionPerApp : 85;
 
       const ytdCloseRateDec = ytdQuotes > 0 ? (ytdBound / ytdQuotes) : 0.20;
       const ytdQuoteRateDec = ytdTouches > 0 ? (ytdQuotes / ytdTouches) : 0.10;
@@ -3092,7 +3233,7 @@ export default function Home() {
       leaderboard: leaderboard.sort((a, b) => b.monthPremium - a.monthPremium),
       ownerRows: ownerRows.sort((a, b) => b.monthPremium - a.monthPremium),
     };
-  }, [filteredActivities, filteredPolicies, team, profile, overviewMonth, agencySettings, canViewAgencyMtd, compPlans, whatIfCommission]);
+  }, [filteredActivities, filteredPolicies, team, profile, overviewMonth, agencySettings, canViewAgencyMtd, compPlans, compPlansLoaded, whatIfCommission, agencyEffectiveRates]);
 
   const lifeOverviewData = useMemo(() => {
     if (!profile || !canViewLifeModule) return null;
@@ -3421,6 +3562,7 @@ export default function Home() {
           reqTouches={personalWhatIf.reqTouches} 
           reqQuotes={personalWhatIf.reqQuotes} 
           reqApps={personalWhatIf.reqApps} 
+          whatIfLoading={personalWhatIf.isLoading} 
           logTouchpoint={logTouchpoint} logInboundCall={logInboundCall} openLogModal={openLogModal} openBackdateModal={openBackdateModal} 
           fetchDashboardData={(pId: any, aId: any) => fetchDashboardData(pId, aId, agencySettings)} 
           fetchPipeline={fetchPipeline} updatePolicyStatus={updatePolicyStatus} 
@@ -3454,6 +3596,12 @@ export default function Home() {
           profile={profile} 
           agencySettings={agencySettings} 
         />}
+        {activeTab === 'agency' && canViewAgencyMtd && !isBookkeeper && !agencyOverviewData && !compPlansLoaded && (
+          // RACE-CONDITION GUARD: agencyOverviewData intentionally returns null until compPlans has
+          // settled (see its own guard for the full rationale) - show an explicit loading state here
+          // instead of a blank tab while that fetch finishes (typically well under a second).
+          <div className="p-10 text-center text-sm font-bold text-gray-400 animate-pulse">Syncing comp plan data…</div>
+        )}
         {activeTab === 'agency' && canViewAgencyMtd && !isBookkeeper && agencyOverviewData && <AgencyOverviewTab agencyOverviewData={agencyOverviewData} expandedProducerId={expandedProducerId} setExpandedProducerId={setExpandedProducerId} whatIfCommission={whatIfCommission} setWhatIfCommission={setWhatIfCommission} generateCoachingInsight={generateCoachingInsight} isGeneratingAi={isGeneratingAi} aiInsights={aiInsights} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} agencySettings={agencySettings} dateFilterMode={dateFilterMode} setDateFilterMode={setDateFilterMode} />}
         {activeTab === 'life' && canViewLifeModule && !isBookkeeper && lifeOverviewData && <LifeTab lifeOverviewData={lifeOverviewData} team={team} updatePolicyStatus={updatePolicyStatus} overviewMonth={overviewMonth} setOverviewMonth={setOverviewMonth} fetchAgencyOverview={fetchAgencyOverview} profile={profile} />}
         
