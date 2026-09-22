@@ -2635,8 +2635,17 @@ export default function Home() {
   }, [team, compPlans, agencyPolicies, agencySettings]);
 
   const commissionData = useMemo(() => {
-    const activeUserId = selectedProducer === 'all' ? profile?.id : selectedProducer;
-    const activeProfile = (selectedProducer === 'all' || selectedProducer === profile?.id) ? profile : team.find(t => t.id === activeUserId);
+    // RBAC GUARD (fixes the Commissions-tab data leak): `selectedProducer` is GLOBAL, shared page
+    // state - it's also driven by the Scoreboard's producer dropdown, which a restricted viewer
+    // (e.g. an office manager with canViewTeamComm=false) can still touch for legitimate
+    // performance-viewing reasons gated by a completely different permission (canViewAgencyDash).
+    // Previously this memo trusted `selectedProducer` unconditionally, so selecting a team member
+    // on the Scoreboard and then switching to the Commissions tab silently carried that OTHER
+    // person's real salary/commission data along with it. A viewer without canViewTeamComm may
+    // only ever resolve to their OWN id here - never whatever producer happens to be selected
+    // elsewhere in the app.
+    const activeUserId = (canViewTeamComm && selectedProducer !== 'all') ? selectedProducer : profile?.id;
+    const activeProfile = (activeUserId === profile?.id) ? profile : team.find(t => t.id === activeUserId);
     
     const manualBonusTotal = manualBonuses.reduce((acc, curr) => acc + Number(curr.amount), 0);
 
@@ -2660,7 +2669,7 @@ export default function Home() {
     });
 
     return { ...result, planName: plan.name };
-  }, [profile, team, selectedProducer, compPlans, monthPolicies, agencySettings, manualBonuses]);
+  }, [profile, team, selectedProducer, compPlans, monthPolicies, agencySettings, manualBonuses, canViewTeamComm]);
 
   const blendedCommRate = useMemo(() => {
     const totalPrem = stats.monthAutoPrem + stats.monthFirePrem + stats.monthCommPrem + stats.monthLifePrem + stats.monthHealthPrem;
@@ -2691,51 +2700,10 @@ export default function Home() {
     return rate / 100;
   }, [stats, commissionData, agencyEffectiveRates]);
 
-  // Dynamic per-app dollar value for the Dashboard tab's personal "What-If" calculator.
-  // Replaces the old flat $850 fallback: scans this month's agency-wide bound/issued policies
-  // (mapped through custom_product_lines) so the fallback always reflects real production,
-  // and only drops to a tiny hardcoded floor if the agency has zero bound volume at all this month.
-  const personalWhatIf = useMemo(() => {
-    // RACE-CONDITION GUARD: compPlans hasn't finished its initial fetch yet. Without this, every
-    // producer - including ones who DO have a real plan - would transiently fall through
-    // commissionData's `compPlans.length === 0` branch and get bucketed into the no-plan fallback
-    // for one render before snapping to their real number the instant compPlans arrives. Deferring
-    // here means the UI can show an explicit loading state instead of a real-looking number that's
-    // silently wrong for a split second.
-    if (!compPlansLoaded) {
-      return { reqApps: 0, reqQuotes: 0, reqTouches: 0, commissionPerApp: 0, isLoading: true };
-    }
-
-    const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
-    const getParentLine = (line: string) => resolveParentLine(line, lines);
-
-    let agencyTotalPremium = 0, agencyTotalApps = 0;
-    monthPolicies.forEach((pol: any) => {
-      if (pol.status !== 'bound' && pol.status !== 'issued') return;
-      if (pol.is_renewal) return; // Scoreboard/What-If math is New Business only.
-      const parentLine = getParentLine(pol.product_line);
-      if (!(PARENT_CATEGORIES as readonly string[]).includes(parentLine)) return;
-      agencyTotalPremium += Number(pol.premium_amount) || 0;
-      agencyTotalApps += 1;
-    });
-    const dynamicAvgPremiumPerApp = agencyTotalApps > 0 ? agencyTotalPremium / agencyTotalApps : 0;
-
-    const ownAvgPremiumPerApp = stats.monthBound > 0 ? stats.monthPremium / stats.monthBound : dynamicAvgPremiumPerApp;
-    const commissionPerApp = ownAvgPremiumPerApp * blendedCommRate;
-    // Last-resort floor only - unreachable in normal operation now that blendedCommRate's own
-    // no-plan fallback is driven by agencyEffectiveRates instead of a flat constant; this only
-    // guards a literal 0/NaN if the agency has zero premium history at all (brand-new agency).
-    const safeCommissionPerApp = commissionPerApp > 0 ? commissionPerApp : 85;
-
-    const closeRateDec = stats.monthQuotes > 0 ? (stats.monthBound / stats.monthQuotes) : 0.20;
-    const quoteRateDec = stats.monthTouches > 0 ? (stats.monthQuotes / stats.monthTouches) : 0.10;
-
-    const reqApps = Math.max(1, Math.ceil(whatIfCommission / safeCommissionPerApp));
-    const reqQuotes = Math.max(1, Math.ceil(reqApps / closeRateDec));
-    const reqTouches = Math.max(1, Math.ceil(reqQuotes / quoteRateDec));
-
-    return { reqApps, reqQuotes, reqTouches, commissionPerApp: safeCommissionPerApp, isLoading: false };
-  }, [monthPolicies, agencySettings, stats, blendedCommRate, whatIfCommission, compPlansLoaded]);
+  // personalWhatIf (Dashboard tab's personal What-If calculator) is defined further below, AFTER
+  // agencyOverviewData - see that block for why (it reuses agencyOverviewData's literal computed
+  // output to guarantee identical numbers between the two pages, so it has to come after that
+  // memo is declared).
 
   const teamCommissions = useMemo(() => {
     if (selectedProducer !== 'all' || !profile || !canViewTeamComm) return null;
@@ -3234,6 +3202,79 @@ export default function Home() {
       ownerRows: ownerRows.sort((a, b) => b.monthPremium - a.monthPremium),
     };
   }, [filteredActivities, filteredPolicies, team, profile, overviewMonth, agencySettings, canViewAgencyMtd, compPlans, compPlansLoaded, whatIfCommission, agencyEffectiveRates]);
+
+  // Dynamic per-app dollar value for the Dashboard tab's personal "What-If" calculator.
+  // FIX (What-If math discrepancy): this used to run its OWN, architecturally different formula -
+  // a single blended commission rate x a single blended avg-premium-per-app, over calendar MTD -
+  // while the Agency MTD page ran a completely separate per-line (mix x avgPremium x rate) engine
+  // over YTD/rolling-30-day windows. Two different formulas over two different windows can never
+  // reliably agree, even for the exact same producer. Rather than re-approximate Agency MTD's
+  // engine a second time (and risk it drifting again on the next edit), reuse its literal computed
+  // output for this exact producer whenever it's available - i.e. whenever the viewer can also see
+  // Agency MTD to compare against (agencyOverviewData is gated identically, by canViewAgencyMtd;
+  // that's also exactly why this memo is declared AFTER agencyOverviewData instead of near
+  // blendedCommRate where it used to live). Defaults to `.mtd` (Agency MTD's own rolling-
+  // last-30-days default view - see AgencyOverviewTab.tsx's getWhatIfMode) so "same inputs" really
+  // does mean the same producer, the same $ goal, AND the same default window.
+  const personalWhatIf = useMemo(() => {
+    // RACE-CONDITION GUARD: compPlans hasn't finished its initial fetch yet. Without this, every
+    // producer - including ones who DO have a real plan - would transiently fall through
+    // commissionData's `compPlans.length === 0` branch and get bucketed into the no-plan fallback
+    // for one render before snapping to their real number the instant compPlans arrives. Deferring
+    // here means the UI can show an explicit loading state instead of a real-looking number that's
+    // silently wrong for a split second.
+    if (!compPlansLoaded) {
+      return { reqApps: 0, reqQuotes: 0, reqTouches: 0, commissionPerApp: 0, isLoading: true };
+    }
+
+    const activeUserId = selectedProducer === 'all' ? profile?.id : selectedProducer;
+    if (agencyOverviewData) {
+      const matchedRow = [...agencyOverviewData.leaderboard, ...agencyOverviewData.ownerRows].find((row: any) => row.id === activeUserId);
+      if (matchedRow?.whatIf?.mtd) {
+        const engine = matchedRow.whatIf.mtd;
+        return {
+          reqApps: engine.reqApps, reqQuotes: engine.reqQuotes, reqTouches: engine.reqTouches,
+          commissionPerApp: engine.commissionPerApp, isLoading: false,
+        };
+      }
+    }
+
+    // FALLBACK ENGINE - only reached when agencyOverviewData isn't available at all (roles below
+    // canViewAgencyMtd, e.g. plain producers, who have no Agency MTD page to cross-check against
+    // in the first place, so a mismatch here is unobservable). Kept as the same dynamic-avg-
+    // premium/blended-rate approximation this widget always used (with agencyEffectiveRates now
+    // driving blendedCommRate's own no-plan fallback - see that memo above), purely so this widget
+    // never goes blank for those roles.
+    const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
+    const getParentLine = (line: string) => resolveParentLine(line, lines);
+
+    let agencyTotalPremium = 0, agencyTotalApps = 0;
+    monthPolicies.forEach((pol: any) => {
+      if (pol.status !== 'bound' && pol.status !== 'issued') return;
+      if (pol.is_renewal) return; // Scoreboard/What-If math is New Business only.
+      const parentLine = getParentLine(pol.product_line);
+      if (!(PARENT_CATEGORIES as readonly string[]).includes(parentLine)) return;
+      agencyTotalPremium += Number(pol.premium_amount) || 0;
+      agencyTotalApps += 1;
+    });
+    const dynamicAvgPremiumPerApp = agencyTotalApps > 0 ? agencyTotalPremium / agencyTotalApps : 0;
+
+    const ownAvgPremiumPerApp = stats.monthBound > 0 ? stats.monthPremium / stats.monthBound : dynamicAvgPremiumPerApp;
+    const commissionPerApp = ownAvgPremiumPerApp * blendedCommRate;
+    // Last-resort floor only - unreachable in normal operation now that blendedCommRate's own
+    // no-plan fallback is driven by agencyEffectiveRates instead of a flat constant; this only
+    // guards a literal 0/NaN if the agency has zero premium history at all (brand-new agency).
+    const safeCommissionPerApp = commissionPerApp > 0 ? commissionPerApp : 85;
+
+    const closeRateDec = stats.monthQuotes > 0 ? (stats.monthBound / stats.monthQuotes) : 0.20;
+    const quoteRateDec = stats.monthTouches > 0 ? (stats.monthQuotes / stats.monthTouches) : 0.10;
+
+    const reqApps = Math.max(1, Math.ceil(whatIfCommission / safeCommissionPerApp));
+    const reqQuotes = Math.max(1, Math.ceil(reqApps / closeRateDec));
+    const reqTouches = Math.max(1, Math.ceil(reqQuotes / quoteRateDec));
+
+    return { reqApps, reqQuotes, reqTouches, commissionPerApp: safeCommissionPerApp, isLoading: false };
+  }, [monthPolicies, agencySettings, stats, blendedCommRate, whatIfCommission, compPlansLoaded, agencyOverviewData, selectedProducer, profile]);
 
   const lifeOverviewData = useMemo(() => {
     if (!profile || !canViewLifeModule) return null;

@@ -112,9 +112,6 @@ export default function CommissionTab({
     closeBonusModal();
   };
 
-  const activeUserId = selectedProducer === 'all' ? profile?.id : selectedProducer;
-  const activeProfile = team?.find((t: any) => t.id === activeUserId) || profile;
-  
   // --- DYNAMIC RBAC CHECK ---
   // Find the active user's role settings in the JSON array. Fallback to false if not found.
   const userRoleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
@@ -125,6 +122,23 @@ export default function CommissionTab({
   const canViewTeamComm = userRoleConfig
     ? userRoleConfig.permissions?.view_team_comm
     : (isManagerLevelRole(profile?.role) || isBookkeeper); // Fallback just in case
+
+  // SECURITY FIX (Commission Data Leak): `selectedProducer` is GLOBAL page state shared with the
+  // Scoreboard's producer dropdown, which a restricted viewer (canViewTeamComm=false) can still
+  // touch for legitimate, unrelated performance-viewing reasons (gated by a completely different
+  // permission, canViewAgencyDash). Previously this component trusted `selectedProducer` blindly
+  // for `activeUserId`/`activeProfile` - so selecting a team member on the Scoreboard and then
+  // switching to this tab silently carried that OTHER person's base salary, itemized policy
+  // statement, and commission breakdown along with it, even though the dropdown to pick them
+  // here was correctly hidden. `canViewCommissions` is false exactly when a restricted viewer's
+  // global selection still points at someone besides themselves - in that case this component
+  // renders ONLY the restricted state below (see the early return in the JSX), never real data
+  // for another producer, "regardless of which team member is active in the global state."
+  const requestedProducerId = selectedProducer === 'all' ? profile?.id : selectedProducer;
+  const isRestrictedSelection = requestedProducerId !== profile?.id && !canViewTeamComm;
+  const canViewCommissions = !isRestrictedSelection;
+  const activeUserId = canViewCommissions ? requestedProducerId : profile?.id;
+  const activeProfile = (activeUserId === profile?.id) ? profile : (team?.find((t: any) => t.id === activeUserId) || profile);
 
   const baseSalary = Number(activeProfile?.monthly_base_salary || 0);
   const earnedCash = commissionData.issuedComm + commissionData.bonusTotal;
@@ -216,13 +230,19 @@ export default function CommissionTab({
           <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             {selectedProducer === 'all' && canViewTeamComm ? (
               <><Users className="text-blue-600" size={32} /> Agency Payroll</>
+            ) : isRestrictedSelection ? (
+              <><Lock className="text-red-500" size={32} /> Restricted</>
             ) : (
               <><Wallet className="text-emerald-600" size={32} /> My Money</>
             )}
           </h2>
           <p className="text-gray-500 mt-1">
-            {selectedProducer === 'all' && canViewTeamComm ? 'Agency-wide commission overview and payout projections.' : `Currently assigned to: `}
-            {selectedProducer !== 'all' && <span className="font-semibold text-gray-700">{commissionData.planName || 'No Plan Assigned'}</span>}
+            {selectedProducer === 'all' && canViewTeamComm
+              ? 'Agency-wide commission overview and payout projections.'
+              : isRestrictedSelection
+                ? "You don't have permission to view this team member's commission data."
+                : `Currently assigned to: `}
+            {selectedProducer !== 'all' && !isRestrictedSelection && <span className="font-semibold text-gray-700">{commissionData.planName || 'No Plan Assigned'}</span>}
           </p>
         </div>
         
@@ -365,6 +385,25 @@ export default function CommissionTab({
                );
             })}
           </div>
+        </div>
+
+      ) : isRestrictedSelection ? (
+
+        /* =========================================
+           RESTRICTED VIEW - a viewer without canViewTeamComm has a stale/foreign
+           `selectedProducer` left over from somewhere else in the app (most commonly the
+           Scoreboard's producer dropdown, which is gated by a completely different permission).
+           This tab must never render another team member's salary/commission/itemized policy
+           data for them just because that global selection happens to still point elsewhere -
+           show ONLY this restricted state, never fall through to real numbers.
+        ========================================= */
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-12 text-center space-y-3 animate-in fade-in duration-300">
+          <Lock className="mx-auto text-red-400" size={40} />
+          <h3 className="text-xl font-bold text-red-700">Access Restricted</h3>
+          <p className="text-red-600 max-w-md mx-auto font-medium">
+            You don&apos;t have permission to view another team member&apos;s commission or salary data.
+            Select &quot;My Personal Commission&quot; above, or ask an owner/manager for access.
+          </p>
         </div>
 
       ) : (
