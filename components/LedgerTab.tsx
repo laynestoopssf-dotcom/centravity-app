@@ -6,6 +6,7 @@ import { encryptIdentifierForAgency } from "../utils/e2ee";
 import { cacheIdentifier } from "../utils/identifierCache";
 import IdentifierChip from "./ui/IdentifierChip";
 import FormattedNumberInput from "./ui/FormattedNumberInput";
+import { DATE_RANGE_OPTIONS } from "../utils/dateRanges";
 
 // Bulk-Delete row selection - one independent instance per ledger table (Bound Policies,
 // Quotes, Complex Resolutions, Calls & Touches, etc.), NOT shared globally, so checking rows
@@ -99,12 +100,15 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   // Bulk-Delete selection state - one per rendered table (see useRowSelection above). Declared
   // unconditionally (not inside the isServiceView branch) since hooks can't be called
   // conditionally; only whichever set is actually rendered below ever gets used.
-  const serviceTouchSelection = useRowSelection();
+  const serviceOutboundTouchSelection = useRowSelection();
+  const serviceInboundTouchSelection = useRowSelection();
   const serviceResolutionSelection = useRowSelection();
   const servicePolicySelection = useRowSelection();
   const boundSelection = useRowSelection();
   const quoteSelection = useRowSelection();
   const resolutionSelection = useRowSelection();
+  const outboundTouchSelection = useRowSelection();
+  const inboundTouchSelection = useRowSelection();
   const activitySelection = useRowSelection();
 
   const openEditActivity = (act: any) => setEditingEntry({ kind: "activity", id: act.id, loggedAt: act.logged_at });
@@ -167,7 +171,13 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
 
   // FIX 2 & 3: Map Complex Resolutions to the Policy table so we can see Customer Name & Sentiment, 
   // and simultaneously remove them from the general Policies table!
-  const serviceTouches = ledgerActivities.filter((a: any) => a.activity_type === 'touchpoint');
+  // Split Touches: "Outbound" (producer/service-rep-initiated calls, logged as 'touchpoint')
+  // vs. "Inbound" (customer-initiated calls, logged as 'inbound_call') are now two distinct
+  // reportable tables/metrics instead of being silently merged into one "Touches" bucket -
+  // mirrors the Inbound/Outbound split the Scoreboard's own stats already track separately
+  // (see tempStats.todayTouches vs. tempStats.todayInbound in app/dashboard/page.tsx).
+  const serviceOutboundTouches = ledgerActivities.filter((a: any) => a.activity_type === 'touchpoint');
+  const serviceInboundTouches = ledgerActivities.filter((a: any) => a.activity_type === 'inbound_call');
   const serviceResolutions = ledgerPolicies.filter((p: any) => p.product_line === 'Complex Resolution');
   const servicePolicies = ledgerPolicies.filter((p: any) => p.product_line !== 'Complex Resolution');
 
@@ -180,7 +190,14 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   const standardResolutions = ledgerPolicies.filter((p: any) => p.product_line === 'Complex Resolution');
   const boundPolicies = ledgerPolicies.filter((p: any) => p.status === 'bound' || p.status === 'issued');
   const quotedPolicies = ledgerPolicies.filter((p: any) => p.status === 'quoted');
-  const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote');
+  // Standard layout's "Calls & Touches" is now split the same way (see the service-view
+  // serviceOutboundTouches/serviceInboundTouches above) into dedicated Outbound/Inbound tables.
+  // Anything else that isn't a policy/quote row (e.g. a stray complex_res/cross_sell activity
+  // log entry) still falls back into this residual "Other Activity" bucket so it never
+  // silently disappears from the Ledger entirely.
+  const outboundTouches = ledgerActivities.filter((a: any) => a.activity_type === 'touchpoint');
+  const inboundTouches = ledgerActivities.filter((a: any) => a.activity_type === 'inbound_call');
+  const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote' && a.activity_type !== 'touchpoint' && a.activity_type !== 'inbound_call');
 
   const activityTypeLabel = (type: string) => {
     switch (type) {
@@ -213,11 +230,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
             )}
 
             <select value={ledgerDateFilter} onChange={e => setLedgerDateFilter(e.target.value as any)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold min-w-[150px]">
-              <option value="today">Last 24 Hours</option>
-              <option value="7days">Last 7 Days</option>
-              <option value="mtd">Month to Date</option>
-              <option value="ytd">Year to Date</option>
-              <option value="custom">Custom Range</option>
+              {DATE_RANGE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
             
             {ledgerDateFilter === 'custom' && (
@@ -247,24 +260,56 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         <>
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
              <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center gap-3">
-               <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Touches (Calls/Contacts)</h3>
+               <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Outbound Touches</h3>
                <div className="flex items-center gap-2">
-                 <DeleteSelectedButton selection={serviceTouchSelection} onDelete={deleteActivitiesBulk} />
-                 <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{serviceTouches.length} Records</span>
+                 <DeleteSelectedButton selection={serviceOutboundTouchSelection} onDelete={deleteActivitiesBulk} />
+                 <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{serviceOutboundTouches.length} Records</span>
                </div>
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceTouches.map((a: any) => a.id)} selection={serviceTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceOutboundTouches.map((a: any) => a.id)} selection={serviceOutboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No touches logged.</td></tr>) : (
-                     serviceTouches.map((act: any) => (
+                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceOutboundTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No outbound touches logged.</td></tr>) : (
+                     serviceOutboundTouches.map((act: any) => (
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
-                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={serviceTouchSelection} /></td>
+                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={serviceOutboundTouchSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800">TOUCHPOINT</span></td>
+                         <td className="px-6 py-4 text-right">
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                         </td>
+                       </tr>
+                     ))
+                   )}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 bg-sky-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-sky-900 flex items-center gap-2"><PhoneCall size={20} className="text-sky-600"/> Inbound Touches</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={serviceInboundTouchSelection} onDelete={deleteActivitiesBulk} />
+                 <span className="bg-sky-100 text-sky-800 text-xs font-bold px-3 py-1 rounded-full">{serviceInboundTouches.length} Records</span>
+               </div>
+             </div>
+             <div className="overflow-x-auto max-h-80 overflow-y-auto">
+               <table className="w-full text-left text-sm">
+                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceInboundTouches.map((a: any) => a.id)} selection={serviceInboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-50">
+                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceInboundTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No inbound touches logged.</td></tr>) : (
+                     serviceInboundTouches.map((act: any) => (
+                       <tr key={act.id} className="hover:bg-sky-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={serviceInboundTouchSelection} /></td>
+                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-sky-100 text-sky-800">INBOUND CALL</span></td>
                          <td className="px-6 py-4 text-right">
                            <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
                            <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
@@ -484,30 +529,25 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             {/* Quotes are tracked exclusively via the "Quotes" table above (sourced from the
-                 policies table's status === 'quoted' rows, written only when a quote is officially
-                 completed through the Log Activity workflow). This section is calls/touches only -
-                 activity_type === 'quote' rows are intentionally excluded here so a single quote
-                 submission isn't counted a second time under a legacy "scoreboard click" label. */}
              <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center gap-3">
-               <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Calls & Touches</h3>
+               <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Outbound Touches</h3>
                <div className="flex items-center gap-2">
-                 <DeleteSelectedButton selection={activitySelection} onDelete={deleteActivitiesBulk} />
-                 <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{callsAndTouches.length} Records</span>
+                 <DeleteSelectedButton selection={outboundTouchSelection} onDelete={deleteActivitiesBulk} />
+                 <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{outboundTouches.length} Records</span>
                </div>
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={callsAndTouches.map((a: any) => a.id)} selection={activitySelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={outboundTouches.map((a: any) => a.id)} selection={outboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : callsAndTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No calls found.</td></tr>) : (
-                     callsAndTouches.map((act: any) => {
+                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : outboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No outbound touches found.</td></tr>) : (
+                     outboundTouches.map((act: any) => {
                        const label = activityTypeLabel(act.activity_type);
                        return (
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
-                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={activitySelection} /></td>
+                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={outboundTouchSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4 font-bold text-gray-900">{act.profiles?.first_name} {act.profiles?.last_name}</td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
@@ -523,6 +563,84 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                </table>
              </div>
           </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 bg-sky-50/30 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-sky-900 flex items-center gap-2"><PhoneCall size={20} className="text-sky-600"/> Inbound Touches</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={inboundTouchSelection} onDelete={deleteActivitiesBulk} />
+                 <span className="bg-sky-100 text-sky-800 text-xs font-bold px-3 py-1 rounded-full">{inboundTouches.length} Records</span>
+               </div>
+             </div>
+             <div className="overflow-x-auto max-h-80 overflow-y-auto">
+               <table className="w-full text-left text-sm">
+                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={inboundTouches.map((a: any) => a.id)} selection={inboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-50">
+                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : inboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No inbound touches found.</td></tr>) : (
+                     inboundTouches.map((act: any) => {
+                       const label = activityTypeLabel(act.activity_type);
+                       return (
+                       <tr key={act.id} className="hover:bg-sky-50/50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={inboundTouchSelection} /></td>
+                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900">{act.profiles?.first_name} {act.profiles?.last_name}</td>
+                         <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
+                         <td className="px-6 py-4 text-right">
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                         </td>
+                       </tr>
+                       );
+                     })
+                   )}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+
+          {/* Residual "Other Activity" - anything that isn't a policy/quote row and isn't a
+              touchpoint/inbound_call either (e.g. a stray complex_res/cross_sell activity log
+              entry surfaced outside the Service layout). Kept so a row like that never silently
+              disappears from the standard Ledger view entirely; ordinarily empty for pure
+              producer/manager agencies since complex_res/cross_sell are logged exclusively by
+              Service reps (see isServiceView above). */}
+          {callsAndTouches.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><PhoneCall size={20} className="text-gray-500"/> Other Activity</h3>
+               <div className="flex items-center gap-2">
+                 <DeleteSelectedButton selection={activitySelection} onDelete={deleteActivitiesBulk} />
+                 <span className="bg-gray-200 text-gray-700 text-xs font-bold px-3 py-1 rounded-full">{callsAndTouches.length} Records</span>
+               </div>
+             </div>
+             <div className="overflow-x-auto max-h-80 overflow-y-auto">
+               <table className="w-full text-left text-sm">
+                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={callsAndTouches.map((a: any) => a.id)} selection={activitySelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-50">
+                   {callsAndTouches.map((act: any) => {
+                       const label = activityTypeLabel(act.activity_type);
+                       return (
+                       <tr key={act.id} className="hover:bg-gray-50 transition-colors">
+                         <td className="px-6 py-4"><RowCheckbox id={act.id} selection={activitySelection} /></td>
+                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900">{act.profiles?.first_name} {act.profiles?.last_name}</td>
+                         <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
+                         <td className="px-6 py-4 text-right">
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                         </td>
+                       </tr>
+                       );
+                     })}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+          )}
         </>
       )}
 

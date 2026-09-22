@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { supabase } from '../utils/supabase';
 import { resolveParentLine } from '../utils/productLines';
 import { isManagerLevelRole, isOwnerLevelRole } from '../utils/roles';
+import { resolveDateRange, DATE_RANGE_OPTIONS, type DateRangeKey } from '../utils/dateRanges';
 import DashboardMetrics from './dashboard/DashboardMetrics';
 import { hashSearchIdentifier } from '../utils/crypto';
 import { getCachedIdentifier, cacheIdentifier } from '../utils/identifierCache';
@@ -190,6 +191,27 @@ export default function DashboardTab({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'logged_at', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const PIPELINE_PAGE_SIZE = 10;
+
+  // Active Pipeline date range + team filter. `pipeline` itself is already scoped server-side
+  // by the global Scoreboard producer selection (see fetchPipeline's `scopedUserId` in
+  // app/dashboard/page.tsx), but that global selector drives RBAC-sensitive data elsewhere on
+  // the dashboard (Commissions, What-If, etc.) - see the Commission Data Leak fix. This filter
+  // is intentionally local/client-side only, so an Owner/Manager can narrow the Active Pipeline
+  // table down to one producer without touching that global state or its RBAC implications.
+  // Defaults to "This month" rather than any single-day option so the table isn't emptied out
+  // on first load - open deals routinely sit in the pipeline for weeks.
+  const [pipelineDateFilter, setPipelineDateFilter] = useState<DateRangeKey>('thisMonth');
+  const [pipelineCustomStart, setPipelineCustomStart] = useState("");
+  const [pipelineCustomEnd, setPipelineCustomEnd] = useState("");
+  const [pipelineProducerFilter, setPipelineProducerFilter] = useState("all");
+  // Declared up here (alongside the other hooks, before the `if (!profile) return null` guard
+  // below) rather than down next to where it's consumed - React Hooks must run unconditionally
+  // in the same order every render, and that early return would otherwise make this hook
+  // conditional.
+  const pipelineDateRange = useMemo(
+    () => resolveDateRange(pipelineDateFilter, pipelineCustomStart, pipelineCustomEnd),
+    [pipelineDateFilter, pipelineCustomStart, pipelineCustomEnd]
+  );
 
   const requestSort = (key: string) => {
     setCurrentPage(1);
@@ -454,6 +476,21 @@ export default function DashboardTab({
   // across every filter that branches on it.
   const TERMINAL_STATUSES = ['issued', 'not_taken', 'not_sold'];
 
+  // Date-range + team-member filter for the Active Pipeline/Archive table below (pipelineDateRange
+  // itself is declared as a hook above, before the `if (!profile) return null` guard). Uses the
+  // same bound_at||written_at||logged_at "effective date" convention as the Data Ledger (see
+  // components/LedgerTab.tsx / fetchLedgerData's `effectiveDate` helper) so a deal that moved
+  // past 'quoted' is windowed by when it actually happened, not by whenever the row was first
+  // logged. `end === null` means the range is still open-ended (through right now).
+  const pipelineEffectiveDate = (p: any) => new Date(p.bound_at || p.written_at || p.logged_at);
+  const matchesPipelineFilters = (p: any) => {
+    if (pipelineProducerFilter !== 'all' && p.user_id !== pipelineProducerFilter) return false;
+    const d = pipelineEffectiveDate(p);
+    if (d < pipelineDateRange.start) return false;
+    if (pipelineDateRange.end && d > pipelineDateRange.end) return false;
+    return true;
+  };
+
   const activePipeline = (pipeline || []).filter((p: any) => {
     // "Not Taken / Rejected / Declined by UW" and "Not Sold" are terminal outcomes like Issued -
     // they belong in the Archive, not the working pipeline, so they don't clutter the list of
@@ -464,6 +501,7 @@ export default function DashboardTab({
        const today = new Date();
        if (logDate.toDateString() !== today.toDateString()) return false;
     }
+    if (!matchesPipelineFilters(p)) return false;
     if (activeSearch) {
       return matchesIdentifierSearch(p, activeSearch.toLowerCase(), activeSearchHash, activeSearchTrigrams);
     }
@@ -478,6 +516,7 @@ export default function DashboardTab({
        const today = new Date();
        if (logDate.toDateString() === today.toDateString()) return false;
     }
+    if (!matchesPipelineFilters(p)) return false;
 
     if (archiveSearch) {
       return matchesIdentifierSearch(p, archiveSearch.toLowerCase(), archiveSearchHash, archiveSearchTrigrams);
@@ -1300,7 +1339,8 @@ export default function DashboardTab({
         {coachingErrorMsg && (
           <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs font-bold">{coachingErrorMsg}</div>
         )}
-        <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
            <h3 className="font-bold text-gray-900 flex items-center gap-2">
              {showArchive ? <Archive size={20} className="text-gray-500" /> : <List size={20} className="text-blue-500" />}
              {showArchive ? 'Issued Archive' : 'Active Pipeline'}
@@ -1321,6 +1361,39 @@ export default function DashboardTab({
                {showArchive ? 'View Active Pipeline' : 'View Archive'}
              </button>
            </div>
+          </div>
+
+          {/* Pipeline Team Filter + Date Range - local/client-side only (see pipelineDateRange /
+              matchesPipelineFilters above), applies to whichever of Active/Archive is showing. */}
+          <div className="flex flex-wrap items-center gap-3">
+            {isManagerLevelRole(profile?.role) && (
+              <select
+                value={pipelineProducerFilter}
+                onChange={(e) => { setCurrentPage(1); setPipelineProducerFilter(e.target.value); }}
+                className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 min-w-[160px]"
+              >
+                <option value="all">All Team Members</option>
+                <option value={profile.id}>Myself</option>
+                {(team || []).map((t: any) => <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>)}
+              </select>
+            )}
+
+            <select
+              value={pipelineDateFilter}
+              onChange={(e) => { setCurrentPage(1); setPipelineDateFilter(e.target.value as DateRangeKey); }}
+              className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 min-w-[140px]"
+            >
+              {DATE_RANGE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+
+            {pipelineDateFilter === 'custom' && (
+              <div className="flex gap-2 items-center">
+                <input type="date" value={pipelineCustomStart} onChange={(e) => { setCurrentPage(1); setPipelineCustomStart(e.target.value); }} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400" />
+                <span className="text-gray-400 font-bold">to</span>
+                <input type="date" value={pipelineCustomEnd} onChange={(e) => { setCurrentPage(1); setPipelineCustomEnd(e.target.value); }} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400" />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">

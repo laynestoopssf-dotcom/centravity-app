@@ -6,6 +6,7 @@ import { resolveParentLine } from "../../utils/productLines";
 import { calculateCommission, makeParentLineResolver, resolveAccelerators, resolveRates, emptyCommissionLineTotals } from "../../utils/commissionMath";
 import { enrichCustomTargets, type CustomTargetRow } from "../../utils/customTargets";
 import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
+import { resolveDateRange, type DateRangeKey } from "../../utils/dateRanges";
 import { generateCoachingInsight as generateCoachingInsightAction } from "../actions/coaching";
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
@@ -219,7 +220,7 @@ export default function Home() {
 
   const [ledgerActivities, setLedgerActivities] = useState<any[]>([]);
   const [ledgerPolicies, setLedgerPolicies] = useState<any[]>([]);
-  const [ledgerDateFilter, setLedgerDateFilter] = useState<'today' | '7days' | 'mtd' | 'ytd' | 'custom'>('today');
+  const [ledgerDateFilter, setLedgerDateFilter] = useState<DateRangeKey>('today');
   const [ledgerCustomStart, setLedgerCustomStart] = useState("");
   const [ledgerCustomEnd, setLedgerCustomEnd] = useState("");
   const [ledgerProducerFilter, setLedgerProducerFilter] = useState("all");
@@ -1174,30 +1175,27 @@ export default function Home() {
     setLedgerLoading(true);
 
     try {
-      const today = new Date();
-      let startDate = new Date();
-      let endDate = new Date();
-      let useCustomEnd = false;
-
-      if (ledgerDateFilter === 'today') {
-        startDate = new Date(today.getTime() - (24 * 60 * 60 * 1000));
-      } else if (ledgerDateFilter === '7days') {
-        startDate = new Date(today.getTime() - (7 * 24 * 60 * 60 * 1000));
-      } else if (ledgerDateFilter === 'mtd') {
-        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      } else if (ledgerDateFilter === 'ytd') {
-        startDate = new Date(today.getFullYear(), 0, 1);
-      } else if (ledgerDateFilter === 'custom') {
-        if (ledgerCustomStart) startDate = new Date(`${ledgerCustomStart}T00:00:00`);
-        if (ledgerCustomEnd) { endDate = new Date(`${ledgerCustomEnd}T23:59:59`); useCustomEnd = true; }
-      }
+      // Date window resolved via the shared utils/dateRanges helper so "This week"/"Last
+      // month"/etc. mean exactly the same thing here as they do on the Active Pipeline's date
+      // filter (components/DashboardTab.tsx) - see that file's `pipelineDateFilter` for the
+      // other consumer. `end === null` means the range is open-ended (still accumulating through
+      // right now); every other range is a fully closed [start, end] window.
+      const { start: startDate, end: resolvedEnd } = resolveDateRange(ledgerDateFilter, ledgerCustomStart, ledgerCustomEnd);
+      const endDate = resolvedEnd || new Date();
+      const hasEndBound = resolvedEnd !== null;
 
       const targetAgency = profile.agency_id;
       
+      // Split Touches (audit finding): 'inbound_call' rows were never included in this `.in()`
+      // filter, so Inbound Touches silently never made it into `ledgerActivities` at all - the
+      // Ledger's "Calls & Touches" table only ever showed outbound 'touchpoint' rows even though
+      // the Scoreboard's own Inbound tile (see tempStats.todayInbound in fetchDashboardData) has
+      // tracked inbound calls separately all along. Added here so Inbound Touches has real data
+      // to split into its own table/metric (see LedgerTab.tsx's inboundTouches).
       let activityQuery = supabase.from('activities')
         .select('*')
         .eq('agency_id', targetAgency)
-        .in('activity_type', ['touchpoint', 'quote', 'complex_res', 'cross_sell'])
+        .in('activity_type', ['touchpoint', 'inbound_call', 'quote', 'complex_res', 'cross_sell'])
         .gte('logged_at', startDate.toISOString())
         .order('logged_at', { ascending: false })
         .limit(10000); 
@@ -1231,7 +1229,7 @@ export default function Home() {
         .order('logged_at', { ascending: false })
         .limit(10000);
 
-      if (useCustomEnd) {
+      if (hasEndBound) {
         activityQuery = activityQuery.lte('logged_at', endDate.toISOString());
         // No .lte() widen needed on the policy query's upper bound - the effective-date window
         // applied client-side below already re-checks the exact endDate boundary precisely.
@@ -1267,7 +1265,7 @@ export default function Home() {
       const windowedPolicies = (pData || []).filter((p: any) => {
         const d = effectiveDate(p);
         if (d < startDate) return false;
-        if (useCustomEnd && d > endDate) return false;
+        if (hasEndBound && d > endDate) return false;
         return true;
       });
 
