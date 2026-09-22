@@ -1975,7 +1975,7 @@ export default function SettingsTab({
                    <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><DollarSign size={20}/></div>
                    <div><h3 className="font-bold text-gray-900">Compensation Plans</h3><p className="text-xs text-gray-500">Tiered rules that automatically calculate commission</p></div>
                  </div>
-                 <button onClick={() => setEditingPlan({ name: "New Plan", rules: { base_rates: { auto_nb: 0, fire_nb: 0, commercial_nb: 0, life_nb: 0, health_nb: 0 }, thresholds: { required_apps_to_unlock: 0, required_premium_to_unlock: 0, required_life_health_apps_to_unlock: 0 }, accelerators: [], custom_bonuses: [] } })} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 text-sm"><Plus size={16}/> Create Plan</button>
+                 <button onClick={() => setEditingPlan({ name: "New Plan", rules: { base_rates: { auto_nb: 0, fire_nb: 0, commercial_nb: 0, term_life_nb: 0, term_life_rate_type: 'percent', whole_life_nb: 0, whole_life_rate_type: 'percent', health_nb: 0 }, thresholds: { required_apps_to_unlock: 0, required_premium_to_unlock: 0, required_life_health_apps_to_unlock: 0 }, accelerators: [], custom_bonuses: [] } })} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 text-sm"><Plus size={16}/> Create Plan</button>
               </div>
               <div className="p-6 space-y-3">
                 {compPlans.length === 0 && <p className="text-sm text-gray-400">No comp plans created. Click 'Create Plan' to begin.</p>}
@@ -2008,17 +2008,58 @@ export default function SettingsTab({
               
               <div className="p-6 bg-gray-50 border-b border-gray-200">
                 <h4 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
-                  1. Base Commission Rates (%)
-                  <InfoTooltip text="The starting commission % this plan pays per line before any accelerator bumps below are applied. Every producer on this plan earns at least this rate on Auto/Fire/Commercial/Life/Health premium." />
+                  1. Base Commission Rates
+                  <InfoTooltip text="The starting commission this plan pays per line before any accelerator bumps below are applied. Auto/Fire/Commercial/Health are always a % of premium; Term Life and Whole Life can each independently be switched to a flat $ amount per policy instead." />
                 </h4>
-                <div className="grid grid-cols-5 gap-4">
-                  {['auto_nb', 'fire_nb', 'commercial_nb', 'life_nb', 'health_nb'].map(lob => (
-                    <div key={lob}>
-                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{lob.split('_')[0]}</label>
-                      <input type="number" value={editingPlan.rules?.base_rates?.[lob] || 0} onChange={e => updateRule('base_rates', lob, Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" />
-                    </div>
-                  ))}
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+                  {[
+                    { key: 'auto_nb', label: 'Auto' },
+                    { key: 'fire_nb', label: 'Fire' },
+                    { key: 'commercial_nb', label: 'Commercial' },
+                    { key: 'term_life_nb', label: 'Term Life', rateTypeKey: 'term_life_rate_type' },
+                    { key: 'whole_life_nb', label: 'Whole Life', rateTypeKey: 'whole_life_rate_type' },
+                    { key: 'health_nb', label: 'Health' },
+                  ].map(({ key, label, rateTypeKey }) => {
+                    // Flat-$-per-App Life Commissions: only Term Life/Whole Life ever get this
+                    // toggle - every other line stays a plain % input exactly as before.
+                    const rateType = rateTypeKey ? (editingPlan.rules?.base_rates?.[rateTypeKey] === 'flat' ? 'flat' : 'percent') : 'percent';
+                    const isFlat = rateType === 'flat';
+                    const fallbackVal = (key === 'term_life_nb' || key === 'whole_life_nb') ? (editingPlan.rules?.base_rates?.life_nb || 0) : 0;
+                    return (
+                      <div key={key}>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase">{label}</label>
+                          {rateTypeKey && (
+                            <select
+                              value={rateType}
+                              onChange={e => updateRule('base_rates', rateTypeKey, e.target.value)}
+                              className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="percent">% of Premium</option>
+                              <option value="flat">Flat $ / App</option>
+                            </select>
+                          )}
+                        </div>
+                        <div className="relative">
+                          {isFlat && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">$</span>}
+                          <input
+                            type="number"
+                            value={editingPlan.rules?.base_rates?.[key] ?? fallbackVal}
+                            onChange={e => updateRule('base_rates', key, Number(e.target.value))}
+                            className={`w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold ${isFlat ? 'pl-6 pr-2.5' : 'pr-6'}`}
+                          />
+                          {!isFlat && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">%</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+                {editingPlan.rules?.base_rates?.life_nb !== undefined && editingPlan.rules?.base_rates?.term_life_nb === undefined && editingPlan.rules?.base_rates?.whole_life_nb === undefined && (
+                  <p className="text-[11px] text-amber-600 font-semibold mt-3">This plan still uses its legacy blended Life rate ({editingPlan.rules.base_rates.life_nb}%) on both Term and Whole Life until you adjust either field above.</p>
+                )}
+                {(editingPlan.rules?.base_rates?.term_life_rate_type === 'flat' || editingPlan.rules?.base_rates?.whole_life_rate_type === 'flat') && (
+                  <p className="text-[11px] text-gray-500 font-semibold mt-3">Flat $ lines pay strictly per bound/issued policy count on that line - premium amount is ignored for that line's payout.</p>
+                )}
               </div>
 
               <div className="p-6 bg-white border-b border-gray-200">
@@ -2095,7 +2136,9 @@ export default function SettingsTab({
                             <option value="pnc_base">Property &amp; Casualty (P&amp;C) Base</option>
                             <option value="auto_base">Auto Base</option>
                             <option value="fire_base">Fire Base</option>
-                            <option value="life_base">Life Base</option>
+                            <option value="life_base">Life Base (Term + Whole)</option>
+                            <option value="term_life_base">Term Life Base</option>
+                            <option value="whole_life_base">Whole Life Base</option>
                             <option value="health_base">Health Base</option>
                           </select>
                           <span className="text-xs font-bold text-gray-400">by</span>

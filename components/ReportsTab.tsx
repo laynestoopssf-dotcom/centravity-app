@@ -85,6 +85,8 @@ type ReportRow = {
   boundPremium: number;
   issuedApps: number; // status === 'issued' only - powers the Written vs. Issued view
   issuedPremium: number;
+  pivots: number; // activity_type === 'pivot' - see components/dashboard/PivotReviewModals.tsx
+  reviews: number; // activity_type === 'review'
   lines: Record<ParentLine, { apps: number; premium: number }>;
 };
 
@@ -186,7 +188,7 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       let activityQuery = supabase.from('activities')
         .select('user_id, activity_type, logged_at')
         .eq('agency_id', profile.agency_id)
-        .in('activity_type', ['touchpoint', 'inbound_call', 'quote'])
+        .in('activity_type', ['touchpoint', 'inbound_call', 'quote', 'pivot', 'review'])
         .gte('logged_at', startIso)
         .lte('logged_at', endIso)
         .limit(10000);
@@ -231,6 +233,7 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
             userId: uid, name: nameForUser(uid),
             inbound: 0, outbound: 0, quotes: 0, bound: 0, premium: 0,
             boundApps: 0, boundPremium: 0, issuedApps: 0, issuedPremium: 0,
+            pivots: 0, reviews: 0,
             lines: makeEmptyLines(),
           });
         }
@@ -251,6 +254,8 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
         if (act.activity_type === 'inbound_call') { g.inbound++; point.Inbound++; }
         else if (act.activity_type === 'touchpoint') { g.outbound++; point.Outbound++; }
         else if (act.activity_type === 'quote') { g.quotes++; point.Quotes++; }
+        else if (act.activity_type === 'pivot') { g.pivots++; }
+        else if (act.activity_type === 'review') { g.reviews++; }
       });
 
       const customLines = agencySettings?.custom_product_lines || [];
@@ -331,6 +336,8 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       { key: 'quotes', label: 'Quotes', align: 'text-center', numeric: true, getValue: (r: ReportRow) => r.quotes },
       { key: 'bound', label: 'Bound Apps', align: 'text-center', numeric: true, getValue: (r: ReportRow) => r.bound },
       { key: 'premium', label: 'Premium', align: 'text-right', numeric: true, isCurrency: true, getValue: (r: ReportRow) => r.premium },
+      { key: 'pivots', label: 'Pivots', align: 'text-center', numeric: true, getValue: (r: ReportRow) => r.pivots },
+      { key: 'reviews', label: 'Reviews Asked', align: 'text-center', numeric: true, getValue: (r: ReportRow) => r.reviews },
     ];
   }, [reportView]);
 

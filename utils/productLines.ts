@@ -18,3 +18,24 @@ export const resolveParentLine = (line: string, linesDict: any[]): string => {
   const fallback = PARENT_LINE_FALLBACK_ORDER.find(p => normalized.includes(p.toLowerCase()));
   return fallback || line;
 };
+
+// Granular Life Commissions: sub-type resolver for anything that rolls up to the "Life" parent
+// category (see resolveParentLine above), used ONLY by the commission-rate engine
+// (utils/commissionMath.ts) to decide whether a Life policy pays its Term or Whole rate. Every
+// other consumer of "Life" as a parent bucket (Scoreboard tiles, roster counts, Pipeline grouping,
+// Weekly Rank, Agency Overview, etc.) is completely unaffected by this - resolveParentLine still
+// returns the single umbrella "Life" for all of those, on purpose, so this split only ever touches
+// payout math, never production/app-count reporting.
+//
+// An agency creates the actual "Term Life"/"Whole Life" product lines themselves via Settings ->
+// Custom Product Lines (mapped to parent "Life", exactly like any other custom line) - there's
+// nothing new to configure there. This just reads the resulting name text: anything containing
+// "whole" is Whole Life; everything else under the Life umbrella (including a bare legacy "Life"
+// product line from before this split existed) defaults to Term, matching the same Term-as-default
+// convention utils/commissionRates.ts already established for the separate agency-revenue engine.
+export type LifeSubType = 'term' | 'whole';
+
+export const resolveLifeSubType = (productLine: string): LifeSubType => {
+  const normalized = (productLine || '').trim().toLowerCase();
+  return normalized.includes('whole') ? 'whole' : 'term';
+};

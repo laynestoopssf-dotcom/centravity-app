@@ -11,6 +11,7 @@ import { generateCoachingInsight as generateCoachingInsightAction } from "../act
 import type { CoachingInsightPayload } from "../actions/coaching.types";
 import QuickActionsBar from "../../components/dashboard/QuickActionsBar";
 import LogActivityModal, { type LoggingType } from "../../components/dashboard/LogActivityModal";
+import { PivotModal, AskForReviewModal } from "../../components/dashboard/PivotReviewModals";
 import { isLoggerMessage, isLoggerDataChangedMessage } from "../../utils/loggerBridge";
 import { hashIdentifiersFull } from "../../utils/crypto";
 import { encryptIdentifiersForAgency } from "../../utils/e2ee";
@@ -175,6 +176,9 @@ export default function Home() {
     // Inbound calls are tracked separately from Outbound touches (see logInboundCall) so the
     // Scoreboard can show them as two distinct halves of the "Calls" tile.
     todayInbound: 0, weekInbound: 0, monthInbound: 0,
+    // Team's daily/MTD Pivot & Ask-for-Review progress - see the Scoreboard tile just below the
+    // Daily/MTD Conversion tiles in DashboardTab.tsx, and PivotModal/AskForReviewModal.
+    todayPivots: 0, monthPivots: 0, todayReviews: 0, monthReviews: 0,
     monthIssuedPremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 },
     monthPipelinePremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 }
   });
@@ -217,6 +221,12 @@ export default function Home() {
   // components/dashboard/LogActivityModal.tsx itself, since that component is also mounted
   // standalone by app/logger/page.tsx, which has none of this page's state to reach into.
   const [logModalInitialDate, setLogModalInitialDate] = useState(todayDateStr());
+
+  // "Pivot" / "Ask for Review" modals - see components/dashboard/PivotReviewModals.tsx. Both are
+  // simple, single-purpose logs (never a companion `policies` row) opened from the two buttons
+  // sitting right next to "Log Past Data" on the Scoreboard.
+  const [isPivotModalOpen, setIsPivotModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   const [ledgerActivities, setLedgerActivities] = useState<any[]>([]);
   const [ledgerPolicies, setLedgerPolicies] = useState<any[]>([]);
@@ -593,6 +603,7 @@ export default function Home() {
       weekPosRes: 0, weekNegRes: 0,
       todayCrossSell: 0, weekCrossSell: 0, monthCrossSell: 0,
       todayInbound: 0, weekInbound: 0, monthInbound: 0,
+      todayPivots: 0, monthPivots: 0, todayReviews: 0, monthReviews: 0,
       monthIssuedPremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 },
       monthPipelinePremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 }
     };
@@ -629,6 +640,8 @@ export default function Home() {
         // Service team's "Cross-Sells" scoreboard tile reads monthCrossSell directly (activity-based,
         // so it moves the instant the activity is logged rather than waiting for the quote to bind).
         if (act.activity_type === 'cross_sell') tempStats.monthCrossSell++;
+        if (act.activity_type === 'pivot') tempStats.monthPivots++;
+        if (act.activity_type === 'review') tempStats.monthReviews++;
       }
       if (isSameWeek(logDate)) {
         if (act.activity_type === 'touchpoint') tempStats.weekTouches++;
@@ -641,6 +654,8 @@ export default function Home() {
         if (act.activity_type === 'inbound_call') tempStats.todayInbound++;
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.todayQuotes++;
         if (act.activity_type === 'cross_sell') tempStats.todayCrossSell++;
+        if (act.activity_type === 'pivot') tempStats.todayPivots++;
+        if (act.activity_type === 'review') tempStats.todayReviews++;
       }
       
       if (logDate >= startOfQuarter) {
@@ -2279,6 +2294,21 @@ export default function Home() {
     setIsBackdateModalOpen(false);
     openLogModal(type, backdateDate);
   };
+
+  // "Pivot" / "Ask for Review" - PivotModal/AskForReviewModal own their own submit logic (identifier
+  // hashing/encryption + the `activities` insert itself); this tab's job is just opening them and,
+  // once one succeeds, refreshing the stats the new Scoreboard tile and Reports page read (no
+  // pipeline/agency-overview refetch needed - unlike Quote/Bound/Complex Resolution, neither writes
+  // a `policies` row, so nothing there ever changes).
+  const openPivotModal = () => setIsPivotModalOpen(true);
+  const openReviewModal = () => setIsReviewModalOpen(true);
+  const handlePivotReviewSuccess = (message: string) => {
+    if (!profile) return;
+    showToast(message);
+    setIsPivotModalOpen(false);
+    setIsReviewModalOpen(false);
+    fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+  };
   
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2935,6 +2965,8 @@ export default function Home() {
         monthTotalApps: metrics.totalApps,
         issuedPremLOB: emptyCommissionLineTotals(),
         pipelinePremLOB: emptyCommissionLineTotals(),
+        issuedAppsLOB: emptyCommissionLineTotals(),
+        pipelineAppsLOB: emptyCommissionLineTotals(),
       };
       const { bumps } = resolveAccelerators(accelerators, pseudoMetrics);
       const rates = resolveRates(baseRates, bumps);
@@ -3602,7 +3634,7 @@ export default function Home() {
           reqQuotes={personalWhatIf.reqQuotes} 
           reqApps={personalWhatIf.reqApps} 
           whatIfLoading={personalWhatIf.isLoading} 
-          logTouchpoint={logTouchpoint} logInboundCall={logInboundCall} openLogModal={openLogModal} openBackdateModal={openBackdateModal} 
+          logTouchpoint={logTouchpoint} logInboundCall={logInboundCall} openLogModal={openLogModal} openBackdateModal={openBackdateModal} openPivotModal={openPivotModal} openReviewModal={openReviewModal} 
           fetchDashboardData={(pId: any, aId: any) => fetchDashboardData(pId, aId, agencySettings)} 
           fetchPipeline={fetchPipeline} updatePolicyStatus={updatePolicyStatus} 
           selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} 
@@ -3691,6 +3723,27 @@ export default function Home() {
           quotedPipeline={pipeline.filter(p => p.status === 'quoted')}
           onClose={() => setIsLoggingModalOpen(false)}
           onSuccess={handleLogActivitySuccess}
+          onError={(msg) => showToast(msg, 'error')}
+        />
+      )}
+
+      {isPivotModalOpen && profile && (
+        <PivotModal
+          isOpen={isPivotModalOpen}
+          profile={profile}
+          agencySettings={agencySettings}
+          onClose={() => setIsPivotModalOpen(false)}
+          onSuccess={handlePivotReviewSuccess}
+          onError={(msg) => showToast(msg, 'error')}
+        />
+      )}
+
+      {isReviewModalOpen && profile && (
+        <AskForReviewModal
+          isOpen={isReviewModalOpen}
+          profile={profile}
+          onClose={() => setIsReviewModalOpen(false)}
+          onSuccess={handlePivotReviewSuccess}
           onError={(msg) => showToast(msg, 'error')}
         />
       )}

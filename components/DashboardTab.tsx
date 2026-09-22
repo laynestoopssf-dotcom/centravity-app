@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MapPin, GraduationCap } from 'lucide-react';
+import { Plus, Settings, Target, TrendingUp, TrendingDown, Calculator, PhoneCall, PhoneIncoming, ShieldCheck, DollarSign, Archive, Search, List, Calendar, FileText, BarChart3, Users, Sparkles, RefreshCw, ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MapPin, GraduationCap, Shuffle, MessageSquareHeart } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { supabase } from '../utils/supabase';
 import { resolveParentLine } from '../utils/productLines';
@@ -21,7 +21,7 @@ const displayIdentifier = (policyId: string, hash?: string | null) => getCachedI
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
 export default function DashboardTab({ 
-  profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, whatIfLoading, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
+  profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, whatIfLoading, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, openPivotModal, openReviewModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
   offices, selectedOffice, setSelectedOffice, customTargets, onSendToSparring
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -890,6 +890,26 @@ export default function DashboardTab({
             <Calendar size={16}/> Log Past Data
           </button>
         )}
+
+        {/* PIVOT & ASK FOR REVIEW — deliberately the exact same size/shape as "Log Past Data"
+            above (same padding/border/rounded classes), just their own accent color, so all three
+            secondary actions read as one equally-weighted row. */}
+        {openPivotModal && (
+          <button
+            onClick={openPivotModal}
+            className="flex items-center gap-2 bg-white border-2 border-amber-200 hover:border-amber-400 hover:bg-amber-50 text-amber-700 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
+          >
+            <Shuffle size={16}/> Pivot
+          </button>
+        )}
+        {openReviewModal && (
+          <button
+            onClick={openReviewModal}
+            className="flex items-center gap-2 bg-white border-2 border-teal-200 hover:border-teal-400 hover:bg-teal-50 text-teal-700 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
+          >
+            <MessageSquareHeart size={16}/> Ask for Review
+          </button>
+        )}
       </div>
 
       {/* TILE METRICS SECTION */}
@@ -1090,6 +1110,25 @@ export default function DashboardTab({
                  </div>
                </>
              )}
+          </div>
+
+          {/* TEAM PIVOTS & REVIEWS — sits right below the Daily/MTD Conversion tiles (or Weekly
+              Sentiment/Lapse Trend for Service). Lives in this left column (not alongside the
+              What-If Machine/Live Goal on the right) specifically so it always has room: when the
+              Live Goal card is active it fills the entire right column, but this column always has
+              space below its 2-tile row regardless. */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Shuffle size={18} className="text-amber-500"/> Team Pivots &amp; Reviews Today</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-4 bg-amber-50 rounded-xl border border-amber-100">
+                <div className="text-2xl font-black text-amber-600">{stats.todayPivots || 0}</div>
+                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-1 flex items-center justify-center gap-1"><Shuffle size={11}/> Pivots</div>
+              </div>
+              <div className="text-center p-4 bg-teal-50 rounded-xl border border-teal-100">
+                <div className="text-2xl font-black text-teal-600">{stats.todayReviews || 0}</div>
+                <div className="text-[10px] font-bold text-teal-700 uppercase tracking-wider mt-1 flex items-center justify-center gap-1"><MessageSquareHeart size={11}/> Reviews</div>
+              </div>
+            </div>
           </div>
         </div>
 

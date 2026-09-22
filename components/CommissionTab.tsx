@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, TrendingUp, Users, ArrowRightCircle, Sparkles, Target, ClipboardList, X, Gift } from 'lucide-react';
-import { resolveParentLine } from '../utils/productLines';
+import { resolveParentLine, resolveLifeSubType } from '../utils/productLines';
 import { isManagerLevelRole, isOwnerLevelRole } from '../utils/roles';
 import { encryptIdentifierForAgency, decryptIdentifier } from '../utils/e2ee';
 import IdentifierChip from './ui/IdentifierChip';
@@ -148,11 +148,17 @@ export default function CommissionTab({
   // Helper to map a product to its parent line to calculate its exact payout rate
   const getParentLine = (line: string) => resolveParentLine(line, agencySettings?.custom_product_lines || []);
 
+  // `parentLine` accepts the real 5 parent categories (Auto/Fire/Commercial/Life/Health) PLUS the
+  // two virtual Granular Life Commissions sub-lines ('TermLife'/'WholeLife') so callers that
+  // already know a specific policy's sub-type (calculatePolicyCommission below) can ask for its
+  // exact rate instead of the blended `rates.life` average.
   const getRateForLine = (parentLine: string) => {
     if (!commissionData?.rates) return 0;
     if (parentLine === 'Auto') return commissionData.rates.auto || 0;
     if (parentLine === 'Fire') return commissionData.rates.fire || 0;
     if (parentLine === 'Commercial') return commissionData.rates.comm || 0;
+    if (parentLine === 'TermLife') return commissionData.rates.termLife || 0;
+    if (parentLine === 'WholeLife') return commissionData.rates.wholeLife || 0;
     if (parentLine === 'Life') return commissionData.rates.life || 0;
     if (parentLine === 'Health') return commissionData.rates.health || 0;
     return 0;
@@ -166,6 +172,23 @@ export default function CommissionTab({
   // object) so this always agrees with the real payout math in utils/commissionMath.ts.
   const getLinePremium = (parentLine: string) => {
     return commissionData?.issuedPremLOB?.[parentLine as keyof typeof commissionData.issuedPremLOB] || 0;
+  };
+
+  // Human-readable label for a virtual line key ('TermLife'/'WholeLife') on the breakdown grid below -
+  // every real parent category already reads fine as-is.
+  const lineDisplayName = (line: string) => (line === 'TermLife' ? 'Term Life' : line === 'WholeLife' ? 'Whole Life' : line);
+
+  // Flat-$-per-App Life Commissions: whether a given Life sub-line pays a % of premium (default)
+  // or a flat $ amount per policy - mirrors resolveRates' own normalizeLifeRateType fallback in
+  // utils/commissionMath.ts, so a plan with no rate_type set (or an unrecognized value) always
+  // reads as 'percent' here too.
+  const isLifeSubLineFlat = (subLine: 'TermLife' | 'WholeLife') =>
+    (subLine === 'TermLife' ? commissionData?.rates?.termLifeRateType : commissionData?.rates?.wholeLifeRateType) === 'flat';
+
+  // App COUNT for a line (only meaningful for TermLife/WholeLife on a 'flat' plan) - sourced from
+  // commissionData.issuedAppsLOB so this always agrees with the real payout math.
+  const getLineAppCount = (parentLine: string) => {
+    return commissionData?.issuedAppsLOB?.[parentLine as keyof typeof commissionData.issuedAppsLOB] || 0;
   };
 
   const userPolicies = (monthPolicies || []).filter((p: any) => 
@@ -191,6 +214,15 @@ export default function CommissionTab({
   const calculatePolicyCommission = (pol: any) => {
     if (commissionData.isLocked) return 0;
     const parentLine = getParentLine(pol.product_line);
+    // Granular Life Commissions: a Life policy's exact payout depends on whether it's Term or
+    // Whole - resolve that from the policy's own product_line rather than reading the blended
+    // `rates.life` average, so this dollar figure always matches the real per-line breakdown.
+    if (parentLine === 'Life') {
+      const subLine = resolveLifeSubType(pol.product_line) === 'whole' ? 'WholeLife' : 'TermLife';
+      const rate = getRateForLine(subLine);
+      // Flat-$-per-App: this one policy IS the "policy_count" of 1 - premium is ignored entirely.
+      return isLifeSubLineFlat(subLine) ? rate : (Number(pol.premium_amount) * (rate / 100));
+    }
     const rate = getRateForLine(parentLine);
     return (Number(pol.premium_amount) * (rate / 100));
   };
@@ -458,19 +490,33 @@ export default function CommissionTab({
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Issued Only - Matches "Earned" Above</p>
               </div>
               <div className="p-4 space-y-2">
-                {['Auto', 'Fire', 'Commercial', 'Life', 'Health'].map(line => {
+                {/* Life is split into its own Term/Whole rows (Granular Life Commissions) since each
+                    now carries its own distinct rate - getLinePremium/getRateForLine both accept
+                    these two virtual line keys directly (see their definitions above). */}
+                {['Auto', 'Fire', 'Commercial', 'TermLife', 'WholeLife', 'Health'].map(line => {
                   const prem = getLinePremium(line);
                   const rate = getRateForLine(line);
-                  const payout = (prem * (rate / 100));
+                  // Flat-$-per-App Life Commissions: a flat line's payout is policy_count * rate,
+                  // completely ignoring premium - swap the basis this whole row displays so the
+                  // "Premium"/"Rate"/"Payout" math shown here always matches calculatePolicyCommission.
+                  const isFlatLine = (line === 'TermLife' && isLifeSubLineFlat('TermLife')) || (line === 'WholeLife' && isLifeSubLineFlat('WholeLife'));
+                  const appCount = getLineAppCount(line);
+                  const payout = isFlatLine ? (appCount * rate) : (prem * (rate / 100));
                   return (
                     <div key={line} className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
                       <div className="w-1/3">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{line}</p>
-                        <p className="font-black text-gray-900">${prem.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{lineDisplayName(line)}</p>
+                        <p className="font-black text-gray-900">
+                          {isFlatLine
+                            ? `${appCount} ${appCount === 1 ? 'policy' : 'policies'}`
+                            : `$${prem.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`}
+                        </p>
                       </div>
                       <div className="w-1/3 text-center border-l border-r border-gray-100">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Rate</p>
-                        <p className="font-black text-blue-600">{rate.toFixed(1)}%</p>
+                        <p className="font-black text-blue-600">
+                          {isFlatLine ? `$${rate.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})}/app` : `${rate.toFixed(1)}%`}
+                        </p>
                       </div>
                       <div className="w-1/3 text-right">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Payout</p>
@@ -653,7 +699,11 @@ export default function CommissionTab({
                    )}
                    {userPolicies.map((pol: any, idx: number) => {
                      const parentLine = getParentLine(pol.product_line);
-                     const rate = getRateForLine(parentLine);
+                     // Matches calculatePolicyCommission's own sub-type resolution below so the
+                     // displayed Rate always agrees with the displayed Estimated Payout $.
+                     const lifeSubLine = parentLine === 'Life' ? (resolveLifeSubType(pol.product_line) === 'whole' ? 'WholeLife' : 'TermLife') : null;
+                     const rate = lifeSubLine ? getRateForLine(lifeSubLine) : getRateForLine(parentLine);
+                     const isFlatRate = !!lifeSubLine && isLifeSubLineFlat(lifeSubLine);
                      const comm = calculatePolicyCommission(pol);
                      const isGhost = parentLine === 'Standalone';
                      
@@ -673,7 +723,7 @@ export default function CommissionTab({
                            </span>
                          </td>
                          <td className="p-4 text-sm font-bold text-gray-900 text-right">${Number(pol.premium_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                         <td className="p-4 text-sm font-bold text-gray-500 text-right">{rate.toFixed(1)}%</td>
+                         <td className="p-4 text-sm font-bold text-gray-500 text-right">{isFlatRate ? `$${rate.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})}/app` : `${rate.toFixed(1)}%`}</td>
                          <td className="p-4 text-sm font-black text-right">
                            {commissionData.isLocked ? (
                              <span className="text-red-400 flex items-center justify-end gap-1"><Lock size={12}/> Locked</span>
