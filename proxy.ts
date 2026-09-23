@@ -154,7 +154,28 @@ export default async function proxy(request: NextRequest) {
       // anymore") and the local cookie is cleared regardless — exactly this
       // scenario. { scope: "local" } skips trying to revoke a token that's
       // already meaningless server-side and only clears this browser's copy.
-      if (authError) {
+      //
+      // EXCEPT on /reset-password: @supabase/auth-js's _signOut (and
+      // _removeSession underneath it) unconditionally deletes the
+      // `<storageKey>-code-verifier` cookie regardless of scope — see
+      // GoTrueClient._signOut. That cookie is the PKCE code_verifier
+      // app/page.tsx's resetPasswordForEmail() call just wrote moments
+      // earlier, and it's what the client-side exchange on /reset-password
+      // needs to redeem the `?code=` in the recovery link (utils/supabase.ts
+      // hardcodes flowType: 'pkce' via @supabase/ssr). This server client
+      // shares the exact same cookie jar as the browser client (same
+      // storage key, no custom cookieOptions on either side), so running
+      // signOut() here on a request that also happens to be carrying a
+      // stale/dead session cookie was silently destroying that verifier
+      // before the browser ever got a chance to complete the exchange —
+      // guaranteeing "Link has expired" on every reset whenever a leftover
+      // invalid session cookie happened to be present. Skip the cleanup
+      // entirely here; a stale session cookie on this one route is harmless
+      // (it's not in PROTECTED_PREFIXES, so it never gates access) and the
+      // recovery flow's own single-use `code` is what actually needs to
+      // survive this request untouched.
+      const isResetPasswordPath = pathname === "/reset-password" || pathname.startsWith("/reset-password/");
+      if (authError && !isResetPasswordPath) {
         await supabase.auth.signOut({ scope: "local" });
       }
 
@@ -162,7 +183,7 @@ export default async function proxy(request: NextRequest) {
         hasSession: false,
         authError: authError?.message || null,
         authErrorStatus: (authError as { status?: number } | null)?.status ?? null,
-        clearedStaleCookie: !!authError,
+        clearedStaleCookie: !!authError && !isResetPasswordPath,
         routeIsProtected,
         redirectingTo: destination,
       });

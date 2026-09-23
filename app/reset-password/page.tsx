@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, FormEvent } from "react";
+import React, { useEffect, useState, FormEvent, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle, KeyRound } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 
@@ -9,9 +10,12 @@ import { supabase } from "../../utils/supabase";
 // -----------------------------------------------------------------------------
 // Reached from the "Forgot your password?" link on "/" -> supabase.auth
 // .resetPasswordForEmail(email, { redirectTo: `${origin}/reset-password` }).
-// The recovery email's link lands here with the session tokens in the URL
-// *hash* (`#access_token=...&type=recovery`), which @supabase/ssr's
-// createBrowserClient auto-detects and exchanges into a real session on
+// utils/supabase.ts's createBrowserClient hardcodes flowType: 'pkce' (that's
+// @supabase/ssr's own default, not ours), so the recovery email's link lands
+// here as `?code=...&type=recovery` in the URL *query string* — never a
+// `#access_token=...` hash; that was the legacy implicit-flow shape and
+// Supabase never sends it to a PKCE-flow client. The Supabase client
+// auto-detects that `code` param and exchanges it for a real session on
 // load, firing a `PASSWORD_RECOVERY` auth event as it does. This page's only
 // job is to catch that event, show a "set a new password" form, and call
 // supabase.auth.updateUser({ password }) — same call the legacy inline
@@ -20,16 +24,20 @@ import { supabase } from "../../utils/supabase";
 //
 // Deliberately its own route rather than reusing "/" or the dashboard's
 // legacy inline auth: proxy.ts doesn't gate this path (see PROTECTED_PREFIXES
-// in proxy.ts), so the hash can be processed before any auth-based redirect
-// has a chance to race it, and "/" 's own onAuthStateChange listener (which
-// hard-navigates any SIGNED_IN straight to /dashboard) never gets a chance to
-// intercept a recovery session before the user has actually set a new
-// password.
+// and the /reset-password carve-out in proxy.ts's stale-session signOut()
+// cleanup — that cleanup unconditionally deletes the PKCE code_verifier
+// cookie this exchange needs, so it must never run on this route), so the
+// exchange can complete before any auth-based redirect has a chance to race
+// it, and "/" 's own onAuthStateChange listener (which hard-navigates any
+// SIGNED_IN straight to /dashboard) never gets a chance to intercept a
+// recovery session before the user has actually set a new password.
 // =============================================================================
 
 type CatcherStatus = "checking" | "invalid" | "ready" | "success";
 
-export default function ResetPasswordPage() {
+function ResetPasswordCatcher() {
+  const searchParams = useSearchParams();
+
   const [status, setStatus] = useState<CatcherStatus>("checking");
   const [linkError, setLinkError] = useState("");
 
@@ -41,24 +49,50 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     let mounted = true;
 
-    // Supabase surfaces an expired/already-used recovery link as
-    // `#error=access_denied&error_code=otp_expired&...` instead of a normal
-    // session — no PASSWORD_RECOVERY event will ever fire for this case.
-    const hash = window.location.hash;
-    if (hash.includes("error=")) {
-      const params = new URLSearchParams(hash.replace(/^#/, ""));
-      setLinkError(params.get("error_description")?.replace(/\+/g, " ") || "This password reset link is invalid or has expired.");
+    // Supabase's own /auth/v1/verify hop rejects a truly expired or
+    // already-used recovery token before it ever reaches us, redirecting
+    // back here with `?error=access_denied&error_code=otp_expired&...` as
+    // plain query params — PKCE links never carry anything in the hash, so
+    // there's nothing to parse out of window.location.hash anymore.
+    const errorDescription = searchParams.get("error_description");
+    const hasUrlError = !!(searchParams.get("error") || searchParams.get("error_code") || errorDescription);
+    const code = searchParams.get("code");
+
+    if (hasUrlError) {
+      setLinkError(errorDescription?.replace(/\+/g, " ") || "This password reset link is invalid or has expired.");
       setStatus("invalid");
       return;
     }
 
-    // The hash may already have been processed (and the session established)
-    // by the time this effect runs, in which case the PASSWORD_RECOVERY event
-    // fired before this listener existed to catch it — so also check for an
-    // already-live session up front instead of relying on the event alone.
-    const isRecoveryLink = hash.includes("type=recovery");
+    if (!code) {
+      // No `code` and no `error` param at all — there is nothing for the
+      // Supabase client to exchange, so only an already-live session (e.g.
+      // this tab already completed a recovery earlier) can save this load.
+      // Resolve immediately instead of burning the 4s timeout below on a
+      // page load that was never going to succeed.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!mounted) return;
+        if (session) {
+          setStatus("ready");
+        } else {
+          setStatus("invalid");
+          setLinkError("This password reset link is invalid, expired, or already used.");
+        }
+      });
+      return () => {
+        mounted = false;
+      };
+    }
+
+    // A `code` IS present — let the Supabase client's own PKCE exchange run
+    // automatically (see utils/supabase.ts's flowType: 'pkce' and
+    // detectSessionInUrl) and just catch its result here. The exchange may
+    // already have resolved by the time this effect runs, in which case the
+    // PASSWORD_RECOVERY event fired before this listener existed to catch
+    // it — so also check for an already-live session up front instead of
+    // relying on the event alone.
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && isRecoveryLink && session) setStatus("ready");
+      if (mounted && session) setStatus("ready");
     });
 
     const {
@@ -68,9 +102,12 @@ export default function ResetPasswordPage() {
       if (event === "PASSWORD_RECOVERY") setStatus("ready");
     });
 
-    // Neither the hash-based session check nor a PASSWORD_RECOVERY event ever
-    // resolved (e.g. someone navigated here directly with no token at all) —
-    // don't leave the user staring at a spinner forever.
+    // Last-resort fallback for this branch only: a PKCE exchange can still
+    // fail silently (the code was already single-use consumed, or its
+    // code_verifier cookie is missing/mismatched) without ever throwing
+    // anywhere this page can catch or firing any auth event at all. If
+    // neither a live session nor PASSWORD_RECOVERY shows up in a reasonable
+    // window, treat it as a dead link.
     const timer = setTimeout(() => {
       if (mounted) {
         setStatus((prev) => (prev === "checking" ? "invalid" : prev));
@@ -83,7 +120,7 @@ export default function ResetPasswordPage() {
       clearTimeout(timer);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -229,5 +266,24 @@ export default function ResetPasswordPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() opts this subtree into client-side rendering up to the
+// nearest Suspense boundary (see Next's useSearchParams docs) — wrapping it
+// here (rather than relying on the page being fully dynamic) is what Next
+// requires so `next build` doesn't fail with "Missing Suspense boundary
+// with useSearchParams".
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-900">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" aria-label="Loading" />
+        </div>
+      }
+    >
+      <ResetPasswordCatcher />
+    </Suspense>
   );
 }
