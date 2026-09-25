@@ -570,7 +570,9 @@ export default function Home() {
     // triggering React's "missing unique key" warning for the whole list.
     // `bound_at`/`written_at` are also required here - see the `boundDate` note below in the
     // policies.forEach loop for why MTD/QTD/YTD Bound Apps must key off them instead of `logged_at`.
-    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, client_identifier_hash, client_identifier_ciphertext, client_identifier_iv, is_renewal').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
+    // `issued_at` is required for monthPolicies' own commission-month anchor immediately below -
+    // see that comment for why it (not bound_at/written_at) has to drive commission bucketing.
+    let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, issued_at, client_identifier_hash, client_identifier_ciphertext, client_identifier_iv, is_renewal').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) polQuery = polQuery.in('user_id', officeMemberIds);
     const { data: policies, error: policiesError } = await polQuery;
     if (policiesError) {
@@ -578,7 +580,22 @@ export default function Home() {
       showToast('Failed to load policy data — revenue numbers below may be incomplete.', 'error');
     }
 
-    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(p.bound_at || p.written_at || p.logged_at), targetDate)) || []);
+    // COMMISSION MONTH ANCHOR: monthPolicies is the sole feed for every real commission
+    // calculation (commissionData + teamCommissions below, both via utils/commissionMath.ts's
+    // calculateCommission) - this is deliberately NOT the same date basis as the Scoreboard's
+    // production KPIs (`boundDate` in the policies.forEach loop further down), which are correctly
+    // anchored to bound_at because "production" is meant to reflect when a producer did the work.
+    // Commission payout timing is different: the agency pays on the month a policy actually
+    // ISSUES, not the month it was written/bound - a policy bound in August but issued in
+    // September must land in September's commission run, not August's, even though it's the exact
+    // same policy row throughout. So: an issued policy anchors on `issued_at` (stamped exactly
+    // once, at the moment status first becomes 'issued' - see updatePolicyStatus); anything not yet
+    // issued (still 'bound'/pipeline) has no issue date yet and keeps the existing bound_at ->
+    // written_at -> logged_at chain, since that pipeline premium's only meaningful date is when it
+    // was bound. Falls back to logged_at for any legacy row from before issued_at/bound_at existed.
+    const commissionAnchorDate = (p: { issued_at?: string | null; bound_at?: string | null; written_at?: string | null; logged_at: string }) =>
+      p.issued_at || p.bound_at || p.written_at || p.logged_at;
+    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(commissionAnchorDate(p)), targetDate)) || []);
 
     let bonusQuery = supabase.from('manual_bonuses').select('*').eq('agency_id', agencyId).gte('logged_at', firstDayOfMonth.toISOString());
     const { data: fetchedBonuses, error: bonusesError } = await bonusQuery;
@@ -3554,7 +3571,7 @@ export default function Home() {
     // pane nested inside it, so `min-h-full` (not `min-h-screen`) and no
     // flex-row (the sidebar that used to sit beside `<main>` here moved out
     // to the shell too).
-    <div className="min-h-full bg-gray-50">
+    <div className="min-h-full bg-gray-50 dark:bg-slate-900">
       <GlobalStyles />
       
       {/* GLOBAL BIND CELEBRATION */}

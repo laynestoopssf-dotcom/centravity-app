@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import PostHogProvider from "./providers/PostHogProvider";
+import ThemeProvider from "./providers/ThemeProvider";
 
 export const dynamic = 'force-dynamic'; 
 
@@ -32,9 +33,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className={`${inter.className} min-h-full flex flex-col`}>
-        <PostHogProvider>{children}</PostHogProvider>
+    // suppressHydrationWarning is required by next-themes: it applies the resolved
+    // theme's `dark` class to this element via a pre-hydration inline script, so the
+    // class React sees on hydration intentionally differs from the server-rendered
+    // markup. Only suppresses the warning on this one element's attributes, not any
+    // of its children's actual content.
+    <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className={`${inter.className} min-h-full flex flex-col bg-background text-foreground`}>
+        <ThemeProvider>
+          <PostHogProvider>{children}</PostHogProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

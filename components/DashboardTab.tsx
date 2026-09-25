@@ -781,8 +781,8 @@ export default function DashboardTab({
 
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">{isManagerLevelRole(profile?.role) ? scoreboardName : 'My Scoreboard'}</h2>
-          <p className="text-gray-500 mt-1">{isService ? 'Track retention and cross-sells.' : 'Track pacing and pipeline.'}</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{isManagerLevelRole(profile?.role) ? scoreboardName : 'My Scoreboard'}</h2>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">{isService ? 'Track retention and cross-sells.' : 'Track pacing and pipeline.'}</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3">

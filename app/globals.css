@@ -1,8 +1,22 @@
 @import "tailwindcss";
 
+/* Dark Mode: Tailwind CSS v4 is CSS-first here (no tailwind.config.ts exists in this
+   project), so there's no `darkMode: 'class'` option to set the way v3 did it. This
+   `@custom-variant` is v4's documented equivalent — it redefines the `dark:` variant
+   to key off a literal `.dark` class (anywhere in the ancestor chain) instead of v4's
+   own default, the OS-level `prefers-color-scheme` media query. next-themes (see
+   app/providers/ThemeProvider.tsx, attribute="class") is what actually adds/removes
+   that `.dark` class on <html> at runtime. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme inline {
