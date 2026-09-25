@@ -20,16 +20,16 @@ const SUBSCRIPTION_STATUS_BADGES: Record<string, { label: string; className: str
   trialing: { label: 'Trialing', className: 'bg-blue-100 text-blue-700' },
   past_due: { label: 'Past Due', className: 'bg-amber-100 text-amber-700' },
   incomplete: { label: 'Incomplete', className: 'bg-amber-100 text-amber-700' },
-  incomplete_expired: { label: 'Incomplete (Expired)', className: 'bg-gray-200 text-gray-600' },
+  incomplete_expired: { label: 'Incomplete (Expired)', className: 'bg-gray-200 text-gray-600 dark:text-slate-300' },
   unpaid: { label: 'Unpaid', className: 'bg-red-100 text-red-700' },
-  paused: { label: 'Paused', className: 'bg-gray-200 text-gray-600' },
-  canceled: { label: 'Canceled', className: 'bg-gray-200 text-gray-600' },
+  paused: { label: 'Paused', className: 'bg-gray-200 text-gray-600 dark:text-slate-300' },
+  canceled: { label: 'Canceled', className: 'bg-gray-200 text-gray-600 dark:text-slate-300' },
 };
 
 function SubscriptionStatusBadge({ status }: { status: string | null | undefined }) {
   const entry = (status && SUBSCRIPTION_STATUS_BADGES[status]) || {
     label: 'No Active Subscription',
-    className: 'bg-gray-100 text-gray-500',
+    className: 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400',
   };
   return (
     <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${entry.className}`}>
@@ -590,8 +590,8 @@ export default function SettingsTab({
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-12">
       <header className="mb-8 flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Agency Settings</h2>
-          <p className="text-gray-500 mt-1">Manage global parameters, compensation, and team structure.</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Agency Settings</h2>
+          <p className="text-gray-500 dark:text-slate-400 mt-1">Manage global parameters, compensation, and team structure.</p>
         </div>
         <button onClick={handleSaveGlobalParams} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm">
           <Save size={20} /> Save All Global Settings
@@ -600,18 +600,18 @@ export default function SettingsTab({
 
       {/* Settings Navigation */}
       <div className="flex flex-wrap gap-2 mb-6 p-1 bg-gray-200/50 rounded-xl overflow-x-auto hide-scroll">
-        <button onClick={() => setActiveSettingsSection('agency')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'agency' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Globe size={16}/> Global Settings</button>
-        <button onClick={() => setActiveSettingsSection('team')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'team' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Users size={16}/> Team Management</button>
-        <button onClick={() => setActiveSettingsSection('roles')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'roles' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Shield size={16}/> Roles & Permissions</button>
-        <button onClick={() => setActiveSettingsSection('compplans')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'compplans' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DollarSign size={16}/> Compensation Plans</button>
-        <button onClick={() => setActiveSettingsSection('commission_rates')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'commission_rates' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Percent size={16}/> Life/Health Commission Rates</button>
-        <button onClick={() => setActiveSettingsSection('conversion_metrics')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'conversion_metrics' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Target size={16}/> Conversion Metrics</button>
-        <button onClick={() => setActiveSettingsSection('promotions')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'promotions' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Trophy size={16}/> Corporate Promotions</button>
-        <button onClick={() => setActiveSettingsSection('corporate_targets')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'corporate_targets' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><ToggleLeft size={16}/> Corporate Targets</button>
-        <button onClick={() => setActiveSettingsSection('locations')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'locations' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><MapPin size={16}/> Office Locations</button>
-        <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><DownloadCloud size={16}/> Import Historical Data</button>
+        <button onClick={() => setActiveSettingsSection('agency')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'agency' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><Globe size={16}/> Global Settings</button>
+        <button onClick={() => setActiveSettingsSection('team')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'team' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><Users size={16}/> Team Management</button>
+        <button onClick={() => setActiveSettingsSection('roles')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'roles' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><Shield size={16}/> Roles & Permissions</button>
+        <button onClick={() => setActiveSettingsSection('compplans')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'compplans' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><DollarSign size={16}/> Compensation Plans</button>
+        <button onClick={() => setActiveSettingsSection('commission_rates')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'commission_rates' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><Percent size={16}/> Life/Health Commission Rates</button>
+        <button onClick={() => setActiveSettingsSection('conversion_metrics')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'conversion_metrics' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><Target size={16}/> Conversion Metrics</button>
+        <button onClick={() => setActiveSettingsSection('promotions')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'promotions' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><Trophy size={16}/> Corporate Promotions</button>
+        <button onClick={() => setActiveSettingsSection('corporate_targets')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'corporate_targets' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><ToggleLeft size={16}/> Corporate Targets</button>
+        <button onClick={() => setActiveSettingsSection('locations')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'locations' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><MapPin size={16}/> Office Locations</button>
+        <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><DownloadCloud size={16}/> Import Historical Data</button>
         {canManageBilling && (
-          <button onClick={() => setActiveSettingsSection('billing')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'billing' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><CreditCard size={16}/> Billing</button>
+          <button onClick={() => setActiveSettingsSection('billing')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'billing' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><CreditCard size={16}/> Billing</button>
         )}
       </div>
 
@@ -620,30 +620,30 @@ export default function SettingsTab({
         <div className="space-y-6">
           
           {/* 1. BRANDING & DISPLAY */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><Target size={20}/></div>
-               <div><h3 className="font-bold text-gray-900">Branding & Display</h3><p className="text-xs text-gray-500">Universal visual settings across all branches</p></div>
+               <div><h3 className="font-bold text-gray-900 dark:text-slate-100">Branding & Display</h3><p className="text-xs text-gray-500 dark:text-slate-400">Universal visual settings across all branches</p></div>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <div>
-                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Global Scoreboard Title</label>
+                   <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">Global Scoreboard Title</label>
                    <input 
                      type="text" 
                      placeholder="e.g. Stoops Insurance Scoreboard"
                      value={agencySettings.scoreboard_name || ''} 
                      onChange={e => setAgencySettings({...agencySettings, scoreboard_name: e.target.value})} 
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-gray-900" 
+                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" 
                    />
-                   <p className="text-[10px] text-gray-400 mt-1">Displayed when users view the "All Locations" scoreboard.</p>
+                   <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-1">Displayed when users view the "All Locations" scoreboard.</p>
                  </div>
                  <div>
-                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Primary Timezone</label>
+                   <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">Primary Timezone</label>
                    <select 
                      value={agencySettings.timezone || 'America/Los_Angeles'} 
                      onChange={e => setAgencySettings({...agencySettings, timezone: e.target.value})} 
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-gray-900 text-sm"
+                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                    >
                      <option value="America/New_York">Eastern Time (ET)</option>
                      <option value="America/Chicago">Central Time (CT)</option>
@@ -651,11 +651,11 @@ export default function SettingsTab({
                      <option value="America/Los_Angeles">Pacific Time (PT)</option>
                      <option value="America/Anchorage">Alaska Time (AKT)</option>
                    </select>
-                   <p className="text-[10px] text-gray-400 mt-1">Dictates when daily streaks and metric counts reset to zero.</p>
+                   <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-1">Dictates when daily streaks and metric counts reset to zero.</p>
                  </div>
               </div>
 
-              <div className="mt-6 pt-6 border-t border-gray-100 flex items-center gap-3">
+              <div className="mt-6 pt-6 border-t border-gray-100 dark:border-slate-800 flex items-center gap-3">
                 <input 
                   type="checkbox" 
                   id="stealth-mode" 
@@ -664,100 +664,100 @@ export default function SettingsTab({
                   className="w-5 h-5 text-purple-600 rounded cursor-pointer"
                 />
                 <div>
-                  <label htmlFor="stealth-mode" className="font-bold text-gray-900 cursor-pointer">Enable Leaderboard Stealth Mode</label>
-                  <p className="text-xs text-gray-500 mt-0.5">Hides producer names (e.g., "Agent A", "Agent B") on the Weekly Rank tab to foster anonymous competition.</p>
+                  <label htmlFor="stealth-mode" className="font-bold text-gray-900 dark:text-slate-100 cursor-pointer">Enable Leaderboard Stealth Mode</label>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Hides producer names (e.g., "Agent A", "Agent B") on the Weekly Rank tab to foster anonymous competition.</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* 2. NOTIFICATIONS & AUTOMATION */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><Bell size={20}/></div>
-               <div><h3 className="font-bold text-gray-900">Notifications & Automation</h3><p className="text-xs text-gray-500">Configure email reports and database cleanup schedules</p></div>
+               <div><h3 className="font-bold text-gray-900 dark:text-slate-100">Notifications & Automation</h3><p className="text-xs text-gray-500 dark:text-slate-400">Configure email reports and database cleanup schedules</p></div>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <div>
-                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">End-of-Day Report Time</label>
+                   <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">End-of-Day Report Time</label>
                    <select 
                      value={agencySettings.daily_report_time || '18:00'} 
                      onChange={e => setAgencySettings({...agencySettings, daily_report_time: e.target.value})} 
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-900 text-sm"
+                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                    >
                      <option value="17:00">5:00 PM</option>
                      <option value="18:00">6:00 PM</option>
                      <option value="19:00">7:00 PM</option>
                      <option value="20:00">8:00 PM</option>
                    </select>
-                   <p className="text-[10px] text-gray-400 mt-1">When the automated daily production brief email fires to you (the agency owner), summarizing the whole team's activity for the day.</p>
+                   <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-1">When the automated daily production brief email fires to you (the agency owner), summarizing the whole team's activity for the day.</p>
                  </div>
                  <div>
-                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Auto-Archive Stale Quotes</label>
+                   <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">Auto-Archive Stale Quotes</label>
                    <select 
                      value={agencySettings.pipeline_auto_archive_days ?? 30} 
                      onChange={e => setAgencySettings({...agencySettings, pipeline_auto_archive_days: Number(e.target.value)})} 
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-900 text-sm"
+                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                    >
                      <option value={14}>After 14 Days</option>
                      <option value={30}>After 30 Days</option>
                      <option value={60}>After 60 Days</option>
                      <option value={0}>Never Auto-Archive</option>
                    </select>
-                   <p className="text-[10px] text-gray-400 mt-1">Silently moves old, unbound quotes out of the active pipeline.</p>
+                   <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-1">Silently moves old, unbound quotes out of the active pipeline.</p>
                  </div>
               </div>
             </div>
           </div>
 
           {/* 3. GAMIFICATION CONTROLS */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
                <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><Sparkles size={20}/></div>
-               <div><h3 className="font-bold text-gray-900">Gamification Controls</h3><p className="text-xs text-gray-500">Tune the physics of your leaderboards and celebrations</p></div>
+               <div><h3 className="font-bold text-gray-900 dark:text-slate-100">Gamification Controls</h3><p className="text-xs text-gray-500 dark:text-slate-400">Tune the physics of your leaderboards and celebrations</p></div>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                  <div>
-                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Confetti Threshold ($)</label>
+                   <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">Confetti Threshold ($)</label>
                    <FormattedNumberInput
                      value={agencySettings.celebration_threshold || 0}
                      onChange={v => setAgencySettings({...agencySettings, celebration_threshold: v === '' ? 0 : v})}
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900"
+                     className="w-full p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900 dark:text-slate-100"
                    />
-                   <p className="text-[10px] text-gray-400 mt-1">Minimum premium required to trigger the "Policy Bound" floor celebration popup.</p>
+                   <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-1">Minimum premium required to trigger the "Policy Bound" floor celebration popup.</p>
                  </div>
                  <div>
-                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Default Leaderboard Metric</label>
+                   <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">Default Leaderboard Metric</label>
                    <select 
                      value={agencySettings.default_leaderboard_metric || 'total_premium'} 
                      onChange={e => setAgencySettings({...agencySettings, default_leaderboard_metric: e.target.value})} 
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900 text-sm"
+                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                    >
                      <option value="total_premium">Total Premium</option>
                      <option value="total_apps">Total Apps</option>
                      <option value="life_apps">Life Apps</option>
                      <option value="quotes">Total Quotes</option>
                    </select>
-                   <p className="text-[10px] text-gray-400 mt-1">Dictates who claims 1st Place on the Weekly Rank and MTD Agency tabs.</p>
+                   <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-1">Dictates who claims 1st Place on the Weekly Rank and MTD Agency tabs.</p>
                  </div>
                  <div>
-                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Production Days / Week</label>
+                   <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">Production Days / Week</label>
                    <input 
                      type="number" 
                      value={agencySettings.production_days_per_week || 5} 
                      onChange={e => setAgencySettings({...agencySettings, production_days_per_week: Number(e.target.value)})} 
-                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900" 
+                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" 
                    />
-                   <p className="text-[10px] text-gray-400 mt-1">Calculates pacing requirements for end-of-month goals.</p>
+                   <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-1">Calculates pacing requirements for end-of-month goals.</p>
                  </div>
               </div>
 
               <div className="bg-amber-50/50 border border-amber-200 p-4 rounded-xl flex items-start gap-3">
                  <input type="checkbox" id="holiday-mode" className="w-5 h-5 text-amber-600 rounded cursor-pointer border-gray-300 mt-0.5" />
                  <div>
-                    <label htmlFor="holiday-mode" className="font-bold text-gray-900 cursor-pointer">Enable Agency-Wide Holiday Mode</label>
+                    <label htmlFor="holiday-mode" className="font-bold text-gray-900 dark:text-slate-100 cursor-pointer">Enable Agency-Wide Holiday Mode</label>
                     <p className="text-xs text-amber-800 mt-1 font-medium">Freezes all daily activity targets and prevents streaks from resetting to zero. Perfect for Thanksgiving, Christmas, and long weekends.</p>
                  </div>
               </div>
@@ -765,17 +765,17 @@ export default function SettingsTab({
           </div>
 
           {/* 4. DYNAMIC PRODUCT LINE MANAGER WITH JSON MAPPING */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
                <div className="p-2 bg-pink-100 text-pink-600 rounded-lg"><Tag size={20}/></div>
-               <div><h3 className="font-bold text-gray-900">Custom Product Lines</h3><p className="text-xs text-gray-500">Map custom business lines to core categories for accurate commission & YTD roll-ups</p></div>
+               <div><h3 className="font-bold text-gray-900 dark:text-slate-100">Custom Product Lines</h3><p className="text-xs text-gray-500 dark:text-slate-400">Map custom business lines to core categories for accurate commission & YTD roll-ups</p></div>
             </div>
             <div className="p-6">
               <div className="flex flex-wrap gap-3 mb-6">
                 {(agencySettings.custom_product_lines || DEFAULT_LINES).map((lineObj: any, idx: number) => {
                   const isCore = ['Auto', 'Fire', 'Commercial', 'Life', 'Health'].includes(lineObj.name);
                   return (
-                    <div key={idx} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-sm border ${isCore ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-pink-50 border-pink-200 text-pink-800'}`}>
+                    <div key={idx} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-sm border ${isCore ? 'bg-gray-100 dark:bg-slate-700 border-gray-200 dark:border-slate-800 text-gray-500 dark:text-slate-400' : 'bg-pink-50 border-pink-200 text-pink-800'}`}>
                       {lineObj.name} <span className="text-[10px] opacity-70 font-medium">({lineObj.parent})</span>
                       {!isCore && (
                         <button onClick={() => {
@@ -788,14 +788,14 @@ export default function SettingsTab({
                 })}
               </div>
               
-              <div className="flex flex-col md:flex-row gap-4 max-w-2xl bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <div className="flex flex-col md:flex-row gap-4 max-w-2xl bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-800">
                 <div className="flex-1">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">New Line Name</label>
-                  <input type="text" value={newProductLine} onChange={e => setNewProductLine(e.target.value)} placeholder="e.g. Pet, Farm, Bank" className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-pink-500 font-bold text-sm" />
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">New Line Name</label>
+                  <input type="text" value={newProductLine} onChange={e => setNewProductLine(e.target.value)} placeholder="e.g. Pet, Farm, Bank" className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-pink-500 font-bold text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                 </div>
                 <div className="w-48">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Parent Category</label>
-                  <select value={newProductParent} onChange={e => setNewProductParent(e.target.value)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-pink-500 font-bold text-sm text-gray-900">
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Parent Category</label>
+                  <select value={newProductParent} onChange={e => setNewProductParent(e.target.value)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-pink-500 font-bold text-sm text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">
                     <option value="Auto">Auto Roll-Up</option>
                     <option value="Fire">Fire Roll-Up</option>
                     <option value="Life">Life Roll-Up</option>
@@ -819,7 +819,7 @@ export default function SettingsTab({
                   }} className="bg-pink-600 hover:bg-pink-700 text-white px-6 py-2.5 rounded-lg font-bold transition-colors text-sm shadow-sm h-[42px]">Add</button>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mt-4 leading-relaxed"><strong>Note:</strong> Deleting a line here removes it from the logging dropdowns, but it will not delete existing historical data associated with that line. The "Parent Category" determines which commission base rate and YTD goal threshold this product applies to.</p>
+              <p className="text-xs text-gray-400 dark:text-slate-400 mt-4 leading-relaxed"><strong>Note:</strong> Deleting a line here removes it from the logging dropdowns, but it will not delete existing historical data associated with that line. The "Parent Category" determines which commission base rate and YTD goal threshold this product applies to.</p>
             </div>
           </div>
         </div>
@@ -830,7 +830,7 @@ export default function SettingsTab({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
           <div className="lg:col-span-1 space-y-4">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="font-bold text-gray-900 text-lg">Defined Custom Roles</h3>
+              <h3 className="font-bold text-gray-900 dark:text-slate-100 text-lg">Defined Custom Roles</h3>
               <button onClick={handleAddNewRole} className="text-blue-600 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition-colors"><Plus size={18}/></button>
             </div>
             <div className="space-y-2">
@@ -838,11 +838,11 @@ export default function SettingsTab({
                 <div 
                   key={r.id} 
                   onClick={() => setEditingRole(r)}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${editingRole?.id === r.id ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-gray-200 bg-white hover:border-blue-300'}`}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${editingRole?.id === r.id ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300'}`}
                 >
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-gray-900">{r.name}</span>
-                    {r.isSystem && <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded uppercase tracking-wider font-black">System</span>}
+                    <span className="font-bold text-gray-900 dark:text-slate-100">{r.name}</span>
+                    {r.isSystem && <span className="text-[10px] bg-gray-200 text-gray-600 dark:text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider font-black">System</span>}
                   </div>
                 </div>
               ))}
@@ -851,16 +851,16 @@ export default function SettingsTab({
 
           <div className="lg:col-span-2">
             {editingRole ? (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                <div className="flex flex-col sm:flex-row justify-between sm:items-end mb-6 pb-6 border-b border-gray-100 gap-4">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-6">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-end mb-6 pb-6 border-b border-gray-100 dark:border-slate-800 gap-4">
                   <div className="w-full max-w-sm">
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Role Name</label>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Role Name</label>
                     <input 
                       type="text" 
                       value={editingRole.name} 
                       onChange={e => setEditingRole({...editingRole, name: e.target.value})}
                       disabled={editingRole.isSystem}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-bold text-gray-900 disabled:opacity-60" 
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-bold text-gray-900 disabled:opacity-60 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" 
                     />
                     {editingRole.isSystem && <p className="text-xs text-amber-600 mt-2 font-medium">System role names cannot be changed, but their permissions can be customized.</p>}
                   </div>
@@ -873,16 +873,16 @@ export default function SettingsTab({
                 </div>
 
                 <div className="space-y-4">
-                  <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider text-gray-400">Access Capabilities</h4>
+                  <h4 className="font-bold text-gray-900 dark:text-slate-100 text-sm uppercase tracking-wider text-gray-400 dark:text-slate-400">Access Capabilities</h4>
                   {AVAILABLE_PERMISSIONS.map(perm => {
                     const hasAccess = editingRole.permissions?.[perm.id] || false;
                     return (
-                      <div key={perm.id} onClick={() => togglePermission(perm.id)} className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer hover:border-blue-300 ${hasAccess ? 'border-blue-500 bg-blue-50/30' : 'border-gray-200 bg-white'}`}>
+                      <div key={perm.id} onClick={() => togglePermission(perm.id)} className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer hover:border-blue-300 ${hasAccess ? 'border-blue-500 bg-blue-50/30' : 'border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900'}`}>
                         <div>
-                          <p className="font-bold text-gray-900 text-sm">{perm.label}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{perm.desc}</p>
+                          <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{perm.label}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{perm.desc}</p>
                         </div>
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${hasAccess ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${hasAccess ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 dark:text-slate-400'}`}>
                           {hasAccess ? <CheckCircle2 size={14}/> : <XCircle size={14}/>}
                         </div>
                       </div>
@@ -891,10 +891,10 @@ export default function SettingsTab({
                 </div>
               </div>
             ) : (
-              <div className="h-full min-h-[350px] flex flex-col items-center justify-center text-gray-400 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center">
+              <div className="h-full min-h-[350px] flex flex-col items-center justify-center text-gray-400 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl p-6 text-center">
                 <Shield size={40} className="mb-3 text-gray-300 animate-pulse" />
-                <p className="font-bold text-gray-500">Access Control Blueprint Panel</p>
-                <p className="text-xs text-gray-400 max-w-xs mt-1">Select a title configuration profile on the left to map or inspect active security descriptors.</p>
+                <p className="font-bold text-gray-500 dark:text-slate-400">Access Control Blueprint Panel</p>
+                <p className="text-xs text-gray-400 dark:text-slate-400 max-w-xs mt-1">Select a title configuration profile on the left to map or inspect active security descriptors.</p>
               </div>
             )}
           </div>
@@ -967,12 +967,12 @@ export default function SettingsTab({
       {/* --- SECTION: CORPORATE TARGETS (OBA carrier-agnostic compliance toggles) --- */}
       {activeSettingsSection === 'corporate_targets' && agencySettings && (
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
               <div className="p-2 bg-slate-100 text-slate-600 rounded-lg"><ToggleLeft size={20}/></div>
               <div>
-                <h3 className="font-bold text-gray-900">Corporate Targets</h3>
-                <p className="text-xs text-gray-500">Carrier-agnostic by default - turn on only the specific target features your agency wants to use.</p>
+                <h3 className="font-bold text-gray-900 dark:text-slate-100">Corporate Targets</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Carrier-agnostic by default - turn on only the specific target features your agency wants to use.</p>
               </div>
             </div>
             <div className="p-6 space-y-4">
@@ -991,7 +991,7 @@ export default function SettingsTab({
                     checked={agencySettings.target_vc_active || false}
                     onChange={e => setAgencySettings({ ...agencySettings, target_vc_active: e.target.checked })}
                   />
-                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-slate-900 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
                 </label>
               </div>
 
@@ -1007,27 +1007,27 @@ export default function SettingsTab({
                     checked={agencySettings.target_travel_active || false}
                     onChange={e => setAgencySettings({ ...agencySettings, target_travel_active: e.target.checked })}
                   />
-                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-slate-900 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                 </label>
               </div>
 
-              <p className="text-[11px] text-gray-400 pt-2">Both default to off. The underlying targets/benchmarks you&apos;ve set under Corporate Promotions and Office Locations are preserved either way - these switches only control whether their widgets render.</p>
+              <p className="text-[11px] text-gray-400 dark:text-slate-400 pt-2">Both default to off. The underlying targets/benchmarks you&apos;ve set under Corporate Promotions and Office Locations are preserved either way - these switches only control whether their widgets render.</p>
             </div>
           </div>
 
           {/* --- CUSTOM TARGET BUILDER --- */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Target size={20}/></div>
                 <div>
-                  <h3 className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <h3 className="font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
                     Custom Target Builder
                     {/* Same top-of-overflow-hidden-card clipping issue as the Corporate
                         Promotions header above - "bottom" keeps it from getting cut off. */}
                     <InfoTooltip text="Build a goal from any real metric Centravity already tracks (apps, premium, quotes, touches) for any office/period, then choose whether the whole team sees it on the Scoreboard or it stays owner-only on the Revenue tab." position="bottom" />
                   </h3>
-                  <p className="text-xs text-gray-500">Define your own goals on top of real tracked metrics, and route each one to the team-visible Scoreboard or the owner-only Revenue tab.</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Define your own goals on top of real tracked metrics, and route each one to the team-visible Scoreboard or the owner-only Revenue tab.</p>
                 </div>
               </div>
               <button
@@ -1039,7 +1039,7 @@ export default function SettingsTab({
             </div>
             <div className="p-6 space-y-3">
               {(!customTargets || customTargets.length === 0) && (
-                <p className="text-sm text-gray-400">No custom targets yet. Click &quot;Add Custom Target&quot; to build your first one.</p>
+                <p className="text-sm text-gray-400 dark:text-slate-400">No custom targets yet. Click &quot;Add Custom Target&quot; to build your first one.</p>
               )}
               {(customTargets || []).map((t: CustomTargetRow) => {
                 const metricDef = getMetricDef(t.metric_type);
@@ -1050,18 +1050,18 @@ export default function SettingsTab({
                 const tierCount = Array.isArray(t.tiers) ? t.tiers.length : 0;
                 const feedsIntoName = t.feeds_into_target_id ? (customTargets || []).find((x: CustomTargetRow) => x.id === t.feeds_into_target_id)?.name : null;
                 return (
-                  <div key={t.id} className={`flex items-center justify-between p-4 border rounded-xl transition-colors ${t.active === false ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 hover:bg-gray-50'}`}>
+                  <div key={t.id} className={`flex items-center justify-between p-4 border rounded-xl transition-colors ${t.active === false ? 'border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 opacity-60' : 'border-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                     <div>
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="font-bold text-gray-900">{t.name}</h4>
+                        <h4 className="font-bold text-gray-900 dark:text-slate-100">{t.name}</h4>
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${t.display_location === 'scoreboard' ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'}`}>
                           {t.display_location === 'scoreboard' ? 'Scoreboard (Team)' : 'Revenue Tab (Owner)'}
                         </span>
                         {tierCount > 0 && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{tierCount} Tier{tierCount === 1 ? '' : 's'}</span>}
                         {feedsIntoName && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700">→ Feeds {feedsIntoName}</span>}
-                        {t.active === false && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Inactive</span>}
+                        {t.active === false && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 dark:text-slate-400">Inactive</span>}
                       </div>
-                      <p className="text-xs text-gray-500">{metricDef?.label || t.metric_type} • Target: {Number(t.target_value).toLocaleString()} • {periodLabel} • {officeName}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{metricDef?.label || t.metric_type} • Target: {Number(t.target_value).toLocaleString()} • {periodLabel} • {officeName}</p>
                     </div>
                     <div className="flex gap-3 shrink-0">
                       <button onClick={() => setEditingCustomTarget(t)} className="text-blue-600 hover:text-blue-800 font-bold text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Edit</button>
@@ -1080,26 +1080,26 @@ export default function SettingsTab({
         const availablePeriods = CUSTOM_TARGET_PERIODS.filter(p => getMetricDef(editingCustomTarget.metric_type || '')?.periods.includes(p.value));
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
-            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center gap-3 mb-5">
                 <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-xl"><Target size={22}/></div>
-                <h3 className="text-lg font-bold text-gray-900">{editingCustomTarget.id ? 'Edit Custom Target' : 'New Custom Target'}</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">{editingCustomTarget.id ? 'Edit Custom Target' : 'New Custom Target'}</h3>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Target Name</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-1">Target Name</label>
                   <input
                     type="text"
                     placeholder="e.g. Q3 Commercial Push"
                     value={editingCustomTarget.name || ''}
                     onChange={e => setEditingCustomTarget({ ...editingCustomTarget, name: e.target.value })}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Metric</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-1">Metric</label>
                   <select
                     value={editingCustomTarget.metric_type || 'touchpoints'}
                     onChange={e => {
@@ -1107,7 +1107,7 @@ export default function SettingsTab({
                       const nextPeriod = def?.periods.includes(editingCustomTarget.period as any) ? editingCustomTarget.period : (def?.periods[0] || 'monthly');
                       setEditingCustomTarget({ ...editingCustomTarget, metric_type: e.target.value, period: nextPeriod });
                     }}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                    className="w-full p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 dark:text-slate-100 text-sm"
                   >
                     {CUSTOM_TARGET_METRICS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
@@ -1115,22 +1115,22 @@ export default function SettingsTab({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Timeframe</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-1">Timeframe</label>
                     <select
                       value={editingCustomTarget.period || 'monthly'}
                       onChange={e => setEditingCustomTarget({ ...editingCustomTarget, period: e.target.value as any })}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                     >
                       {availablePeriods.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Target Value</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-1">Target Value</label>
                     <FormattedNumberInput
                       prefix={getMetricDef(editingCustomTarget.metric_type || '')?.aggregate === 'premium_sum' ? '$' : ''}
                       value={editingCustomTarget.target_value ?? 0}
                       onChange={v => setEditingCustomTarget({ ...editingCustomTarget, target_value: v === '' ? 0 : v })}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900"
+                      className="w-full p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 dark:text-slate-100"
                     />
                   </div>
                 </div>
@@ -1143,7 +1143,7 @@ export default function SettingsTab({
                         type="date"
                         value={toDateInputValue(editingCustomTarget.start_date)}
                         onChange={e => setEditingCustomTarget({ ...editingCustomTarget, start_date: e.target.value ? new Date(`${e.target.value}T00:00:00`).toISOString() : null })}
-                        className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                        className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                       />
                     </div>
                     <div>
@@ -1152,18 +1152,18 @@ export default function SettingsTab({
                         type="date"
                         value={toDateInputValue(editingCustomTarget.end_date)}
                         onChange={e => setEditingCustomTarget({ ...editingCustomTarget, end_date: e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null })}
-                        className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                        className="w-full p-2.5 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Location Scope</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-1">Location Scope</label>
                   <select
                     value={editingCustomTarget.office_id || ''}
                     onChange={e => setEditingCustomTarget({ ...editingCustomTarget, office_id: e.target.value || null })}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                   >
                     <option value="">All Locations (Combined)</option>
                     {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -1173,7 +1173,7 @@ export default function SettingsTab({
                 {/* --- TIER BUILDER --- */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">Milestone Tiers (Optional)</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider">Milestone Tiers (Optional)</label>
                     <button
                       type="button"
                       onClick={() => {
@@ -1185,13 +1185,13 @@ export default function SettingsTab({
                       <Plus size={14}/> Add Tier
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-400 mb-2">Each tier fires once this target&apos;s own metric hits its threshold. The reward credit value only does something if this target &quot;feeds into&quot; another one below.</p>
+                  <p className="text-[11px] text-gray-400 dark:text-slate-400 mb-2">Each tier fires once this target&apos;s own metric hits its threshold. The reward credit value only does something if this target &quot;feeds into&quot; another one below.</p>
                   {(!editingCustomTarget.tiers || editingCustomTarget.tiers.length === 0) ? (
-                    <p className="text-xs text-gray-400 italic p-3 bg-gray-50 rounded-lg border border-dashed border-gray-200">No tiers - this is a simple single-threshold target.</p>
+                    <p className="text-xs text-gray-400 dark:text-slate-400 italic p-3 bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-200 dark:border-slate-800">No tiers - this is a simple single-threshold target.</p>
                   ) : (
                     <div className="space-y-2">
                       {editingCustomTarget.tiers.map((tier: any, idx: number) => (
-                        <div key={tier.id ?? idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+                        <div key={tier.id ?? idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg p-2.5">
                           <input
                             type="text"
                             placeholder="Tier name"
@@ -1201,7 +1201,7 @@ export default function SettingsTab({
                               tiers[idx] = { ...tiers[idx], name: e.target.value };
                               setEditingCustomTarget({ ...editingCustomTarget, tiers });
                             }}
-                            className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-xs font-bold text-gray-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                           <div>
                             <FormattedNumberInput
@@ -1213,9 +1213,9 @@ export default function SettingsTab({
                                 tiers[idx] = { ...tiers[idx], threshold_metric: v === '' ? 0 : v };
                                 setEditingCustomTarget({ ...editingCustomTarget, tiers });
                               }}
-                              className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-xs font-bold text-gray-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
                             />
-                            <p className="text-[9px] text-gray-400 mt-0.5">Threshold to hit</p>
+                            <p className="text-[9px] text-gray-400 dark:text-slate-400 mt-0.5">Threshold to hit</p>
                           </div>
                           <div>
                             <FormattedNumberInput
@@ -1227,9 +1227,9 @@ export default function SettingsTab({
                                 tiers[idx] = { ...tiers[idx], reward_credit_value: v === '' ? 0 : v };
                                 setEditingCustomTarget({ ...editingCustomTarget, tiers });
                               }}
-                              className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-xs font-bold text-gray-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
                             />
-                            <p className="text-[9px] text-gray-400 mt-0.5">Bonus credit value</p>
+                            <p className="text-[9px] text-gray-400 dark:text-slate-400 mt-0.5">Bonus credit value</p>
                           </div>
                           <button
                             type="button"
@@ -1249,35 +1249,35 @@ export default function SettingsTab({
 
                 {/* --- FEEDS INTO (CASCADING LINK) --- */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Feeds Into (Optional)</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-1">Feeds Into (Optional)</label>
                   <select
                     value={editingCustomTarget.feeds_into_target_id || ''}
                     onChange={e => setEditingCustomTarget({ ...editingCustomTarget, feeds_into_target_id: e.target.value || null })}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                   >
                     <option value="">Standalone (doesn&apos;t feed anywhere)</option>
                     {(customTargets || [])
                       .filter((t: CustomTargetRow) => t.id && t.id !== editingCustomTarget.id && t.feeds_into_target_id !== editingCustomTarget.id)
                       .map((t: CustomTargetRow) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  <p className="text-[11px] text-gray-400 mt-1">When this mini-promo&apos;s tiers above are achieved, their reward credits are added on top of the selected master target&apos;s progress.</p>
+                  <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-1">When this mini-promo&apos;s tiers above are achieved, their reward credits are added on top of the selected master target&apos;s progress.</p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Display Location</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-200 uppercase tracking-wider mb-2">Display Location</label>
                   <div className="grid grid-cols-1 gap-2">
-                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${editingCustomTarget.display_location === 'scoreboard' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${editingCustomTarget.display_location === 'scoreboard' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                       <input type="radio" name="display_location" checked={editingCustomTarget.display_location === 'scoreboard'} onChange={() => setEditingCustomTarget({ ...editingCustomTarget, display_location: 'scoreboard' })} className="w-4 h-4 text-emerald-600" />
                       <div>
-                        <p className="font-bold text-sm text-gray-900">Scoreboard (Team Visible)</p>
-                        <p className="text-xs text-gray-500">Shown to the whole team on the Dashboard Scoreboard tab.</p>
+                        <p className="font-bold text-sm text-gray-900 dark:text-slate-100">Scoreboard (Team Visible)</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400">Shown to the whole team on the Dashboard Scoreboard tab.</p>
                       </div>
                     </label>
-                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${editingCustomTarget.display_location === 'revenue' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${editingCustomTarget.display_location === 'revenue' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                       <input type="radio" name="display_location" checked={editingCustomTarget.display_location === 'revenue'} onChange={() => setEditingCustomTarget({ ...editingCustomTarget, display_location: 'revenue' })} className="w-4 h-4 text-purple-600" />
                       <div>
-                        <p className="font-bold text-sm text-gray-900">Revenue Tab (Owner Only)</p>
-                        <p className="text-xs text-gray-500">Only visible on the Revenue &amp; AEC tab, gated by the same permission as the rest of that tab.</p>
+                        <p className="font-bold text-sm text-gray-900 dark:text-slate-100">Revenue Tab (Owner Only)</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400">Only visible on the Revenue &amp; AEC tab, gated by the same permission as the rest of that tab.</p>
                       </div>
                     </label>
                   </div>
@@ -1291,12 +1291,12 @@ export default function SettingsTab({
                     onChange={e => setEditingCustomTarget({ ...editingCustomTarget, active: e.target.checked })}
                     className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
                   />
-                  <label htmlFor="custom-target-active" className="text-sm font-bold text-gray-700 cursor-pointer">Active (uncheck to hide without deleting)</label>
+                  <label htmlFor="custom-target-active" className="text-sm font-bold text-gray-700 dark:text-slate-200 cursor-pointer">Active (uncheck to hide without deleting)</label>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-                <button onClick={() => setEditingCustomTarget(null)} className="text-sm font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Cancel</button>
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-slate-800">
+                <button onClick={() => setEditingCustomTarget(null)} className="text-sm font-bold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Cancel</button>
                 <button
                   onClick={async () => {
                     if (!editingCustomTarget.name?.trim()) { showToast("Give the target a name first.", "error"); return; }
@@ -1316,16 +1316,16 @@ export default function SettingsTab({
       {/* --- MODAL: Confirm Delete Custom Target --- */}
       {customTargetPendingDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2.5 bg-red-100 text-red-600 rounded-xl"><AlertCircle size={22}/></div>
-              <h3 className="text-lg font-bold text-gray-900">Delete Custom Target?</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">Delete Custom Target?</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to delete <span className="font-bold text-gray-900">{customTargetPendingDelete.name}</span>? This can&apos;t be undone.
+            <p className="text-sm text-gray-600 dark:text-slate-300 mb-6">
+              Are you sure you want to delete <span className="font-bold text-gray-900 dark:text-slate-100">{customTargetPendingDelete.name}</span>? This can&apos;t be undone.
             </p>
             <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setCustomTargetPendingDelete(null)} className="text-sm font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Cancel</button>
+              <button type="button" onClick={() => setCustomTargetPendingDelete(null)} className="text-sm font-bold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Cancel</button>
               <button
                 type="button"
                 onClick={() => { handleDeleteCustomTarget(customTargetPendingDelete.id); setCustomTargetPendingDelete(null); }}
@@ -1340,26 +1340,26 @@ export default function SettingsTab({
 
       {/* --- SECTION: LOCATIONS --- */}
       {activeSettingsSection === 'locations' && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><MapPin size={20}/></div>
-             <div><h3 className="font-bold text-gray-900">Office Locations & Financials</h3><p className="text-xs text-gray-500">Manage branches and set localized production, revenue, and Additional Earned Comp (AEC) targets</p></div>
+             <div><h3 className="font-bold text-gray-900 dark:text-slate-100">Office Locations & Financials</h3><p className="text-xs text-gray-500 dark:text-slate-400">Manage branches and set localized production, revenue, and Additional Earned Comp (AEC) targets</p></div>
           </div>
           <div className="p-6 space-y-4">
             <div className="flex gap-4">
-              <input type="text" value={newLocationName} onChange={e => setNewLocationName(e.target.value)} placeholder="New Location Name (e.g. South Branch)" className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-bold" />
+              <input type="text" value={newLocationName} onChange={e => setNewLocationName(e.target.value)} placeholder="New Location Name (e.g. South Branch)" className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-bold dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
               <button onClick={() => { if(newLocationName) { handleAddLocation(newLocationName); setNewLocationName(""); } }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-colors">Add</button>
             </div>
             
-            <div className="space-y-4 mt-6 pt-4 border-t border-gray-100">
+            <div className="space-y-4 mt-6 pt-4 border-t border-gray-100 dark:border-slate-800">
               {offices.map((office: any) => (
-                <div key={office.id} className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                <div key={office.id} className="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
                   <div className="flex items-center gap-4 p-4">
                     <input type="text" value={office.name} onChange={e => handleUpdateLocation(office.id, e.target.value)} className="flex-1 bg-transparent font-bold outline-none border-b border-dashed border-gray-300 focus:border-blue-500 p-1" />
                     
                     <button 
                       onClick={() => setExpandedLocationId(expandedLocationId === office.id ? null : office.id)} 
-                      className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${expandedLocationId === office.id ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${expandedLocationId === office.id ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-200'}`}
                     >
                       {expandedLocationId === office.id ? 'Close Branch Settings' : 'Edit Branch Settings'}
                     </button>
@@ -1368,35 +1368,35 @@ export default function SettingsTab({
                   </div>
                   
                   {expandedLocationId === office.id && (
-                    <div className="p-6 bg-indigo-50/30 border-t border-gray-100 animate-in slide-in-from-top-2">
+                    <div className="p-6 bg-indigo-50/30 border-t border-gray-100 dark:border-slate-800 animate-in slide-in-from-top-2">
                        
                        {/* PRODUCTION TARGETS */}
                        <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">1. Annual Production Targets</h4>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Annual Target Premium ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.annual_target_premium || 0} onChange={v => updateLocalOffice(office.id, 'annual_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" /></div>
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Annual Target Life Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_life_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_life_apps', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" /></div>
+                          <div><label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Annual Target Premium ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.annual_target_premium || 0} onChange={v => updateLocalOffice(office.id, 'annual_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" /></div>
+                          <div><label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Annual Target Life Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_life_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_life_apps', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" /></div>
                        </div>
                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Auto Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_auto_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_auto_apps', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Fire Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_fire_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_fire_apps', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Commercial Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_commercial_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_commercial_apps', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Health Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_health_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_health_apps', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Auto Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_auto_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_auto_apps', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Fire Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_fire_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_fire_apps', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Commercial Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_commercial_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_commercial_apps', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Health Apps</label><input type="number" value={localOfficeData[office.id]?.annual_target_health_apps || 0} onChange={e => updateLocalOffice(office.id, 'annual_target_health_apps', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                        </div>
 
                        {/* BASE COMMISSIONS & BOOK SIZE */}
                        <h4 className="text-sm font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">2. Base Commission Rates & Book Size</h4>
                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Auto Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_auto ?? 8} onChange={e => updateLocalOffice(office.id, 'base_comm_auto', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Fire Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_fire ?? 8} onChange={e => updateLocalOffice(office.id, 'base_comm_fire', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Life Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_life ?? 20} onChange={e => updateLocalOffice(office.id, 'base_comm_life', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Health Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_health ?? 20} onChange={e => updateLocalOffice(office.id, 'base_comm_health', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Auto Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_auto ?? 8} onChange={e => updateLocalOffice(office.id, 'base_comm_auto', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Fire Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_fire ?? 8} onChange={e => updateLocalOffice(office.id, 'base_comm_fire', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Life Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_life ?? 20} onChange={e => updateLocalOffice(office.id, 'base_comm_life', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Health Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_health ?? 20} onChange={e => updateLocalOffice(office.id, 'base_comm_health', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                        </div>
                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Auto Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_auto || 0} onChange={v => updateLocalOffice(office.id, 'book_size_auto', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Fire Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_fire || 0} onChange={v => updateLocalOffice(office.id, 'book_size_fire', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Comm. Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_commercial || 0} onChange={v => updateLocalOffice(office.id, 'book_size_commercial', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Life Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_life || 0} onChange={v => updateLocalOffice(office.id, 'book_size_life', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Health Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_health || 0} onChange={v => updateLocalOffice(office.id, 'book_size_health', v === '' ? 0 : v)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Auto Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_auto || 0} onChange={v => updateLocalOffice(office.id, 'book_size_auto', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Fire Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_fire || 0} onChange={v => updateLocalOffice(office.id, 'book_size_fire', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Comm. Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_commercial || 0} onChange={v => updateLocalOffice(office.id, 'book_size_commercial', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Life Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_life || 0} onChange={v => updateLocalOffice(office.id, 'book_size_life', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Health Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_health || 0} onChange={v => updateLocalOffice(office.id, 'book_size_health', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                        </div>
 
                        {/* PRIOR PIF & LAPSE RATES */}
@@ -1405,17 +1405,17 @@ export default function SettingsTab({
                          <InfoTooltip text="PIF = Policies In Force, i.e. how many active policies this branch carried at the end of last year. Lapse/Cancel Rate is the % of that book that lapsed or got cancelled - used to project renewal book decay." />
                        </h4>
                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                         <div className="bg-white border border-gray-200 p-3 rounded-lg"><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Prior Year Auto PIF</label><input type="number" value={localOfficeData[office.id]?.prior_pif_auto || 0} onChange={e => updateLocalOffice(office.id, 'prior_pif_auto', Number(e.target.value))} className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div className="bg-white border border-gray-200 p-3 rounded-lg"><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Prior Year Fire PIF</label><input type="number" value={localOfficeData[office.id]?.prior_pif_fire || 0} onChange={e => updateLocalOffice(office.id, 'prior_pif_fire', Number(e.target.value))} className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div className="bg-red-50 border border-red-100 p-3 rounded-lg"><label className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Auto Last Month (%)</label><input type="number" value={localOfficeData[office.id]?.prev_month_lapse_auto || 0} onChange={e => updateLocalOffice(office.id, 'prev_month_lapse_auto', Number(e.target.value))} className="w-full p-2 bg-white border border-red-200 rounded-lg text-sm font-bold" /></div>
-                         <div className="bg-red-50 border border-red-100 p-3 rounded-lg"><label className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Fire Last Month (%)</label><input type="number" value={localOfficeData[office.id]?.prev_month_lapse_fire || 0} onChange={e => updateLocalOffice(office.id, 'prev_month_lapse_fire', Number(e.target.value))} className="w-full p-2 bg-white border border-red-200 rounded-lg text-sm font-bold" /></div>
+                         <div className="bg-white border border-gray-200 p-3 rounded-lg dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Prior Year Auto PIF</label><input type="number" value={localOfficeData[office.id]?.prior_pif_auto || 0} onChange={e => updateLocalOffice(office.id, 'prior_pif_auto', Number(e.target.value))} className="w-full p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div className="bg-white border border-gray-200 p-3 rounded-lg dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Prior Year Fire PIF</label><input type="number" value={localOfficeData[office.id]?.prior_pif_fire || 0} onChange={e => updateLocalOffice(office.id, 'prior_pif_fire', Number(e.target.value))} className="w-full p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div className="bg-red-50 border border-red-100 p-3 rounded-lg dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Auto Last Month (%)</label><input type="number" value={localOfficeData[office.id]?.prev_month_lapse_auto || 0} onChange={e => updateLocalOffice(office.id, 'prev_month_lapse_auto', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-red-200 rounded-lg text-sm font-bold" /></div>
+                         <div className="bg-red-50 border border-red-100 p-3 rounded-lg dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Fire Last Month (%)</label><input type="number" value={localOfficeData[office.id]?.prev_month_lapse_fire || 0} onChange={e => updateLocalOffice(office.id, 'prev_month_lapse_fire', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-red-200 rounded-lg text-sm font-bold" /></div>
                        </div>
                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">YTD Global Rate</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_rate || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_rate', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">YTD Auto</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_auto || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_auto', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">YTD Fire</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_fire || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_fire', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">YTD Comm.</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_commercial || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_commercial', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">YTD Health</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_health || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_health', Number(e.target.value))} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Global Rate</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_rate || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_rate', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Auto</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_auto || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_auto', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Fire</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_fire || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_fire', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Comm.</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_commercial || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_commercial', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Health</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_health || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_health', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                        </div>
 
                        {/* VARIABLE COMP */}
@@ -1424,32 +1424,32 @@ export default function SettingsTab({
                          <InfoTooltip text="Additional Earned Comp is the extra 0-3% commission bump on top of base rates, earned by hitting Auto/Fire app-gain and Financial Services commission thresholds. Set the Min/Max app or dollar range for each bucket below." />
                        </h4>
                        <div className="w-1/3 mb-4">
-                         <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Current Base AEC Rate (%)</label>
-                         <input type="number" value={localOfficeData[office.id]?.current_vc_rate || 0} onChange={e => updateLocalOffice(office.id, 'current_vc_rate', Number(e.target.value))} className="w-full p-2.5 bg-white border border-blue-200 rounded-lg text-sm font-bold text-blue-900" />
+                         <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Current Base AEC Rate (%)</label>
+                         <input type="number" value={localOfficeData[office.id]?.current_vc_rate || 0} onChange={e => updateLocalOffice(office.id, 'current_vc_rate', Number(e.target.value))} className="w-full p-2.5 bg-white border border-blue-200 rounded-lg text-sm font-bold text-blue-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                        </div>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                         <div className="bg-white p-4 rounded-xl border border-gray-200">
-                            <label className="block text-xs font-bold text-gray-900 mb-3">Auto Gain Limits (Apps)</label>
+                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-200 dark:border-slate-800">
+                            <label className="block text-xs font-bold text-gray-900 dark:text-slate-100 mb-3">Auto Gain Limits (Apps)</label>
                             <div className="flex gap-4">
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Min</label><input type="number" value={localOfficeData[office.id]?.vc_min_auto_gain || 0} onChange={e => updateLocalOffice(office.id, 'vc_min_auto_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Max</label><input type="number" value={localOfficeData[office.id]?.vc_max_auto_gain ?? 100} onChange={e => updateLocalOffice(office.id, 'vc_max_auto_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase">Min</label><input type="number" value={localOfficeData[office.id]?.vc_min_auto_gain || 0} onChange={e => updateLocalOffice(office.id, 'vc_min_auto_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase">Max</label><input type="number" value={localOfficeData[office.id]?.vc_max_auto_gain ?? 100} onChange={e => updateLocalOffice(office.id, 'vc_max_auto_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                             </div>
                          </div>
-                         <div className="bg-white p-4 rounded-xl border border-gray-200">
-                            <label className="block text-xs font-bold text-gray-900 mb-3">Fire Gain Limits (Apps)</label>
+                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-200 dark:border-slate-800">
+                            <label className="block text-xs font-bold text-gray-900 dark:text-slate-100 mb-3">Fire Gain Limits (Apps)</label>
                             <div className="flex gap-4">
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Min</label><input type="number" value={localOfficeData[office.id]?.vc_min_fire_gain || 0} onChange={e => updateLocalOffice(office.id, 'vc_min_fire_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Max</label><input type="number" value={localOfficeData[office.id]?.vc_max_fire_gain ?? 100} onChange={e => updateLocalOffice(office.id, 'vc_max_fire_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase">Min</label><input type="number" value={localOfficeData[office.id]?.vc_min_fire_gain || 0} onChange={e => updateLocalOffice(office.id, 'vc_min_fire_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase">Max</label><input type="number" value={localOfficeData[office.id]?.vc_max_fire_gain ?? 100} onChange={e => updateLocalOffice(office.id, 'vc_max_fire_gain', Number(e.target.value))} className="w-full mt-1 p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                             </div>
                          </div>
-                         <div className="bg-white p-4 rounded-xl border border-gray-200 md:col-span-2">
-                            <label className="flex items-center gap-1 text-xs font-bold text-gray-900 mb-3">
+                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-200 dark:border-slate-800 md:col-span-2">
+                            <label className="flex items-center gap-1 text-xs font-bold text-gray-900 dark:text-slate-100 mb-3">
                               Financial Services (FS) Commission Limits ($) (Life, Health, IPS)
                               <InfoTooltip text="The Min/Max dollar range of Life + Health (+ IPS) commission that maps to the 0-2% Financial Services portion of the Additional Earned Comp rate above." />
                             </label>
                             <div className="flex gap-4">
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Min</label><FormattedNumberInput value={localOfficeData[office.id]?.vc_min_fs_comm || 0} onChange={v => updateLocalOffice(office.id, 'vc_min_fs_comm', v === '' ? 0 : v)} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
-                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 uppercase">Max</label><FormattedNumberInput value={localOfficeData[office.id]?.vc_max_fs_comm ?? 10000} onChange={v => updateLocalOffice(office.id, 'vc_max_fs_comm', v === '' ? 0 : v)} className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase">Min</label><FormattedNumberInput value={localOfficeData[office.id]?.vc_min_fs_comm || 0} onChange={v => updateLocalOffice(office.id, 'vc_min_fs_comm', v === '' ? 0 : v)} className="w-full mt-1 p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
+                              <div className="flex-1"><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase">Max</label><FormattedNumberInput value={localOfficeData[office.id]?.vc_max_fs_comm ?? 10000} onChange={v => updateLocalOffice(office.id, 'vc_max_fs_comm', v === '' ? 0 : v)} className="w-full mt-1 p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                             </div>
                          </div>
                        </div>
@@ -1464,7 +1464,7 @@ export default function SettingsTab({
                            onChange={e => updateLocalOffice(office.id, 'team_bonus_active', e.target.checked)}
                            className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
                          />
-                         <label htmlFor={`bonus-active-${office.id}`} className="font-bold text-gray-900 cursor-pointer">Activate Branch Bonus Widget</label>
+                         <label htmlFor={`bonus-active-${office.id}`} className="font-bold text-gray-900 dark:text-slate-100 cursor-pointer">Activate Branch Bonus Widget</label>
                        </div>
                        
                        {localOfficeData[office.id]?.team_bonus_active && (
@@ -1474,7 +1474,7 @@ export default function SettingsTab({
                               <select 
                                 value={localOfficeData[office.id]?.team_bonus_metric || 'total_apps'} 
                                 onChange={e => updateLocalOffice(office.id, 'team_bonus_metric', e.target.value)}
-                                className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm"
+                                className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                               >
                                 <option value="total_apps">Total Apps Bound (MTD)</option>
                                 <option value="total_premium">Total Premium (MTD)</option>
@@ -1493,7 +1493,7 @@ export default function SettingsTab({
                                 prefix={localOfficeData[office.id]?.team_bonus_metric === 'total_premium' ? '$' : ''}
                                 value={localOfficeData[office.id]?.team_bonus_target || 0}
                                 onChange={v => updateLocalOffice(office.id, 'team_bonus_target', v === '' ? 0 : v)}
-                                className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900"
+                                className="w-full p-2 bg-white dark:bg-slate-900 border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 dark:text-slate-100"
                               />
                             </div>
                             <div>
@@ -1503,7 +1503,7 @@ export default function SettingsTab({
                                 placeholder="e.g. Friday Lunch!"
                                 value={localOfficeData[office.id]?.team_bonus_reward || ''} 
                                 onChange={e => updateLocalOffice(office.id, 'team_bonus_reward', e.target.value)} 
-                                className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900" 
+                                className="w-full p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" 
                               />
                             </div>
                          </div>
@@ -1526,10 +1526,10 @@ export default function SettingsTab({
       {/* --- SECTION: TEAM MANAGEMENT --- */}
       {activeSettingsSection === 'team' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 mb-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
              <div>
-               <h3 className="font-bold text-gray-900 text-lg">Invite Team Members</h3>
-               <p className="text-sm text-gray-500">Send a personal email invite with their role (and location) already set up.</p>
+               <h3 className="font-bold text-gray-900 dark:text-slate-100 text-lg">Invite Team Members</h3>
+               <p className="text-sm text-gray-500 dark:text-slate-400">Send a personal email invite with their role (and location) already set up.</p>
              </div>
              <button
                onClick={() => { setInviteFormError(''); setShowInviteModal(true); }}
@@ -1539,13 +1539,13 @@ export default function SettingsTab({
              </button>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 flex justify-between items-center">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 mb-6 flex justify-between items-center">
              <div>
-               <h3 className="font-bold text-gray-900 text-lg">Agency Invite Code</h3>
-               <p className="text-sm text-gray-500">Share this code with new team members so they can join your agency during registration.</p>
+               <h3 className="font-bold text-gray-900 dark:text-slate-100 text-lg">Agency Invite Code</h3>
+               <p className="text-sm text-gray-500 dark:text-slate-400">Share this code with new team members so they can join your agency during registration.</p>
              </div>
              <div className="flex gap-2 items-center">
-               <code className="bg-gray-100 px-4 py-2 rounded-lg font-mono text-gray-800 font-bold border border-gray-200">{profile?.agency_id}</code>
+               <code className="bg-gray-100 dark:bg-slate-700 px-4 py-2 rounded-lg font-mono text-gray-800 font-bold border border-gray-200 dark:border-slate-800">{profile?.agency_id}</code>
                <button onClick={() => { navigator.clipboard.writeText(profile?.agency_id); showToast("Invite code copied!", "success"); }} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
                  <Copy size={20} />
                </button>
@@ -1553,12 +1553,12 @@ export default function SettingsTab({
           </div>
 
           {(teamInvites || []).some((inv: any) => inv.status === 'pending') && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-6">
-              <div className="p-5 border-b border-gray-100 flex items-center gap-2">
-                <Mail size={16} className="text-gray-400" />
-                <h3 className="font-bold text-gray-900 text-sm">Pending Invites ({(teamInvites || []).filter((inv: any) => inv.status === 'pending').length})</h3>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+              <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex items-center gap-2">
+                <Mail size={16} className="text-gray-400 dark:text-slate-400" />
+                <h3 className="font-bold text-gray-900 dark:text-slate-100 text-sm">Pending Invites ({(teamInvites || []).filter((inv: any) => inv.status === 'pending').length})</h3>
               </div>
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-gray-50 dark:divide-slate-800">
                 {(teamInvites || []).filter((inv: any) => inv.status === 'pending').map((invite: any) => {
                   const inviteOffice = offices.find((o: any) => o.id === invite.office_id);
                   const inviteName = [invite.first_name, invite.last_name].filter(Boolean).join(' ');
@@ -1567,9 +1567,9 @@ export default function SettingsTab({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-bold text-gray-800 text-sm truncate">{inviteName || invite.email}</p>
-                          <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${ROLE_BADGE_CLASSES[invite.role] || 'bg-gray-100 text-gray-700'}`}>{ROLE_LABELS[invite.role] || invite.role}</span>
+                          <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${ROLE_BADGE_CLASSES[invite.role] || 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200'}`}>{ROLE_LABELS[invite.role] || invite.role}</span>
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                        <p className="text-xs text-gray-400 dark:text-slate-400 mt-0.5 truncate">
                           {invite.email}{inviteOffice ? ` · ${inviteOffice.name}` : ''} · Invited {new Date(invite.created_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -1612,36 +1612,36 @@ export default function SettingsTab({
                   key={member.id}
                   type="button"
                   onClick={() => setEditingMemberId(member.id)}
-                  className="text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-blue-300 hover:shadow-md transition-all"
+                  className="text-left bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-5 hover:border-blue-300 hover:shadow-md transition-all"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <ProfileAvatar src={member.avatar_url} name={`${member.first_name} ${member.last_name}`} size="md" />
                       <div>
-                        <h3 className="font-bold text-gray-900 text-base">{member.first_name} {member.last_name}</h3>
-                        <span className={`inline-block mt-1.5 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${ROLE_BADGE_CLASSES[member.role] || 'bg-gray-100 text-gray-700'}`}>{ROLE_LABELS[member.role] || member.role}</span>
+                        <h3 className="font-bold text-gray-900 dark:text-slate-100 text-base">{member.first_name} {member.last_name}</h3>
+                        <span className={`inline-block mt-1.5 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${ROLE_BADGE_CLASSES[member.role] || 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200'}`}>{ROLE_LABELS[member.role] || member.role}</span>
                       </div>
                     </div>
                     {member.on_vacation && <span title="On Vacation / OOO" className="text-indigo-500 shrink-0"><Plane size={16}/></span>}
                   </div>
 
                   <div className="space-y-1.5 text-xs mb-4">
-                    <div className="flex items-center gap-1.5 text-gray-600"><MapPin size={12} className="text-gray-400 shrink-0"/><span className="font-semibold truncate">{memberOffice?.name || 'Unassigned Location'}</span></div>
-                    <div className="flex items-center gap-1.5 text-gray-600"><DollarSign size={12} className="text-gray-400 shrink-0"/><span className="font-semibold truncate">{memberPlan?.name || 'No Comp Plan Assigned'}</span></div>
+                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-slate-300"><MapPin size={12} className="text-gray-400 dark:text-slate-400 shrink-0"/><span className="font-semibold truncate">{memberOffice?.name || 'Unassigned Location'}</span></div>
+                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-slate-300"><DollarSign size={12} className="text-gray-400 dark:text-slate-400 shrink-0"/><span className="font-semibold truncate">{memberPlan?.name || 'No Comp Plan Assigned'}</span></div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
+                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
                     <div className="text-center">
-                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Touches</div>
-                      <div className="text-base font-black text-gray-900">{member.daily_target_touchpoints || 0}</div>
+                      <div className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wide">Touches</div>
+                      <div className="text-base font-black text-gray-900 dark:text-slate-100">{member.daily_target_touchpoints || 0}</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">{isService ? 'Res.' : 'Quotes'}</div>
-                      <div className="text-base font-black text-gray-900">{member.daily_target_quotes || 0}</div>
+                      <div className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wide">{isService ? 'Res.' : 'Quotes'}</div>
+                      <div className="text-base font-black text-gray-900 dark:text-slate-100">{member.daily_target_quotes || 0}</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">{isService ? 'X-Sell' : 'Apps'}</div>
-                      <div className="text-base font-black text-gray-900">{member.daily_target_bound || 0}</div>
+                      <div className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wide">{isService ? 'X-Sell' : 'Apps'}</div>
+                      <div className="text-base font-black text-gray-900 dark:text-slate-100">{member.daily_target_bound || 0}</div>
                     </div>
                   </div>
                 </button>
@@ -1659,7 +1659,7 @@ export default function SettingsTab({
                       <div className="flex items-center gap-2">
                         <Shield size={14} className="text-purple-500" />
                         <h4 className="text-xs font-bold text-purple-700 uppercase tracking-wider">Agency Owner</h4>
-                        <span className="text-[10px] text-gray-400">Personal goals & production, tracked separately from team averages</span>
+                        <span className="text-[10px] text-gray-400 dark:text-slate-400">Personal goals & production, tracked separately from team averages</span>
                       </div>
                       {/* Global visibility toggle: does the rest of the team get to see the Owner's
                           isolated "Agency Owner" section on Agency MTD / Weekly Rank? The owner/admin
@@ -1676,7 +1676,7 @@ export default function SettingsTab({
                             checked={agencySettings?.owner_visible_on_leaderboards || false}
                             onChange={e => setAgencySettings({ ...agencySettings, owner_visible_on_leaderboards: e.target.checked })}
                           />
-                          <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                          <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-slate-900 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
                         </span>
                       </label>
                     </div>
@@ -1687,12 +1687,12 @@ export default function SettingsTab({
                 )}
 
                 <div className="flex items-center gap-2 mb-3">
-                  <Users size={14} className="text-gray-400" />
-                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Producers / Team</h4>
+                  <Users size={14} className="text-gray-400 dark:text-slate-400" />
+                  <h4 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Producers / Team</h4>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {producers.map(renderMemberCard)}
-                  {producers.length === 0 && <p className="text-sm text-gray-400 col-span-full py-6 text-center">No active team members yet.</p>}
+                  {producers.length === 0 && <p className="text-sm text-gray-400 dark:text-slate-400 col-span-full py-6 text-center">No active team members yet.</p>}
                 </div>
               </>
             );
@@ -1700,20 +1700,20 @@ export default function SettingsTab({
 
           {/* Archived (soft-deleted) team members - hidden from every active list/leaderboard/
               selector, but reactivatable here since their historical sales data was never touched. */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <button type="button" onClick={() => setShowArchivedTeam(!showArchivedTeam)} className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-2"><Archive size={16} className="text-gray-400"/><h3 className="font-bold text-gray-700 text-sm">Archived Team Members ({(archivedTeam || []).length})</h3></div>
-              <span className="text-xs text-gray-400 font-bold">{showArchivedTeam ? 'Hide' : 'Show'}</span>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <button type="button" onClick={() => setShowArchivedTeam(!showArchivedTeam)} className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+              <div className="flex items-center gap-2"><Archive size={16} className="text-gray-400 dark:text-slate-400"/><h3 className="font-bold text-gray-700 dark:text-slate-200 text-sm">Archived Team Members ({(archivedTeam || []).length})</h3></div>
+              <span className="text-xs text-gray-400 dark:text-slate-400 font-bold">{showArchivedTeam ? 'Hide' : 'Show'}</span>
             </button>
             {showArchivedTeam && (
-              <div className="border-t border-gray-100 divide-y divide-gray-50">
+              <div className="border-t border-gray-100 dark:border-slate-800 divide-y divide-gray-50 dark:divide-slate-800">
                 {(archivedTeam || []).length === 0 ? (
-                  <p className="px-5 py-6 text-sm text-gray-400">No archived team members.</p>
+                  <p className="px-5 py-6 text-sm text-gray-400 dark:text-slate-400">No archived team members.</p>
                 ) : (archivedTeam || []).map((member: any) => (
                   <div key={member.id} className="flex items-center justify-between px-5 py-4">
                     <div>
                       <p className="font-bold text-gray-800 text-sm">{member.first_name} {member.last_name}</p>
-                      <p className="text-xs text-gray-400 capitalize mt-0.5">{ROLE_LABELS[member.role] || member.role}</p>
+                      <p className="text-xs text-gray-400 dark:text-slate-400 capitalize mt-0.5">{ROLE_LABELS[member.role] || member.role}</p>
                     </div>
                     <button
                       type="button"
@@ -1733,48 +1733,48 @@ export default function SettingsTab({
       {/* --- MODAL: Invite Team Member --- */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150" onClick={() => setShowInviteModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-xl font-bold text-gray-900">Invite Team Member</h3>
-              <button type="button" onClick={() => setShowInviteModal(false)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"><X size={20} /></button>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100">Invite Team Member</h3>
+              <button type="button" onClick={() => setShowInviteModal(false)} className="p-1.5 text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"><X size={20} /></button>
             </div>
 
             <form onSubmit={handleSendInvite} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">First Name</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">First Name</label>
                   <input
                     type="text" value={inviteForm.firstName}
                     onChange={e => setInviteForm({ ...inviteForm, firstName: e.target.value })}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Last Name</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Last Name</label>
                   <input
                     type="text" value={inviteForm.lastName}
                     onChange={e => setInviteForm({ ...inviteForm, lastName: e.target.value })}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Email Address</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
                 <input
                   type="email" required value={inviteForm.email}
                   onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })}
                   placeholder="name@example.com"
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Role</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role</label>
                 <select
                   value={inviteForm.role}
                   onChange={e => setInviteForm({ ...inviteForm, role: e.target.value as TeamInviteRole })}
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                 >
                   <option value="producer">Producer</option>
                   <option value="manager">Manager</option>
@@ -1786,11 +1786,11 @@ export default function SettingsTab({
 
               {offices && offices.length > 1 && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Office Location</label>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Office Location</label>
                   <select
                     value={inviteForm.officeId}
                     onChange={e => setInviteForm({ ...inviteForm, officeId: e.target.value })}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                   >
                     <option value="">No preference</option>
                     {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -1823,11 +1823,11 @@ export default function SettingsTab({
         if (!member) return null;
         return (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150" onClick={() => setEditingMemberId(null)}>
-            <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex flex-col md:flex-row justify-between md:items-center pb-4 border-b border-gray-100 mb-6 gap-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex flex-col md:flex-row justify-between md:items-center pb-4 border-b border-gray-100 dark:border-slate-800 mb-6 gap-4">
                  <div>
-                   <h3 className="text-xl font-bold text-gray-900">{member.first_name} {member.last_name}</h3>
-                   <p className="text-xs text-gray-500 mt-1 capitalize">Current Role: {member.role}</p>
+                   <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100">{member.first_name} {member.last_name}</h3>
+                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 capitalize">Current Role: {member.role}</p>
                  </div>
                  <div className="flex items-center gap-2">
                    <div className="flex flex-wrap items-center gap-3">
@@ -1838,18 +1838,18 @@ export default function SettingsTab({
                           {compPlans.map((plan: any) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
                         </select>
                      </div>
-                     <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 gap-2">
-                        <span className="text-gray-500 font-bold text-xs uppercase">Home Base:</span>
+                     <div className="flex items-center bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg px-3 py-1.5 gap-2">
+                        <span className="text-gray-500 dark:text-slate-400 font-bold text-xs uppercase">Home Base:</span>
                         <select value={member.office_id || ""} onChange={e => updateTeamMember(member.id, 'office_id', e.target.value)} className="bg-transparent text-sm font-bold outline-none text-gray-800">
                           {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
                         </select>
                      </div>
-                     <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 gap-2">
+                     <div className="flex items-center bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg px-3 py-1.5 gap-2">
                         <input type="checkbox" id={`floater-${member.id}`} checked={member.is_floater || false} onChange={e => updateTeamMember(member.id, 'is_floater', e.target.checked)} className="rounded text-blue-600" />
-                        <label htmlFor={`floater-${member.id}`} className="text-gray-600 font-bold text-xs uppercase cursor-pointer">Floater</label>
+                        <label htmlFor={`floater-${member.id}`} className="text-gray-600 dark:text-slate-300 font-bold text-xs uppercase cursor-pointer">Floater</label>
                      </div>
-                     <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 gap-2">
-                        <span className="text-gray-500 font-bold text-xs uppercase">System Role:</span>
+                     <div className="flex items-center bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg px-3 py-1.5 gap-2">
+                        <span className="text-gray-500 dark:text-slate-400 font-bold text-xs uppercase">System Role:</span>
                         <select value={member.role} onChange={e => handleUpdateRole(member.id, e.target.value)} className="bg-transparent text-sm font-bold outline-none text-gray-800">
                           {(roles || DEFAULT_ROLES).map((r: any) => (
                             <option key={r.id} value={r.id}>{r.name}</option>
@@ -1857,7 +1857,7 @@ export default function SettingsTab({
                         </select>
                      </div>
                    </div>
-                   <button onClick={() => setEditingMemberId(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors shrink-0"><X size={20}/></button>
+                   <button onClick={() => setEditingMemberId(null)} className="p-2 text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors shrink-0"><X size={20}/></button>
                  </div>
               </div>
 
@@ -1873,30 +1873,30 @@ export default function SettingsTab({
                     checked={member.on_vacation || false} 
                     onChange={(e) => updateTeamMember(member.id, 'on_vacation', e.target.checked)}
                   />
-                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                  <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-slate-900 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
                 </label>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Daily Goals</h4>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Touches</label><input type="number" value={member.daily_target_touchpoints ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_touchpoints', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Complex Res.' : 'Quotes'}</label><input type="number" value={member.daily_target_quotes ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_quotes', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Cross-Sells' : 'Apps'}</label><input type="number" value={member.daily_target_bound ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <p className="text-[10px] text-gray-400 leading-snug pt-1">Weekly (×5) and, for Apps, Monthly (×20) auto-fill from these as you type — still freely editable for a custom stretch goal.</p>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Touches</label><input type="number" value={member.daily_target_touchpoints ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_touchpoints', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">{member.role === 'service' ? 'Complex Res.' : 'Quotes'}</label><input type="number" value={member.daily_target_quotes ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_quotes', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">{member.role === 'service' ? 'Cross-Sells' : 'Apps'}</label><input type="number" value={member.daily_target_bound ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <p className="text-[10px] text-gray-400 dark:text-slate-400 leading-snug pt-1">Weekly (×5) and, for Apps, Monthly (×20) auto-fill from these as you type — still freely editable for a custom stretch goal.</p>
                 </div>
                 
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Weekly Goals</h4>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Touches</label><input type="number" value={member.weekly_target_touchpoints ?? 0} onChange={e => updateTeamMember(member.id, 'weekly_target_touchpoints', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Complex Res.' : 'Quotes'}</label><input type="number" value={member.weekly_target_quotes ?? 0} onChange={e => updateTeamMember(member.id, 'weekly_target_quotes', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">{member.role === 'service' ? 'Cross-Sells' : 'Apps'}</label><input type="number" value={member.weekly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'weekly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Touches</label><input type="number" value={member.weekly_target_touchpoints ?? 0} onChange={e => updateTeamMember(member.id, 'weekly_target_touchpoints', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">{member.role === 'service' ? 'Complex Res.' : 'Quotes'}</label><input type="number" value={member.weekly_target_quotes ?? 0} onChange={e => updateTeamMember(member.id, 'weekly_target_quotes', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">{member.role === 'service' ? 'Cross-Sells' : 'Apps'}</label><input type="number" value={member.weekly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'weekly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
                 </div>
 
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2">Monthly Goals & Pay</h4>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Total Apps</label><input type="number" value={member.monthly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Total Prem ($)</label><FormattedNumberInput value={member.monthly_target_premium ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Total Apps</label><input type="number" value={member.monthly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1">Total Prem ($)</label><FormattedNumberInput value={member.monthly_target_premium ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
                   <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><FormattedNumberInput value={member.monthly_base_salary ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_base_salary', v === '' ? 0 : v)} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
                 </div>
 
@@ -1911,11 +1911,11 @@ export default function SettingsTab({
                   <h4 className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-2">Life / Annual</h4>
                   <div><label className="block text-[10px] font-bold text-red-600 uppercase mb-1">Yr Life Apps</label><input type="number" value={member.annual_target_life_apps ?? 0} onChange={e => updateTeamMember(member.id, 'annual_target_life_apps', Number(e.target.value))} className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-red-400" /></div>
                   <div><label className="block text-[10px] font-bold text-red-600 uppercase mb-1">Yr Life Prem ($)</label><FormattedNumberInput value={member.annual_target_life_premium ?? 0} onChange={v => updateTeamMember(member.id, 'annual_target_life_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-red-400" /></div>
-                  <p className="text-[10px] text-gray-400 leading-snug pt-1">Monthly pacing is calculated automatically as Annual ÷ 12 wherever needed — no separate monthly input required.</p>
+                  <p className="text-[10px] text-gray-400 dark:text-slate-400 leading-snug pt-1">Monthly pacing is calculated automatically as Annual ÷ 12 wherever needed — no separate monthly input required.</p>
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center">
                 <button
                   type="button"
                   onClick={() => setMemberPendingArchive(member)}
@@ -1923,7 +1923,7 @@ export default function SettingsTab({
                 >
                   <Archive size={16}/> Archive Team Member
                 </button>
-                <button type="button" onClick={() => setEditingMemberId(null)} className="text-sm font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Done</button>
+                <button type="button" onClick={() => setEditingMemberId(null)} className="text-sm font-bold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors">Done</button>
               </div>
             </div>
           </div>
@@ -1933,19 +1933,19 @@ export default function SettingsTab({
       {/* --- MODAL: Confirm Archive --- */}
       {memberPendingArchive && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2.5 bg-red-100 text-red-600 rounded-xl"><AlertCircle size={22}/></div>
-              <h3 className="text-lg font-bold text-gray-900">Remove Team Member?</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">Remove Team Member?</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to remove <span className="font-bold text-gray-900">{memberPendingArchive.first_name} {memberPendingArchive.last_name}</span> from the active roster? They'll disappear from producer selectors, leaderboards, and Scoreboard views, but all of their historical sales data is preserved for agency-wide YTD reporting. You can reactivate them anytime from the Archived Team Members list.
+            <p className="text-sm text-gray-600 dark:text-slate-300 mb-6">
+              Are you sure you want to remove <span className="font-bold text-gray-900 dark:text-slate-100">{memberPendingArchive.first_name} {memberPendingArchive.last_name}</span> from the active roster? They'll disappear from producer selectors, leaderboards, and Scoreboard views, but all of their historical sales data is preserved for agency-wide YTD reporting. You can reactivate them anytime from the Archived Team Members list.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setMemberPendingArchive(null)}
-                className="text-sm font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors"
+                className="text-sm font-bold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 px-5 py-2.5 rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -1969,21 +1969,21 @@ export default function SettingsTab({
       {activeSettingsSection === 'compplans' && (
         <div className="space-y-6">
           {!editingPlan ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex justify-between items-center">
                  <div className="flex items-center gap-3">
                    <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><DollarSign size={20}/></div>
-                   <div><h3 className="font-bold text-gray-900">Compensation Plans</h3><p className="text-xs text-gray-500">Tiered rules that automatically calculate commission</p></div>
+                   <div><h3 className="font-bold text-gray-900 dark:text-slate-100">Compensation Plans</h3><p className="text-xs text-gray-500 dark:text-slate-400">Tiered rules that automatically calculate commission</p></div>
                  </div>
                  <button onClick={() => setEditingPlan({ name: "New Plan", rules: { base_rates: { auto_nb: 0, fire_nb: 0, commercial_nb: 0, term_life_nb: 0, term_life_rate_type: 'percent', whole_life_nb: 0, whole_life_rate_type: 'percent', health_nb: 0 }, thresholds: { required_apps_to_unlock: 0, required_premium_to_unlock: 0, required_life_health_apps_to_unlock: 0 }, accelerators: [], custom_bonuses: [] } })} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 text-sm"><Plus size={16}/> Create Plan</button>
               </div>
               <div className="p-6 space-y-3">
-                {compPlans.length === 0 && <p className="text-sm text-gray-400">No comp plans created. Click 'Create Plan' to begin.</p>}
+                {compPlans.length === 0 && <p className="text-sm text-gray-400 dark:text-slate-400">No comp plans created. Click 'Create Plan' to begin.</p>}
                 {compPlans.map((plan: any) => (
-                  <div key={plan.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                  <div key={plan.id} className="flex items-center justify-between p-4 border border-gray-200 dark:border-slate-800 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
                     <div>
-                      <h4 className="font-bold text-gray-900 text-lg">{plan.name}</h4>
-                      <p className="text-xs text-gray-500">{plan.rules?.accelerators?.length || 0} active accelerators • {plan.rules?.custom_bonuses?.length || 0} flat bonuses</p>
+                      <h4 className="font-bold text-gray-900 dark:text-slate-100 text-lg">{plan.name}</h4>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{plan.rules?.accelerators?.length || 0} active accelerators • {plan.rules?.custom_bonuses?.length || 0} flat bonuses</p>
                     </div>
                     <div className="flex gap-3">
                       <button onClick={() => setEditingPlan(plan)} className="text-blue-600 hover:text-blue-800 font-bold text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Edit Rules</button>
@@ -1994,7 +1994,7 @@ export default function SettingsTab({
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden animate-in slide-in-from-bottom-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-xl overflow-hidden animate-in slide-in-from-bottom-4">
               <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
                 <div>
                   <h3 className="font-black text-xl">Plan Editor</h3>
@@ -2006,8 +2006,8 @@ export default function SettingsTab({
                 </div>
               </div>
               
-              <div className="p-6 bg-gray-50 border-b border-gray-200">
-                <h4 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
+              <div className="p-6 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-800">
+                <h4 className="font-bold text-gray-900 dark:text-slate-100 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
                   1. Base Commission Rates
                   <InfoTooltip text="The starting commission this plan pays per line before any accelerator bumps below are applied. Auto/Fire/Commercial/Health are always a % of premium; Term Life and Whole Life can each independently be switched to a flat $ amount per policy instead." />
                 </h4>
@@ -2028,12 +2028,12 @@ export default function SettingsTab({
                     return (
                       <div key={key}>
                         <div className="flex items-center justify-between gap-1 mb-1">
-                          <label className="block text-[10px] font-bold text-gray-500 uppercase">{label}</label>
+                          <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">{label}</label>
                           {rateTypeKey && (
                             <select
                               value={rateType}
                               onChange={e => updateRule('base_rates', rateTypeKey, e.target.value)}
-                              className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500"
+                              className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                             >
                               <option value="percent">% of Premium</option>
                               <option value="flat">Flat $ / App</option>
@@ -2041,14 +2041,14 @@ export default function SettingsTab({
                           )}
                         </div>
                         <div className="relative">
-                          {isFlat && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">$</span>}
+                          {isFlat && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 dark:text-slate-400">$</span>}
                           <input
                             type="number"
                             value={editingPlan.rules?.base_rates?.[key] ?? fallbackVal}
                             onChange={e => updateRule('base_rates', key, Number(e.target.value))}
-                            className={`w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold ${isFlat ? 'pl-6 pr-2.5' : 'pr-6'}`}
+                            className={`w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold ${isFlat ? 'pl-6 pr-2.5' : 'pr-6'}`}
                           />
-                          {!isFlat && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">%</span>}
+                          {!isFlat && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 dark:text-slate-400">%</span>}
                         </div>
                       </div>
                     );
@@ -2058,81 +2058,81 @@ export default function SettingsTab({
                   <p className="text-[11px] text-amber-600 font-semibold mt-3">This plan still uses its legacy blended Life rate ({editingPlan.rules.base_rates.life_nb}%) on both Term and Whole Life until you adjust either field above.</p>
                 )}
                 {(editingPlan.rules?.base_rates?.term_life_rate_type === 'flat' || editingPlan.rules?.base_rates?.whole_life_rate_type === 'flat') && (
-                  <p className="text-[11px] text-gray-500 font-semibold mt-3">Flat $ lines pay strictly per bound/issued policy count on that line - premium amount is ignored for that line's payout.</p>
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400 font-semibold mt-3">Flat $ lines pay strictly per bound/issued policy count on that line - premium amount is ignored for that line's payout.</p>
                 )}
               </div>
 
-              <div className="p-6 bg-white border-b border-gray-200">
-                <h4 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
+              <div className="p-6 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800">
+                <h4 className="font-bold text-gray-900 dark:text-slate-100 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
                   2. Unlocking Thresholds
                   <InfoTooltip text="Minimums a producer must hit in a month before this plan pays ANY commission at all. Leave at 0 to unlock immediately - these are hard gates, not accelerator tiers." />
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Required Premium ($)</label>
-                    <FormattedNumberInput value={editingPlan.rules?.thresholds?.required_premium_to_unlock || 0} onChange={v => updateRule('thresholds', 'required_premium_to_unlock', v === '' ? 0 : v)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" />
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase mb-1">Required Premium ($)</label>
+                    <FormattedNumberInput value={editingPlan.rules?.thresholds?.required_premium_to_unlock || 0} onChange={v => updateRule('thresholds', 'required_premium_to_unlock', v === '' ? 0 : v)} className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Required Apps (Total)</label>
-                    <input type="number" value={editingPlan.rules?.thresholds?.required_apps_to_unlock || 0} onChange={e => updateRule('thresholds', 'required_apps_to_unlock', Number(e.target.value))} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" />
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase mb-1">Required Apps (Total)</label>
+                    <input type="number" value={editingPlan.rules?.thresholds?.required_apps_to_unlock || 0} onChange={e => updateRule('thresholds', 'required_apps_to_unlock', Number(e.target.value))} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                   </div>
                   <div>
                     <label className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase mb-1">
                       Required Life/Health Apps
                       <InfoTooltip text="Short for L/H - just Life and Health apps counted together, separate from the 'Required Apps (Total)' count to the left." />
                     </label>
-                    <input type="number" value={editingPlan.rules?.thresholds?.required_life_health_apps_to_unlock || 0} onChange={e => updateRule('thresholds', 'required_life_health_apps_to_unlock', Number(e.target.value))} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" />
+                    <input type="number" value={editingPlan.rules?.thresholds?.required_life_health_apps_to_unlock || 0} onChange={e => updateRule('thresholds', 'required_life_health_apps_to_unlock', Number(e.target.value))} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                   </div>
                 </div>
               </div>
 
-              <div className="p-6 bg-blue-50 border-b border-gray-200">
+              <div className="p-6 bg-blue-50 border-b border-gray-200 dark:border-slate-800">
                 <div className="flex justify-between items-center mb-1">
-                  <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                  <h4 className="font-bold text-gray-900 dark:text-slate-100 uppercase text-xs tracking-wider flex items-center gap-1.5">
                     3. Variable Accelerators
                     <InfoTooltip text="If/then bonus rules layered on top of the Base Commission Rates above - e.g. 'if Total Premium >= $50,000, bump Auto Base by 2%'. Multiple tiers can be met at once and all of them stack." />
                   </h4>
                   <button onClick={addAccelerator} className="text-xs font-bold text-blue-600 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-md flex items-center gap-1"><Plus size={14}/> Add Tier</button>
                 </div>
-                <p className="text-[11px] text-gray-500 mb-4 max-w-2xl">Tiers stack: every tier whose threshold is met contributes its bump/bonus, and they all add together (never just the largest one alone). Rates always apply to the producer's full eligible premium for the month, retroactively - never just the amount above a threshold.</p>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-4 max-w-2xl">Tiers stack: every tier whose threshold is met contributes its bump/bonus, and they all add together (never just the largest one alone). Rates always apply to the producer's full eligible premium for the month, retroactively - never just the amount above a threshold.</p>
                 <div className="space-y-3">
-                  {(editingPlan.rules?.accelerators || []).length === 0 && <p className="text-sm text-gray-500">No accelerators added.</p>}
+                  {(editingPlan.rules?.accelerators || []).length === 0 && <p className="text-sm text-gray-500 dark:text-slate-400">No accelerators added.</p>}
                   {(editingPlan.rules?.accelerators || []).map((acc: any, idx: number) => (
-                    <div key={idx} className="flex flex-wrap gap-2 items-center bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
-                      <span className="text-xs font-bold text-gray-400">If</span>
-                      <select value={acc.metric} onChange={e => updateAccelerator(idx, 'metric', e.target.value)} className="p-2 border border-gray-200 rounded-md text-xs font-bold text-gray-700 outline-none">
+                    <div key={idx} className="flex flex-wrap gap-2 items-center bg-white dark:bg-slate-900 p-3 rounded-xl border border-blue-100 shadow-sm">
+                      <span className="text-xs font-bold text-gray-400 dark:text-slate-400">If</span>
+                      <select value={acc.metric} onChange={e => updateAccelerator(idx, 'metric', e.target.value)} className="p-2 border border-gray-200 dark:border-slate-800 rounded-md text-xs font-bold text-gray-700 dark:text-slate-200 outline-none">
                         <option value="life_health_apps">Financial Services Apps (Life + Health)</option>
                         <option value="life_premium">Financial Services Premium (Life + Health)</option>
                         <option value="pnc_premium">Property &amp; Casualty (P&amp;C) Premium</option>
                         <option value="total_premium">Total Premium</option>
                         <option value="total_apps">Total Apps</option>
                       </select>
-                      <span className="text-xs font-bold text-gray-400">≥</span>
+                      <span className="text-xs font-bold text-gray-400 dark:text-slate-400">≥</span>
                       <FormattedNumberInput
                         prefix={['life_premium', 'pnc_premium', 'total_premium'].includes(acc.metric) ? '$' : ''}
                         value={acc.threshold}
                         onChange={v => updateAccelerator(idx, 'threshold', v === '' ? 0 : v)}
-                        className="w-24 p-2 border border-gray-200 rounded-md text-xs font-bold"
+                        className="w-24 p-2 border border-gray-200 dark:border-slate-800 rounded-md text-xs font-bold"
                       />
-                      <span className="text-xs font-bold text-gray-400">then</span>
+                      <span className="text-xs font-bold text-gray-400 dark:text-slate-400">then</span>
                       
-                      <select value={acc.reward_type || 'rate_bump'} onChange={e => updateAccelerator(idx, 'reward_type', e.target.value)} className="p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700 outline-none">
+                      <select value={acc.reward_type || 'rate_bump'} onChange={e => updateAccelerator(idx, 'reward_type', e.target.value)} className="p-2 border border-gray-200 dark:border-slate-800 rounded-md text-xs font-bold text-emerald-700 outline-none">
                         <option value="rate_bump">bump base rate</option>
                         <option value="flat_bonus">pay flat bonus</option>
                       </select>
 
                       {acc.reward_type === 'flat_bonus' ? (
                         <>
-                          <span className="text-xs font-bold text-gray-400">of</span>
+                          <span className="text-xs font-bold text-gray-400 dark:text-slate-400">of</span>
                           <FormattedNumberInput
                             value={acc.bonus_amount || 0}
                             onChange={v => updateAccelerator(idx, 'bonus_amount', v === '' ? 0 : v)}
-                            className="w-24 p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700"
+                            className="w-24 p-2 border border-gray-200 dark:border-slate-800 rounded-md text-xs font-bold text-emerald-700"
                           />
                         </>
                       ) : (
                         <>
-                          <select value={acc.target_line} onChange={e => updateAccelerator(idx, 'target_line', e.target.value)} className="p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700 outline-none">
+                          <select value={acc.target_line} onChange={e => updateAccelerator(idx, 'target_line', e.target.value)} className="p-2 border border-gray-200 dark:border-slate-800 rounded-md text-xs font-bold text-emerald-700 outline-none">
                             <option value="pnc_base">Property &amp; Casualty (P&amp;C) Base</option>
                             <option value="auto_base">Auto Base</option>
                             <option value="fire_base">Fire Base</option>
@@ -2141,9 +2141,9 @@ export default function SettingsTab({
                             <option value="whole_life_base">Whole Life Base</option>
                             <option value="health_base">Health Base</option>
                           </select>
-                          <span className="text-xs font-bold text-gray-400">by</span>
+                          <span className="text-xs font-bold text-gray-400 dark:text-slate-400">by</span>
                           <div className="relative">
-                            <input type="number" value={acc.bump_percent} onChange={e => updateAccelerator(idx, 'bump_percent', Number(e.target.value))} className="w-20 pl-2 pr-6 p-2 border border-gray-200 rounded-md text-xs font-bold text-emerald-700" />
+                            <input type="number" value={acc.bump_percent} onChange={e => updateAccelerator(idx, 'bump_percent', Number(e.target.value))} className="w-20 pl-2 pr-6 p-2 border border-gray-200 dark:border-slate-800 rounded-md text-xs font-bold text-emerald-700" />
                             <span className="absolute right-2 top-2 text-xs font-bold text-emerald-700">%</span>
                           </div>
                         </>
@@ -2155,20 +2155,20 @@ export default function SettingsTab({
                 </div>
               </div>
 
-              <div className="p-6 bg-white">
+              <div className="p-6 bg-white dark:bg-slate-900">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider flex items-center gap-1.5">
+                  <h4 className="font-bold text-gray-900 dark:text-slate-100 uppercase text-xs tracking-wider flex items-center gap-1.5">
                     4. Custom Flat Bonuses ($)
                     <InfoTooltip text="One-time flat dollar bonuses tracked manually per producer (e.g. a Google Review bonus) - these are named rules an owner/manager can claim against a specific policy, not automatic like the accelerators above." />
                   </h4>
                   <button onClick={addCustomBonus} className="text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-md flex items-center gap-1"><Plus size={14}/> Add Bonus Rule</button>
                 </div>
                 <div className="space-y-3">
-                  {(editingPlan.rules?.custom_bonuses || []).length === 0 && <p className="text-sm text-gray-500">No flat bonuses added.</p>}
+                  {(editingPlan.rules?.custom_bonuses || []).length === 0 && <p className="text-sm text-gray-500 dark:text-slate-400">No flat bonuses added.</p>}
                   {(editingPlan.rules?.custom_bonuses || []).map((bonus: any, idx: number) => (
-                    <div key={idx} className="flex gap-3 items-center bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <div key={idx} className="flex gap-3 items-center bg-gray-50 dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-slate-800">
                       <div className="flex-1">
-                        <input type="text" placeholder="Rule Name (e.g. Google Review)" value={bonus.name} onChange={e => updateCustomBonus(idx, 'name', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-sm font-bold text-gray-900" />
+                        <input type="text" placeholder="Rule Name (e.g. Google Review)" value={bonus.name} onChange={e => updateCustomBonus(idx, 'name', e.target.value)} className="w-full p-2 border border-gray-300 rounded-md text-sm font-bold text-gray-900 dark:text-slate-100" />
                       </div>
                       <div className="w-32">
                         <FormattedNumberInput placeholder="$0" value={bonus.amount} onChange={v => updateCustomBonus(idx, 'amount', v === '' ? 0 : v)} className="w-full p-2 border border-gray-300 rounded-md text-sm font-black text-emerald-700" />
@@ -2198,39 +2198,39 @@ export default function SettingsTab({
           </div>
 
           {/* LIFE */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Shield size={20} /></div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Life Insurance</h3>
-                  <p className="text-xs text-gray-500">Carrier compensation table by product type</p>
+                  <h3 className="font-bold text-gray-900 dark:text-slate-100">Life Insurance</h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Carrier compensation table by product type</p>
                 </div>
               </div>
             </div>
             <div className="p-6 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <tr className="text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">
                     <th className="pb-3 pr-4">Product Type</th>
                     <th className="pb-3 pr-4">Year 1 (New Business) %</th>
                     <th className="pb-3 pr-4">Year 2&ndash;5 (Servicing) %</th>
                     <th className="pb-3 pr-4">Year 6+ (Servicing) %</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                   {(Object.keys(LIFE_SUBTYPE_LABELS) as LifeSubType[]).map((subType) => {
                     const band = commissionRatesDraft.life[subType];
                     return (
                       <tr key={subType}>
-                        <td className="py-3 pr-4 font-bold text-gray-900 whitespace-nowrap">{LIFE_SUBTYPE_LABELS[subType]}</td>
+                        <td className="py-3 pr-4 font-bold text-gray-900 dark:text-slate-100 whitespace-nowrap">{LIFE_SUBTYPE_LABELS[subType]}</td>
                         <td className="py-3 pr-4">
                           <input
                             type="number"
                             step="0.1"
                             value={Math.round(band.year1 * 1000) / 10}
                             onChange={(e) => updateLifeRate(subType, 'year1', Number(e.target.value))}
-                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                           />
                         </td>
                         <td className="py-3 pr-4">
@@ -2239,7 +2239,7 @@ export default function SettingsTab({
                             step="0.1"
                             value={Math.round(band.year2_to_5 * 1000) / 10}
                             onChange={(e) => updateLifeRate(subType, 'year2_to_5', Number(e.target.value))}
-                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                           />
                         </td>
                         <td className="py-3 pr-4">
@@ -2248,7 +2248,7 @@ export default function SettingsTab({
                             step="0.1"
                             value={Math.round(band.year6_plus * 1000) / 10}
                             onChange={(e) => updateLifeRate(subType, 'year6_plus', Number(e.target.value))}
-                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                           />
                         </td>
                       </tr>
@@ -2256,7 +2256,7 @@ export default function SettingsTab({
                   })}
                 </tbody>
               </table>
-              <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
+              <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-4 leading-relaxed">
                 <strong>Note:</strong> Traditional Ordinary rates are an average across the carrier&apos;s mid-tier age
                 brackets for projection simplicity. Aggregate Life premium (which isn&apos;t yet broken out by product
                 type per policy) is projected using the <strong>Term</strong> rate as the blended default.
@@ -2265,38 +2265,38 @@ export default function SettingsTab({
           </div>
 
           {/* HEALTH */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><HeartPulse size={20} /></div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Health Insurance</h3>
-                  <p className="text-xs text-gray-500">Carrier compensation table by product type</p>
+                  <h3 className="font-bold text-gray-900 dark:text-slate-100">Health Insurance</h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Carrier compensation table by product type</p>
                 </div>
               </div>
             </div>
             <div className="p-6 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <tr className="text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">
                     <th className="pb-3 pr-4">Product Type</th>
                     <th className="pb-3 pr-4">First Year (New Business) %</th>
                     <th className="pb-3 pr-4">Servicing (Renewal) %</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                   {(Object.keys(HEALTH_SUBTYPE_LABELS) as HealthSubType[]).map((subType) => {
                     const band = commissionRatesDraft.health[subType];
                     return (
                       <tr key={subType}>
-                        <td className="py-3 pr-4 font-bold text-gray-900 whitespace-nowrap">{HEALTH_SUBTYPE_LABELS[subType]}</td>
+                        <td className="py-3 pr-4 font-bold text-gray-900 dark:text-slate-100 whitespace-nowrap">{HEALTH_SUBTYPE_LABELS[subType]}</td>
                         <td className="py-3 pr-4">
                           <input
                             type="number"
                             step="0.1"
                             value={Math.round(band.first_year * 1000) / 10}
                             onChange={(e) => updateHealthRate(subType, 'first_year', Number(e.target.value))}
-                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                           />
                         </td>
                         <td className="py-3 pr-4">
@@ -2305,7 +2305,7 @@ export default function SettingsTab({
                             step="0.1"
                             value={Math.round(band.servicing * 1000) / 10}
                             onChange={(e) => updateHealthRate(subType, 'servicing', Number(e.target.value))}
-                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900"
+                            className="w-24 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                           />
                         </td>
                       </tr>
@@ -2313,7 +2313,7 @@ export default function SettingsTab({
                   })}
                 </tbody>
               </table>
-              <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
+              <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-4 leading-relaxed">
                 <strong>Note:</strong> Aggregate Health premium is projected using the <strong>Medicare Supplement</strong>{' '}
                 rate as the blended default until per-policy product-type data exists.
               </p>
@@ -2377,35 +2377,35 @@ export default function SettingsTab({
                   }
                   setGlobalCloseRateDraft(parsed);
                 }}
-                className="w-full p-3 bg-white/90 border border-white/20 rounded-lg text-lg font-bold text-gray-900 outline-none"
+                className="w-full p-3 bg-white/90 dark:bg-slate-700/90 border border-white/20 rounded-lg text-lg font-bold text-gray-900 dark:text-slate-100 outline-none"
               />
             </div>
           </div>
 
           {/* PER-PRODUCER: YTD / 30-DAY / TARGET SIDE BY SIDE */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
               <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><Users size={20} /></div>
               <div>
-                <h3 className="font-bold text-gray-900">Team Member Close Rates</h3>
-                <p className="text-xs text-gray-500">Personal YTD average vs. 30-day rolling trend vs. the agency target, for quick comparison</p>
+                <h3 className="font-bold text-gray-900 dark:text-slate-100">Team Member Close Rates</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Personal YTD average vs. 30-day rolling trend vs. the agency target, for quick comparison</p>
               </div>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-slate-800">
               {team.map((m: any) => {
                 const rates = conversionMetricsData?.memberRates?.[m.id];
                 return (
                   <div key={m.id} className="p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <p className="font-bold text-gray-900">{m.first_name} {m.last_name}</p>
-                        <p className="text-xs text-gray-400 capitalize">{ROLE_LABELS[m.role] || m.role}</p>
+                        <p className="font-bold text-gray-900 dark:text-slate-100">{m.first_name} {m.last_name}</p>
+                        <p className="text-xs text-gray-400 dark:text-slate-400 capitalize">{ROLE_LABELS[m.role] || m.role}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                      <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Personal YTD Avg</p>
-                        <p className="text-2xl font-black text-gray-900">{(rates?.ytd ?? 0).toFixed(1)}%</p>
+                      <div className="bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl p-3">
+                        <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Personal YTD Avg</p>
+                        <p className="text-2xl font-black text-gray-900 dark:text-slate-100">{(rates?.ytd ?? 0).toFixed(1)}%</p>
                       </div>
                       <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
                         <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">30-Day Rolling Avg</p>
@@ -2417,7 +2417,7 @@ export default function SettingsTab({
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap flex items-center gap-1">
+                      <label className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap flex items-center gap-1">
                         Manual Override
                         <InfoTooltip text="Optional. Only needed if you want the Cockpit to use a fixed rate for this person instead of their live computed YTD rate - e.g. a brand-new hire with no quote history yet. Leave blank to use their live rate." />
                       </label>
@@ -2427,14 +2427,14 @@ export default function SettingsTab({
                         placeholder="Use live rate"
                         value={individualCloseRatesDraft[m.id] ?? ''}
                         onChange={(e) => updateIndividualCloseRate(m.id, e.target.value)}
-                        className="w-32 p-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900"
+                        className="w-32 p-1.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-xs font-bold text-gray-900 dark:text-slate-100"
                       />
                     </div>
                   </div>
                 );
               })}
               {team.length === 0 && (
-                <p className="py-6 text-center text-gray-400 text-sm">No active team members yet.</p>
+                <p className="py-6 text-center text-gray-400 dark:text-slate-400 text-sm">No active team members yet.</p>
               )}
             </div>
           </div>
@@ -2453,19 +2453,19 @@ export default function SettingsTab({
 
       {/* --- SECTION: HISTORICAL BULK IMPORTER --- */}
       {activeSettingsSection === 'historical' && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden max-w-5xl animate-in slide-in-from-bottom-2">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden max-w-5xl animate-in slide-in-from-bottom-2">
           
-          <div className="flex border-b border-gray-100 bg-gray-50">
-            <button onClick={() => setImportMode('matrix')} className={`flex-1 p-5 text-center font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${importMode === 'matrix' ? 'text-purple-700 bg-white border-b-2 border-purple-600' : 'text-gray-500 hover:text-gray-700'}`}><DownloadCloud size={18} /> Smart Scatter Matrix</button>
-            <button onClick={() => setImportMode('csv')} className={`flex-1 p-5 text-center font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${importMode === 'csv' ? 'text-purple-700 bg-white border-b-2 border-purple-600' : 'text-gray-500 hover:text-gray-700'}`}><FileSpreadsheet size={18} /> ECRM Global Upload</button>
+          <div className="flex border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800">
+            <button onClick={() => setImportMode('matrix')} className={`flex-1 p-5 text-center font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${importMode === 'matrix' ? 'text-purple-700 bg-white dark:bg-slate-900 border-b-2 border-purple-600' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}><DownloadCloud size={18} /> Smart Scatter Matrix</button>
+            <button onClick={() => setImportMode('csv')} className={`flex-1 p-5 text-center font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${importMode === 'csv' ? 'text-purple-700 bg-white dark:bg-slate-900 border-b-2 border-purple-600' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}><FileSpreadsheet size={18} /> ECRM Global Upload</button>
           </div>
 
           <div className="p-6">
              {/* ONLY SHOW DROPDOWNS FOR MATRIX MODE */}
              {importMode === 'matrix' && (
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 border-b border-gray-100 pb-8">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 border-b border-gray-100 dark:border-slate-800 pb-8">
                  <div>
-                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">1. Target Producer</label>
+                   <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">1. Target Producer</label>
                    <select 
                       value={bulkProducerId} 
                       onChange={e => {
@@ -2473,7 +2473,7 @@ export default function SettingsTab({
                         const selectedPol = team.find((t: any) => t.id === e.target.value) || profile;
                         if (selectedPol) setBulkOfficeId(selectedPol.office_id);
                       }} 
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm text-gray-900 focus:ring-2 focus:ring-purple-500"
+                      className="w-full p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-xl outline-none font-bold text-sm text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-purple-500"
                     >
                      <option value="">-- Select Producer --</option>
                      <option value={profile.id}>{profile.first_name} {profile.last_name}</option>
@@ -2481,8 +2481,8 @@ export default function SettingsTab({
                    </select>
                  </div>
                  <div>
-                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">2. Location Override (Optional)</label>
-                   <select value={bulkOfficeId} onChange={e => setBulkOfficeId(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm text-gray-900 focus:ring-2 focus:ring-purple-500">
+                   <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">2. Location Override (Optional)</label>
+                   <select value={bulkOfficeId} onChange={e => setBulkOfficeId(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">
                       <option value="">-- Match Producer Default --</option>
                       {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
                    </select>
@@ -2494,31 +2494,31 @@ export default function SettingsTab({
                 <form onSubmit={submitHistoricalData}>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                      <div>
-                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Target Month</label>
-                       <input type="month" value={bulkMonth} onChange={e => setBulkMonth(e.target.value)} required className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm text-gray-900 focus:ring-2 focus:ring-purple-500" />
+                       <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Target Month</label>
+                       <input type="month" value={bulkMonth} onChange={e => setBulkMonth(e.target.value)} required className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                      </div>
                      <div>
-                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Total Monthly Touches</label>
-                       <input type="number" min="0" placeholder="0" value={bulkTouches} onChange={e => setBulkTouches(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm text-gray-900 focus:ring-2 focus:ring-purple-500" />
+                       <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Total Monthly Touches</label>
+                       <input type="number" min="0" placeholder="0" value={bulkTouches} onChange={e => setBulkTouches(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none font-bold text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                      </div>
                    </div>
 
-                   <div className="border border-gray-200 rounded-xl overflow-hidden mb-6">
-                      <div className="grid grid-cols-5 bg-gray-50 p-4 border-b border-gray-200">
-                         <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Product Line</div>
-                         <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">Quotes</div>
+                   <div className="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden mb-6">
+                      <div className="grid grid-cols-5 bg-gray-50 dark:bg-slate-800 p-4 border-b border-gray-200 dark:border-slate-800">
+                         <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Product Line</div>
+                         <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-center">Quotes</div>
                          <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider text-center">Bound Apps</div>
                          <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider text-center">Issued Apps</div>
-                         <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-right">Total Premium ($)</div>
+                         <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">Total Premium ($)</div>
                       </div>
                       
                       {(agencySettings?.custom_product_lines || DEFAULT_LINES).map((lineObj: any) => {
                          const line = lineObj.name;
                          return (
-                           <div key={line} className="grid grid-cols-5 p-3 items-center border-b border-gray-100 hover:bg-gray-50/50 transition-colors last:border-0">
-                              <div className="font-bold text-gray-900 pl-2 text-sm">{line}</div>
+                           <div key={line} className="grid grid-cols-5 p-3 items-center border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors last:border-0">
+                              <div className="font-bold text-gray-900 dark:text-slate-100 pl-2 text-sm">{line}</div>
                               <div className="px-2">
-                                <input type="number" min="0" placeholder="0" value={bulkData[line]?.quotes || ""} onChange={e => updateBulkData(line, 'quotes', e.target.value)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-center outline-none focus:border-purple-500" />
+                                <input type="number" min="0" placeholder="0" value={bulkData[line]?.quotes || ""} onChange={e => updateBulkData(line, 'quotes', e.target.value)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-center outline-none focus:border-purple-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                               </div>
                               <div className="px-2">
                                 <input type="number" min="0" placeholder="0" value={bulkData[line]?.bound || ""} onChange={e => updateBulkData(line, 'bound', e.target.value)} className="w-full p-2 bg-purple-50 border border-purple-200 rounded-lg text-sm font-bold text-center outline-none focus:border-purple-500 text-purple-900 placeholder-purple-300" />
@@ -2532,7 +2532,7 @@ export default function SettingsTab({
                                   placeholder="$0.00"
                                   value={bulkData[line]?.prem === "" || bulkData[line]?.prem == null ? "" : Number(bulkData[line].prem)}
                                   onChange={v => updateBulkData(line, 'prem', v === '' ? '' : String(v))}
-                                  className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-right outline-none focus:border-purple-500"
+                                  className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold text-right outline-none focus:border-purple-500"
                                 />
                               </div>
                            </div>
@@ -2548,7 +2548,7 @@ export default function SettingsTab({
              ) : (
                 <form onSubmit={(e) => { e.preventDefault(); if(csvFile) handleCsvUpload(csvFile); }} className="space-y-6">
                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-8 flex flex-col items-center justify-center text-center">
-                      <div className="bg-white p-4 rounded-full shadow-sm mb-4">
+                      <div className="bg-white dark:bg-slate-900 p-4 rounded-full shadow-sm mb-4">
                          <UploadCloud size={36} className="text-blue-600" />
                       </div>
                       <h4 className="text-xl font-black text-blue-900 mb-2">Global Agency Import</h4>
@@ -2561,14 +2561,14 @@ export default function SettingsTab({
                            onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                          />
-                         <div className={`px-6 py-4 rounded-xl font-bold border-2 transition-all ${csvFile ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-md' : 'bg-white border-blue-300 text-blue-600 hover:bg-blue-100 shadow-sm'}`}>
+                         <div className={`px-6 py-4 rounded-xl font-bold border-2 transition-all ${csvFile ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-md' : 'bg-white dark:bg-slate-900 border-blue-300 text-blue-600 hover:bg-blue-100 shadow-sm'}`}>
                            {csvFile ? `Selected: ${csvFile.name}` : 'Browse Files or Drag & Drop'}
                          </div>
                       </div>
                    </div>
 
-                   <div className="flex items-center justify-between px-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      <p className="text-xs text-gray-500 leading-relaxed max-w-2xl">
+                   <div className="flex items-center justify-between px-2 bg-gray-50 dark:bg-slate-800 p-4 rounded-lg border border-gray-200 dark:border-slate-800">
+                      <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed max-w-2xl">
                         <strong>Expected Columns:</strong> Team Member Name, Date Written, Identifier, Activity, Line of Business, Product, Premium, Issued Date, Status.<br/>
                         <span className="italic">Note: The script automatically handles "Last, First" producer names and safely ignores missing issue dates.</span>
                       </p>
@@ -2583,7 +2583,7 @@ export default function SettingsTab({
                         a.download = "Centravity_Global_Import_Template.csv";
                         a.click();
                         window.URL.revokeObjectURL(url);
-                      }} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-white border border-blue-200 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
+                      }} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-white dark:bg-slate-900 border border-blue-200 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
                         Download Template
                       </button>
                    </div>
@@ -2601,19 +2601,19 @@ export default function SettingsTab({
       {/* --- SECTION: BILLING & SUBSCRIPTION --- */}
       {activeSettingsSection === 'billing' && canManageBilling && (
         <div className="space-y-6 animate-in fade-in duration-200 max-w-3xl">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
               <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><CreditCard size={20} /></div>
               <div>
-                <h3 className="font-bold text-gray-900">Subscription</h3>
-                <p className="text-xs text-gray-500">Manage your agency&apos;s Centravity subscription and billing.</p>
+                <h3 className="font-bold text-gray-900 dark:text-slate-100">Subscription</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Manage your agency&apos;s Centravity subscription and billing.</p>
               </div>
             </div>
 
             <div className="p-6 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Current Status</p>
+                  <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-2">Current Status</p>
                   <SubscriptionStatusBadge status={agencySettings?.subscription_status} />
                 </div>
 
@@ -2642,8 +2642,8 @@ export default function SettingsTab({
               </div>
 
               {agencySettings?.plan_id && (
-                <p className="text-xs text-gray-400">
-                  Plan: <span className="font-mono text-gray-500">{agencySettings.plan_id}</span>
+                <p className="text-xs text-gray-400 dark:text-slate-400">
+                  Plan: <span className="font-mono text-gray-500 dark:text-slate-400">{agencySettings.plan_id}</span>
                 </p>
               )}
 

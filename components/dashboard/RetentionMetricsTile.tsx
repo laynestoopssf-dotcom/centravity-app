@@ -112,45 +112,45 @@ export default function RetentionMetricsTile({ agencyId, officeId, team }: Reten
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <div className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
+        <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <p className="min-w-0 truncate text-xs font-bold text-gray-400 uppercase tracking-wider">Total Premium Rescued</p>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <p className="min-w-0 truncate text-xs font-bold text-gray-400 dark:text-slate-100 uppercase tracking-wider">Total Premium Rescued</p>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
               <LifeBuoy size={18} />
             </div>
           </div>
-          <p className="text-2xl sm:text-3xl font-black text-gray-900 truncate">{loading ? "…" : formatCurrency(totalPremiumRescued)}</p>
-          <p className="text-xs text-gray-400 mt-1.5">Saved premium, month-to-date</p>
+          <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-slate-100 truncate">{loading ? "…" : formatCurrency(totalPremiumRescued)}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-400 mt-1.5">Saved premium, month-to-date</p>
         </div>
 
-        <div className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
+        <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <p className="min-w-0 truncate text-xs font-bold text-gray-400 uppercase tracking-wider">Opportunity Save Rate</p>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <p className="min-w-0 truncate text-xs font-bold text-gray-400 dark:text-slate-100 uppercase tracking-wider">Opportunity Save Rate</p>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
               <Percent size={18} />
             </div>
           </div>
-          <p className="text-2xl sm:text-3xl font-black text-gray-900 truncate">{loading ? "…" : totalLogged > 0 ? `${Math.round(saveRatePct)}%` : "—"}</p>
-          <p className="text-xs text-gray-400 mt-1.5">{totalLogged > 0 ? `${totalLogged} at-risk ${totalLogged === 1 ? "event" : "events"} logged this month` : "No retention events logged yet this month"}</p>
+          <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-slate-100 truncate">{loading ? "…" : totalLogged > 0 ? `${Math.round(saveRatePct)}%` : "—"}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-400 mt-1.5">{totalLogged > 0 ? `${totalLogged} at-risk ${totalLogged === 1 ? "event" : "events"} logged this month` : "No retention events logged yet this month"}</p>
         </div>
       </div>
 
       {/* RETENTION LEADERBOARD — styled after the sales Production Roster table in
           DashboardTab.tsx (avatar + name row, right-aligned metric columns). */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">Retention Leaderboard</h3>
-          <span className="text-xs font-bold text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1 rounded-lg whitespace-nowrap">Month-to-Date</span>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">Retention Leaderboard</h3>
+          <span className="text-xs font-bold text-gray-500 dark:text-slate-300 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-1 rounded-lg whitespace-nowrap">Month-to-Date</span>
         </div>
 
         {leaderboard.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-gray-400 font-bold text-sm">{loading ? "Loading…" : "No retention events logged yet this month."}</p>
+            <p className="text-gray-400 dark:text-slate-400 font-bold text-sm">{loading ? "Loading…" : "No retention events logged yet this month."}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100">
+              <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800">
                 <tr>
                   <th className="px-6 py-3">Name</th>
                   <th className="px-6 py-3 text-center">Events Logged</th>
@@ -158,18 +158,18 @@ export default function RetentionMetricsTile({ agencyId, officeId, team }: Reten
                   <th className="px-6 py-3 text-right">Premium Rescued</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                 {leaderboard.map((row) => (
-                  <tr key={row.userId} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-3 font-bold text-gray-900">
+                  <tr key={row.userId} className="hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors">
+                    <td className="px-6 py-3 font-bold text-gray-900 dark:text-slate-100">
                       <div className="flex items-center gap-2.5">
                         <ProfileAvatar src={row.avatarUrl} name={row.name} size="xs" />
                         {row.name}
                       </div>
                     </td>
-                    <td className="px-6 py-3 text-center font-medium text-gray-600">{row.totalCount}</td>
-                    <td className="px-6 py-3 text-center font-black text-emerald-600">{Math.round(row.saveRatePct)}%</td>
-                    <td className="px-6 py-3 text-right font-bold text-gray-700">{formatCurrency(row.rescued)}</td>
+                    <td className="px-6 py-3 text-center font-medium text-gray-600 dark:text-slate-400">{row.totalCount}</td>
+                    <td className="px-6 py-3 text-center font-black text-emerald-600 dark:text-emerald-400">{Math.round(row.saveRatePct)}%</td>
+                    <td className="px-6 py-3 text-right font-bold text-gray-700 dark:text-slate-100">{formatCurrency(row.rescued)}</td>
                   </tr>
                 ))}
               </tbody>

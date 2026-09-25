@@ -205,46 +205,46 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
       case 'inbound_call': return { text: 'INBOUND CALL', className: 'bg-sky-100 text-sky-800' };
       case 'complex_res': return { text: 'COMPLEX RESOLUTION', className: 'bg-amber-100 text-amber-800' };
       case 'cross_sell': return { text: 'CROSS-SELL', className: 'bg-emerald-100 text-emerald-800' };
-      default: return { text: type?.toUpperCase() || 'ACTIVITY', className: 'bg-gray-100 text-gray-700' };
+      default: return { text: type?.toUpperCase() || 'ACTIVITY', className: 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200' };
     }
   };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-12">
       <header className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900">Data Ledger</h2>
-        <p className="text-gray-500 mt-1">Review, filter, and manage your raw database entries.</p>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Data Ledger</h2>
+        <p className="text-gray-500 dark:text-slate-400 mt-1">Review, filter, and manage your raw database entries.</p>
       </header>
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-6 mb-6">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-          <div className="flex items-center gap-2"><Filter size={20} className="text-gray-500" /><h3 className="font-bold text-gray-800">Filters:</h3></div>
+          <div className="flex items-center gap-2"><Filter size={20} className="text-gray-500 dark:text-slate-400" /><h3 className="font-bold text-gray-800">Filters:</h3></div>
           <div className="flex flex-wrap gap-4 items-center">
             
             {isManagerLevelRole(profile?.role) && (
-              <select value={ledgerProducerFilter} onChange={e => setLedgerProducerFilter(e.target.value)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold min-w-[160px]">
+              <select value={ledgerProducerFilter} onChange={e => setLedgerProducerFilter(e.target.value)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold min-w-[160px] dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">
                 <option value="all">Entire Agency</option>
                 <option value={profile.id}>Myself</option>
                 {team.map((t: any) => <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>)}
               </select>
             )}
 
-            <select value={ledgerDateFilter} onChange={e => setLedgerDateFilter(e.target.value as any)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold min-w-[150px]">
+            <select value={ledgerDateFilter} onChange={e => setLedgerDateFilter(e.target.value as any)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold min-w-[150px] dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">
               {DATE_RANGE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
             
             {ledgerDateFilter === 'custom' && (
               <div className="flex gap-2 items-center">
-                <input type="date" value={ledgerCustomStart} onChange={e => setLedgerCustomStart(e.target.value)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" />
-                <span className="text-gray-400 font-bold">to</span>
-                <input type="date" value={ledgerCustomEnd} onChange={e => setLedgerCustomEnd(e.target.value)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" />
+                <input type="date" value={ledgerCustomStart} onChange={e => setLedgerCustomStart(e.target.value)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
+                <span className="text-gray-400 dark:text-slate-400 font-bold">to</span>
+                <input type="date" value={ledgerCustomEnd} onChange={e => setLedgerCustomEnd(e.target.value)} className="p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
               </div>
             )}
 
             <button 
               onClick={fetchLedgerData} 
               disabled={ledgerLoading}
-              className="flex items-center gap-2 text-sm font-bold bg-white border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 shadow-sm transition-colors focus:ring-2 focus:ring-blue-600 outline-none disabled:opacity-50"
+              className="flex items-center gap-2 text-sm font-bold bg-white dark:bg-slate-900 border border-gray-300 text-gray-700 dark:text-slate-200 px-4 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 shadow-sm transition-colors focus:ring-2 focus:ring-blue-600 outline-none disabled:opacity-50"
             >
               <RefreshCw size={16} className={ledgerLoading ? "animate-spin" : ""} /> 
               {ledgerLoading ? "Refreshing..." : "Refresh"}
@@ -258,8 +258,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         /* SERVICE ROLE LEDGER LAYOUT                            */
         /* ----------------------------------------------------- */
         <>
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-blue-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Outbound Touches</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={serviceOutboundTouchSelection} onDelete={deleteActivitiesBulk} />
@@ -268,19 +268,19 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceOutboundTouches.map((a: any) => a.id)} selection={serviceOutboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceOutboundTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No outbound touches logged.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : serviceOutboundTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No outbound touches logged.</td></tr>) : (
                      serviceOutboundTouches.map((act: any) => (
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={serviceOutboundTouchSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800">TOUCHPOINT</span></td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                      ))
@@ -290,8 +290,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-sky-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-sky-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-sky-900 flex items-center gap-2"><PhoneCall size={20} className="text-sky-600"/> Inbound Touches</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={serviceInboundTouchSelection} onDelete={deleteActivitiesBulk} />
@@ -300,19 +300,19 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceInboundTouches.map((a: any) => a.id)} selection={serviceInboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceInboundTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">No inbound touches logged.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : serviceInboundTouches.length === 0 ? (<tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No inbound touches logged.</td></tr>) : (
                      serviceInboundTouches.map((act: any) => (
                        <tr key={act.id} className="hover:bg-sky-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={serviceInboundTouchSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
                          <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-sky-100 text-sky-800">INBOUND CALL</span></td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                      ))
@@ -322,8 +322,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-amber-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-amber-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-amber-900 flex items-center gap-2"><RefreshCcw size={20} className="text-amber-600"/> Complex Resolutions</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={serviceResolutionSelection} onDelete={deletePoliciesBulk} />
@@ -332,7 +332,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr>
                      <th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={serviceResolutions.map((p: any) => p.id)} selection={serviceResolutionSelection} /></th>
                      <th className="px-6 py-4">Date & Time</th>
@@ -341,21 +341,21 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                      <th className="px-6 py-4 text-right">Actions</th>
                    </tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : serviceResolutions.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No resolutions logged.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : serviceResolutions.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No resolutions logged.</td></tr>) : (
                      serviceResolutions.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-amber-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={serviceResolutionSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="px-6 py-4">
                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'positive' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                              {pol.status.toUpperCase()}
                            </span>
                          </td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditResolution(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditResolution(pol)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                      ))
@@ -365,8 +365,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-emerald-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-emerald-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={20} className="text-emerald-600"/> Policies (Quoted, Bound & Issued)</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={servicePolicySelection} onDelete={deletePoliciesBulk} />
@@ -375,17 +375,17 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={servicePolicies.map((p: any) => p.id)} selection={servicePolicySelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : servicePolicies.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">No policies found.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : servicePolicies.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No policies found.</td></tr>) : (
                      servicePolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={servicePolicySelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
-                         <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700 dark:text-slate-200"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                         <td className="px-6 py-4"><div className="font-bold text-gray-900 dark:text-slate-100">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold 
                               ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 
@@ -398,8 +398,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                             </span>
                          </td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditPolicy(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditPolicy(pol)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                      ))
@@ -414,8 +414,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         /* STANDARD PRODUCER/MANAGER LEDGER LAYOUT               */
         /* ----------------------------------------------------- */
         <>
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-emerald-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-emerald-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2"><ShieldCheck size={20} className="text-emerald-600"/> Bound Policies</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={boundSelection} onDelete={deletePoliciesBulk} />
@@ -424,22 +424,22 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={boundPolicies.map((p: any) => p.id)} selection={boundSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : boundPolicies.length === 0 ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 font-medium">No bound policies found.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : boundPolicies.length === 0 ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No bound policies found.</td></tr>) : (
                      boundPolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={boundSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
-                         <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700 dark:text-slate-200"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                         <td className="px-6 py-4"><div className="font-bold text-gray-900 dark:text-slate-100">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>{pol.status.toUpperCase()}</span></td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditPolicy(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditPolicy(pol)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                      ))
@@ -449,8 +449,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-purple-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-purple-900 flex items-center gap-2"><FileText size={20} className="text-purple-600"/> Quotes</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={quoteSelection} onDelete={deletePoliciesBulk} />
@@ -459,21 +459,21 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={quotedPolicies.map((p: any) => p.id)} selection={quoteSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : quotedPolicies.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">No quotes found.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : quotedPolicies.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No quotes found.</td></tr>) : (
                      quotedPolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-purple-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={quoteSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
-                         <td className="px-6 py-4"><div className="font-bold text-gray-900">{pol.product_line}</div><div className="text-xs font-semibold text-purple-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700 dark:text-slate-200"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                         <td className="px-6 py-4"><div className="font-bold text-gray-900 dark:text-slate-100">{pol.product_line}</div><div className="text-xs font-semibold text-purple-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditPolicy(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditPolicy(pol)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                      ))
@@ -483,8 +483,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-amber-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-amber-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-amber-900 flex items-center gap-2"><RefreshCcw size={20} className="text-amber-600"/> Complex Resolutions</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={resolutionSelection} onDelete={deletePoliciesBulk} />
@@ -493,7 +493,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr>
                      <th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={standardResolutions.map((p: any) => p.id)} selection={resolutionSelection} /></th>
                      <th className="px-6 py-4">Date & Time</th>
@@ -503,22 +503,22 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                      <th className="px-6 py-4 text-right">Actions</th>
                    </tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : standardResolutions.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">No resolutions logged.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : standardResolutions.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No resolutions logged.</td></tr>) : (
                      standardResolutions.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-amber-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={resolutionSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
-                         <td className="px-6 py-4 font-bold text-gray-700"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(pol.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
+                         <td className="px-6 py-4 font-bold text-gray-700 dark:text-slate-200"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="px-6 py-4">
                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'positive' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                              {pol.status.toUpperCase()}
                            </span>
                          </td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditResolution(pol)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditResolution(pol)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deletePolicy(pol.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                      ))
@@ -528,8 +528,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-blue-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-blue-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><PhoneCall size={20} className="text-blue-600"/> Outbound Touches</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={outboundTouchSelection} onDelete={deleteActivitiesBulk} />
@@ -538,22 +538,22 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={outboundTouches.map((a: any) => a.id)} selection={outboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : outboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No outbound touches found.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : outboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No outbound touches found.</td></tr>) : (
                      outboundTouches.map((act: any) => {
                        const label = activityTypeLabel(act.activity_type);
                        return (
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={outboundTouchSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900">{act.profiles?.first_name} {act.profiles?.last_name}</td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{act.profiles?.first_name} {act.profiles?.last_name}</td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                        );
@@ -564,8 +564,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-sky-50/30 flex justify-between items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-sky-50/30 flex justify-between items-center gap-3">
                <h3 className="text-lg font-bold text-sky-900 flex items-center gap-2"><PhoneCall size={20} className="text-sky-600"/> Inbound Touches</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={inboundTouchSelection} onDelete={deleteActivitiesBulk} />
@@ -574,22 +574,22 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={inboundTouches.map((a: any) => a.id)} selection={inboundTouchSelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
-                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Querying database...</td></tr>) : inboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">No inbound touches found.</td></tr>) : (
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                   {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : inboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No inbound touches found.</td></tr>) : (
                      inboundTouches.map((act: any) => {
                        const label = activityTypeLabel(act.activity_type);
                        return (
                        <tr key={act.id} className="hover:bg-sky-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={inboundTouchSelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900">{act.profiles?.first_name} {act.profiles?.last_name}</td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{act.profiles?.first_name} {act.profiles?.last_name}</td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                        );
@@ -607,31 +607,31 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
               producer/manager agencies since complex_res/cross_sell are logged exclusively by
               Service reps (see isServiceView above). */}
           {callsAndTouches.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-             <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
-               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><PhoneCall size={20} className="text-gray-500"/> Other Activity</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex justify-between items-center gap-3">
+               <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2"><PhoneCall size={20} className="text-gray-500 dark:text-slate-400"/> Other Activity</h3>
                <div className="flex items-center gap-2">
                  <DeleteSelectedButton selection={activitySelection} onDelete={deleteActivitiesBulk} />
-                 <span className="bg-gray-200 text-gray-700 text-xs font-bold px-3 py-1 rounded-full">{callsAndTouches.length} Records</span>
+                 <span className="bg-gray-200 text-gray-700 dark:text-slate-200 text-xs font-bold px-3 py-1 rounded-full">{callsAndTouches.length} Records</span>
                </div>
              </div>
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
-                 <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+                 <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                    <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={callsAndTouches.map((a: any) => a.id)} selection={activitySelection} /></th><th className="px-6 py-4">Date & Time</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
-                 <tbody className="divide-y divide-gray-50">
+                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                    {callsAndTouches.map((act: any) => {
                        const label = activityTypeLabel(act.activity_type);
                        return (
-                       <tr key={act.id} className="hover:bg-gray-50 transition-colors">
+                       <tr key={act.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={activitySelection} /></td>
-                         <td className="px-6 py-4 text-gray-500 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4 font-bold text-gray-900">{act.profiles?.first_name} {act.profiles?.last_name}</td>
+                         <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{act.profiles?.first_name} {act.profiles?.last_name}</td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
                          <td className="px-6 py-4 text-right">
-                           <button onClick={() => openEditActivity(act)} className="text-gray-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
-                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                           <button onClick={() => openEditActivity(act)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                           <button onClick={() => deleteActivity(act.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
                          </td>
                        </tr>
                        );
@@ -646,10 +646,10 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
 
       {editingEntry && (
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Edit Ledger Entry</h2>
-              <button onClick={() => setEditingEntry(null)} className="text-gray-400 hover:text-gray-700 p-1 rounded-lg hover:bg-gray-100"><X size={20}/></button>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">Edit Ledger Entry</h2>
+              <button onClick={() => setEditingEntry(null)} className="text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"><X size={20}/></button>
             </div>
 
             <div className="space-y-4">
@@ -657,27 +657,27 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                         Identifier (Optional)
                         <span title="For compliance, this identifier is cryptographically scrambled before leaving your browser and is never stored in plain text." className="cursor-help">
                           <ShieldCheck size={12} className="text-blue-500" />
                         </span>
                       </label>
-                      <input type="text" placeholder="Leave blank to keep the current (hidden) identifier" value={editingEntry.identifier} onChange={e => setEditingEntry({ ...editingEntry, identifier: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" />
+                      <input type="text" placeholder="Leave blank to keep the current (hidden) identifier" value={editingEntry.identifier} onChange={e => setEditingEntry({ ...editingEntry, identifier: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Product Line</label>
-                      <input type="text" value={editingEntry.productLine} disabled className="w-full p-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm font-bold text-gray-500 cursor-not-allowed" />
+                      <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Product Line</label>
+                      <input type="text" value={editingEntry.productLine} disabled className="w-full p-2.5 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold text-gray-500 dark:text-slate-400 cursor-not-allowed" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Premium Amount</label>
-                      <FormattedNumberInput allowDecimal value={editingEntry.premiumAmount} onChange={v => setEditingEntry({ ...editingEntry, premiumAmount: v === '' ? 0 : v })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" />
+                      <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Premium Amount</label>
+                      <FormattedNumberInput allowDecimal value={editingEntry.premiumAmount} onChange={v => setEditingEntry({ ...editingEntry, premiumAmount: v === '' ? 0 : v })} className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Renewal Cycle</label>
-                      <select value={editingEntry.paymentCycle} onChange={e => setEditingEntry({ ...editingEntry, paymentCycle: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600">
+                      <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Renewal Cycle</label>
+                      <select value={editingEntry.paymentCycle} onChange={e => setEditingEntry({ ...editingEntry, paymentCycle: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">
                         <option value="monthly">6-Month Term</option>
                         <option value="annual">12-Month Term</option>
                       </select>
@@ -689,38 +689,38 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
               {editingEntry.kind === "resolution" && (
                 <>
                   <div>
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                       Identifier (Optional)
                       <span title="For compliance, this identifier is cryptographically scrambled before leaving your browser and is never stored in plain text." className="cursor-help">
                         <ShieldCheck size={12} className="text-blue-500" />
                       </span>
                     </label>
-                    <input type="text" placeholder="Leave blank to keep the current (hidden) identifier" value={editingEntry.identifier} onChange={e => setEditingEntry({ ...editingEntry, identifier: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600" />
+                    <input type="text" placeholder="Leave blank to keep the current (hidden) identifier" value={editingEntry.identifier} onChange={e => setEditingEntry({ ...editingEntry, identifier: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sentiment</label>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Sentiment</label>
                     <div className="flex gap-3">
-                      <button type="button" onClick={() => setEditingEntry({ ...editingEntry, status: 'negative' })} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${editingEntry.status === 'negative' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Negative</button>
-                      <button type="button" onClick={() => setEditingEntry({ ...editingEntry, status: 'positive' })} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${editingEntry.status === 'positive' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>Positive</button>
+                      <button type="button" onClick={() => setEditingEntry({ ...editingEntry, status: 'negative' })} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${editingEntry.status === 'negative' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 dark:border-slate-800 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>Negative</button>
+                      <button type="button" onClick={() => setEditingEntry({ ...editingEntry, status: 'positive' })} className={`flex-1 py-2.5 rounded-lg border-2 font-bold text-sm transition-all ${editingEntry.status === 'positive' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 dark:border-slate-800 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>Positive</button>
                     </div>
                   </div>
                 </>
               )}
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Date & Time</label>
+                <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Date & Time</label>
                 <input
                   type="datetime-local"
                   value={toDateTimeLocalValue(editingEntry.loggedAt)}
                   max={toDateTimeLocalValue(new Date().toISOString())}
                   onChange={e => setEditingEntry({ ...editingEntry, loggedAt: e.target.value } as EditingEntry)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
                 />
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
-              <button type="button" onClick={() => setEditingEntry(null)} disabled={isSavingEdit} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">Cancel</button>
+            <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-slate-800">
+              <button type="button" onClick={() => setEditingEntry(null)} disabled={isSavingEdit} className="flex-1 py-3 px-4 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">Cancel</button>
               <button type="button" onClick={saveEdit} disabled={isSavingEdit} className="flex-1 py-3 px-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50">{isSavingEdit ? 'Saving...' : 'Save Changes'}</button>
             </div>
           </div>

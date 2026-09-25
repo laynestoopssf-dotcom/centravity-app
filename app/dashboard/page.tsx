@@ -3571,7 +3571,7 @@ export default function Home() {
     // pane nested inside it, so `min-h-full` (not `min-h-screen`) and no
     // flex-row (the sidebar that used to sit beside `<main>` here moved out
     // to the shell too).
-    <div className="min-h-full bg-gray-50 dark:bg-slate-900">
+    <div className="min-h-full bg-gray-50 dark:bg-slate-950">
       <GlobalStyles />
       
       {/* GLOBAL BIND CELEBRATION */}

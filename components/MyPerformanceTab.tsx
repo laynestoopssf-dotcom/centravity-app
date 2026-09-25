@@ -129,25 +129,25 @@ export default function MyPerformanceTab({
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300 pb-12">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-3">
             <Award className="text-indigo-500" size={32} /> 
             {isManagerLevelRole(profile?.role) ? 'Team Performance' : 'My Performance'}
           </h2>
-          <p className="text-gray-500 mt-1">Detailed breakdown of conversion and activity.</p>
+          <p className="text-gray-500 dark:text-slate-400 mt-1">Detailed breakdown of conversion and activity.</p>
         </div>
 
         {isManagerLevelRole(profile?.role) && (
           <div className="flex gap-2">
             {offices && offices.length > 0 && (
-              <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">OFFICE:</span>
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
+                <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">OFFICE:</span>
                 <select 
                   value={activeOfficeVal} 
                   onChange={(e) => {
                     updateOffice(e.target.value);
                     if (e.target.value !== 'all') setSelectedProducer('all');
                   }}
-                  className="bg-transparent text-sm font-bold text-gray-900 outline-none cursor-pointer"
+                  className="bg-transparent text-sm font-bold text-gray-900 dark:text-slate-100 outline-none cursor-pointer"
                 >
                   <option value="all">All Locations</option>
                   {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -155,12 +155,12 @@ export default function MyPerformanceTab({
               </div>
             )}
 
-            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TEAM:</span>
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
+              <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">TEAM:</span>
               <select 
                 value={selectedProducer} 
                 onChange={(e) => setSelectedProducer(e.target.value)}
-                className="bg-transparent text-sm font-bold text-gray-900 outline-none cursor-pointer"
+                className="bg-transparent text-sm font-bold text-gray-900 dark:text-slate-100 outline-none cursor-pointer"
               >
                 <option value="all">{activeOfficeVal === 'all' ? 'Entire Agency' : 'Office Team'}</option>
                 {team?.filter((t: any) => activeOfficeVal === 'all' || t.office_id === activeOfficeVal).map((t: any) => (
@@ -175,26 +175,26 @@ export default function MyPerformanceTab({
       {/* --- TOP ROW: PACING & TARGETS --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Monthly Pacing */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
             <Calendar className="text-blue-500" size={20}/> Monthly Targets {isAgencyView && "(Global Pace)"}
           </h3>
           <div className="space-y-6">
             <div>
               <div className="flex justify-between text-sm font-bold mb-2">
-                <span className="text-gray-700">Premium Pacing</span>
+                <span className="text-gray-700 dark:text-slate-200">Premium Pacing</span>
                 <span className="text-blue-600">${stats.monthPremium.toLocaleString()} / ${monthlyPremTarget.toLocaleString()}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
                 <div className="bg-blue-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${calcProgress(stats.monthPremium, monthlyPremTarget)}%` }}></div>
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm font-bold mb-2">
-                <span className="text-gray-700">Total Apps</span>
+                <span className="text-gray-700 dark:text-slate-200">Total Apps</span>
                 <span className="text-emerald-600">{stats.monthTotalApps} / {monthlyAppTarget}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
                 <div className="bg-emerald-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${calcProgress(stats.monthTotalApps, monthlyAppTarget)}%` }}></div>
               </div>
             </div>
@@ -202,26 +202,26 @@ export default function MyPerformanceTab({
         </div>
 
         {/* Annual Life Pacing */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
             <Mountain className="text-amber-500" size={20}/> Annual Life Targets {isAgencyView && "(Global Pace)"}
           </h3>
           <div className="space-y-6">
             <div>
               <div className="flex justify-between text-sm font-bold mb-2">
-                <span className="text-gray-700">Life Premium</span>
+                <span className="text-gray-700 dark:text-slate-200">Life Premium</span>
                 <span className="text-amber-600">${(stats.ytdLifePremium || 0).toLocaleString()} / ${annualLifePremTarget.toLocaleString()}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
                 <div className="bg-amber-400 h-3 rounded-full transition-all duration-1000" style={{ width: `${calcProgress(stats.ytdLifePremium || 0, annualLifePremTarget)}%` }}></div>
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm font-bold mb-2">
-                <span className="text-gray-700">Life Apps</span>
+                <span className="text-gray-700 dark:text-slate-200">Life Apps</span>
                 <span className="text-red-500">{stats.ytdLifeApps || 0} / {annualLifeAppTarget}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
                 <div className="bg-red-400 h-3 rounded-full transition-all duration-1000" style={{ width: `${calcProgress(stats.ytdLifeApps || 0, annualLifeAppTarget)}%` }}></div>
               </div>
             </div>
@@ -233,67 +233,67 @@ export default function MyPerformanceTab({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Touch-to-Quote Conversion */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
               <PhoneCall className="text-blue-500" size={20}/> Touch-to-Quote Conversion
           </h3>
           <div className="grid grid-cols-2 gap-4">
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">This Week</p>
-                <p className="text-2xl font-black text-gray-900 mb-2">{safePercent(stats.weekQuotes, stats.weekTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.weekQuotes} Quotes / {stats.weekTouches} Touches</p>
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">This Week</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.weekQuotes, stats.weekTouches)}%</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.weekQuotes} Quotes / {stats.weekTouches} Touches</p>
              </div>
              
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">This Month</p>
-                <p className="text-2xl font-black text-gray-900 mb-2">{safePercent(stats.monthQuotes, stats.monthTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.monthQuotes} Quotes / {stats.monthTouches} Touches</p>
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">This Month</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.monthQuotes, stats.monthTouches)}%</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.monthQuotes} Quotes / {stats.monthTouches} Touches</p>
              </div>
 
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Quarter to Date</p>
-                <p className="text-2xl font-black text-gray-900 mb-2">{safePercent(stats.qtdQuotes, stats.qtdTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.qtdQuotes} Quotes / {stats.qtdTouches} Touches</p>
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Quarter to Date</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.qtdQuotes, stats.qtdTouches)}%</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.qtdQuotes} Quotes / {stats.qtdTouches} Touches</p>
              </div>
 
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl relative overflow-hidden">
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl relative overflow-hidden">
                 <div className="absolute right-0 top-0 h-full w-1.5 bg-blue-500"></div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Year to Date</p>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Year to Date</p>
                 <p className="text-2xl font-black text-blue-700 mb-2">{safePercent(stats.ytdQuotes, stats.ytdTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.ytdQuotes} Quotes / {stats.ytdTouches} Touches</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.ytdQuotes} Quotes / {stats.ytdTouches} Touches</p>
              </div>
           </div>
         </div>
 
         {/* Quote-to-Bind Conversion */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
               <TrendingUp className="text-indigo-500" size={20}/> Quote-to-Bind Conversion
           </h3>
           <div className="grid grid-cols-2 gap-4">
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">This Week</p>
-                <p className="text-2xl font-black text-gray-900 mb-2">{safePercent(stats.weekBound, stats.weekQuotes)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.weekBound} Bound / {stats.weekQuotes} Quotes</p>
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">This Week</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.weekBound, stats.weekQuotes)}%</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.weekBound} Bound / {stats.weekQuotes} Quotes</p>
              </div>
              
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">This Month</p>
-                <p className="text-2xl font-black text-gray-900 mb-2">{safePercent(stats.monthBound, stats.monthQuotes)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.monthBound} Bound / {stats.monthQuotes} Quotes</p>
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">This Month</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.monthBound, stats.monthQuotes)}%</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.monthBound} Bound / {stats.monthQuotes} Quotes</p>
              </div>
 
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Quarter to Date</p>
-                <p className="text-2xl font-black text-gray-900 mb-2">{safePercent(stats.qtdBound, stats.qtdQuotes)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.qtdBound} Bound / {stats.qtdQuotes} Quotes</p>
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Quarter to Date</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.qtdBound, stats.qtdQuotes)}%</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.qtdBound} Bound / {stats.qtdQuotes} Quotes</p>
              </div>
 
-             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl relative overflow-hidden">
+             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl relative overflow-hidden">
                 <div className="absolute right-0 top-0 h-full w-1.5 bg-indigo-500"></div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Year to Date</p>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Year to Date</p>
                 <p className="text-2xl font-black text-indigo-700 mb-2">{safePercent(stats.ytdBound, stats.ytdQuotes)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500">{stats.ytdBound} Bound / {stats.ytdQuotes} Quotes</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.ytdBound} Bound / {stats.ytdQuotes} Quotes</p>
              </div>
           </div>
         </div>
@@ -302,53 +302,53 @@ export default function MyPerformanceTab({
       {/* --- BOTTOM ROW: LOB PACING & TRENDS --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* YTD Pacing By Line of Business */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
               <Compass className="text-emerald-500" size={20}/> YTD Line of Business Progress {isAgencyView && "(Global)"}
           </h3>
           <div className="space-y-5">
              <div>
                 <div className="flex justify-between items-end mb-1.5">
                    <span className="text-xs font-bold text-gray-800">Auto Apps</span>
-                   <span className="text-[10px] font-bold text-gray-500">{stats.ytdAutoApps} / {autoTarget}</span>
+                   <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400">{stats.ytdAutoApps} / {autoTarget}</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                    <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${calcProgress(stats.ytdAutoApps, autoTarget)}%` }}></div>
                 </div>
              </div>
              <div>
                 <div className="flex justify-between items-end mb-1.5">
                    <span className="text-xs font-bold text-gray-800">Fire Apps</span>
-                   <span className="text-[10px] font-bold text-gray-500">{stats.ytdFireApps} / {fireTarget}</span>
+                   <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400">{stats.ytdFireApps} / {fireTarget}</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                    <div className="bg-red-500 h-2 rounded-full" style={{ width: `${calcProgress(stats.ytdFireApps, fireTarget)}%` }}></div>
                 </div>
              </div>
              <div>
                 <div className="flex justify-between items-end mb-1.5">
                    <span className="text-xs font-bold text-gray-800">Commercial Apps</span>
-                   <span className="text-[10px] font-bold text-gray-500">{stats.ytdCommApps} / {commTarget}</span>
+                   <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400">{stats.ytdCommApps} / {commTarget}</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                    <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${calcProgress(stats.ytdCommApps, commTarget)}%` }}></div>
                 </div>
              </div>
              <div>
                 <div className="flex justify-between items-end mb-1.5">
                    <span className="text-xs font-bold text-gray-800">Life Apps</span>
-                   <span className="text-[10px] font-bold text-gray-500">{stats.ytdLifeApps} / {annualLifeAppTarget}</span>
+                   <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400">{stats.ytdLifeApps} / {annualLifeAppTarget}</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                    <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${calcProgress(stats.ytdLifeApps, annualLifeAppTarget)}%` }}></div>
                 </div>
              </div>
              <div>
                 <div className="flex justify-between items-end mb-1.5">
                    <span className="text-xs font-bold text-gray-800">Health Apps</span>
-                   <span className="text-[10px] font-bold text-gray-500">{stats.ytdHealthApps} / {healthTarget}</span>
+                   <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400">{stats.ytdHealthApps} / {healthTarget}</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                    <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${calcProgress(stats.ytdHealthApps, healthTarget)}%` }}></div>
                 </div>
              </div>
@@ -356,8 +356,8 @@ export default function MyPerformanceTab({
         </div>
 
         {/* 7-Day Trend */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col">
-          <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 flex flex-col">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
               <Activity className="text-purple-500" size={20}/> 7-Day Trend
           </h3>
           <div className="flex-1 w-full min-h-[200px]">

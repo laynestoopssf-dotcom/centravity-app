@@ -52,7 +52,7 @@ function ClaimedBonusDescription({ raw, agencyId }: { raw: string | null | undef
   }, [raw, agencyId]);
 
   if (!plaintext) return null;
-  return <span className="text-gray-400 font-medium"> — {plaintext}</span>;
+  return <span className="text-gray-400 dark:text-slate-400 font-medium"> — {plaintext}</span>;
 }
 
 export default function CommissionTab({ 
@@ -259,7 +259,7 @@ export default function CommissionTab({
       {/* SHARED HEADER SECTION */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
             {selectedProducer === 'all' && canViewTeamComm ? (
               <><Users className="text-blue-600" size={32} /> Agency Payroll</>
             ) : isRestrictedSelection ? (
@@ -268,22 +268,22 @@ export default function CommissionTab({
               <><Wallet className="text-emerald-600" size={32} /> My Money</>
             )}
           </h2>
-          <p className="text-gray-500 mt-1">
+          <p className="text-gray-500 dark:text-slate-400 mt-1">
             {selectedProducer === 'all' && canViewTeamComm
               ? 'Agency-wide commission overview and payout projections.'
               : isRestrictedSelection
                 ? "You don't have permission to view this team member's commission data."
                 : `Currently assigned to: `}
-            {selectedProducer !== 'all' && !isRestrictedSelection && <span className="font-semibold text-gray-700">{commissionData.planName || 'No Plan Assigned'}</span>}
+            {selectedProducer !== 'all' && !isRestrictedSelection && <span className="font-semibold text-gray-700 dark:text-slate-200">{commissionData.planName || 'No Plan Assigned'}</span>}
           </p>
         </div>
         
-        <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-gray-200 shadow-sm w-full md:w-auto">
+        <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-2 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm w-full md:w-auto">
           {canViewTeamComm && (
             <select 
               value={selectedProducer} 
               onChange={e => setSelectedProducer(e.target.value)} 
-              className="p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-bold text-sm text-gray-800 flex-1 md:w-48 cursor-pointer"
+              className="p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-bold text-sm text-gray-800 flex-1 md:w-48 cursor-pointer dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
             >
               <option value="all">🌍 Team Overview</option>
               {team.filter((m:any) => m.id !== profile.id).map((m: any) => (
@@ -294,14 +294,14 @@ export default function CommissionTab({
               {!isBookkeeper && <option value={profile.id}>👤 My Personal Commission</option>}
             </select>
           )}
-          <div className="flex items-center gap-2 px-2 border-l border-gray-200">
-            <CalendarDays size={16} className="text-gray-400" />
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider hidden md:inline">View Month:</span>
+          <div className="flex items-center gap-2 px-2 border-l border-gray-200 dark:border-slate-800">
+            <CalendarDays size={16} className="text-gray-400 dark:text-slate-400" />
+            <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider hidden md:inline">View Month:</span>
             <input 
               type="month" 
               value={commissionMonth} 
               onChange={e => setCommissionMonth(e.target.value)} 
-              className="bg-transparent outline-none font-bold text-sm text-gray-900 cursor-pointer"
+              className="bg-transparent outline-none font-bold text-sm text-gray-900 dark:text-slate-100 cursor-pointer"
             />
           </div>
         </div>
@@ -316,20 +316,20 @@ export default function CommissionTab({
           
           {/* TOP AGENCY MACRO CARDS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-emerald-400 p-6">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Secured Payroll</p>
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 border-l-4 border-l-emerald-400 p-6">
+              <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Secured Payroll</p>
               <p className="text-3xl font-black text-emerald-600">${agencySecuredPayroll.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-xs font-bold text-gray-400 mt-1">Base Salaries + Issued Comm</p>
+              <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Base Salaries + Issued Comm</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-blue-400 p-6">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Pending Commission</p>
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 border-l-4 border-l-blue-400 p-6">
+              <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Pending Commission</p>
               <p className="text-3xl font-black text-blue-600">${totalTeamPipeline.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-xs font-bold text-gray-400 mt-1">Awaiting Underwriting Issue</p>
+              <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Awaiting Underwriting Issue</p>
             </div>
             <div className="bg-[#111827] rounded-xl shadow-lg border border-gray-800 border-l-4 border-l-purple-500 p-6">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Expected Payroll</p>
+              <p className="text-xs font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Total Expected Payroll</p>
               <p className="text-4xl font-black text-purple-400">${agencyExpectedPayroll.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-xs font-bold text-gray-500 mt-1">Producer team only</p>
+              <p className="text-xs font-bold text-gray-500 dark:text-slate-400 mt-1">Producer team only</p>
             </div>
           </div>
 
@@ -341,7 +341,7 @@ export default function CommissionTab({
             <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-1">Owner Production (tracked separately)</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-slate-300">
                   {leadershipTeam.map((m: any) => `${m.first_name} ${m.last_name}`).join(', ')} · Base ${ownerBase.toLocaleString()} + Issued ${ownerIssued.toLocaleString()} + Bonus ${ownerBonuses.toLocaleString()} + Pipeline ${ownerPipeline.toLocaleString()}
                 </p>
               </div>
@@ -366,13 +366,13 @@ export default function CommissionTab({
                const memberTotal = base + comm.issuedComm + comm.bonusTotal + comm.pipelineComm;
 
                return (
-                 <div key={member.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden">
-                    <div className="p-5 border-b border-gray-100 flex justify-between items-start bg-gray-50">
+                 <div key={member.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden">
+                    <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex justify-between items-start bg-gray-50 dark:bg-slate-800">
                       <div className="flex items-center gap-3">
                         <ProfileAvatar src={member.avatar_url} name={`${member.first_name} ${member.last_name}`} size="md" />
                         <div>
-                          <h4 className="font-bold text-gray-900 text-lg leading-tight">{member.first_name} {member.last_name}</h4>
-                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">{member.role}</p>
+                          <h4 className="font-bold text-gray-900 dark:text-slate-100 text-lg leading-tight">{member.first_name} {member.last_name}</h4>
+                          <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mt-1">{member.role}</p>
                         </div>
                       </div>
                       <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md shadow-sm border ${comm.isLocked ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
@@ -383,32 +383,32 @@ export default function CommissionTab({
                     
                     <div className="p-5 flex-1 space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold text-gray-500">Base Salary</span>
-                        <span className="text-sm font-black text-gray-900">${base.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+                        <span className="text-sm font-bold text-gray-500 dark:text-slate-400">Base Salary</span>
+                        <span className="text-sm font-black text-gray-900 dark:text-slate-100">${base.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold text-gray-500">Issued Comm</span>
+                        <span className="text-sm font-bold text-gray-500 dark:text-slate-400">Issued Comm</span>
                         <span className="text-sm font-black text-emerald-600">${comm.issuedComm.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold text-gray-500">Spiffs/Bonus</span>
+                        <span className="text-sm font-bold text-gray-500 dark:text-slate-400">Spiffs/Bonus</span>
                         <span className="text-sm font-black text-amber-600">${comm.bonusTotal.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold text-gray-500">Pending Pipeline</span>
+                        <span className="text-sm font-bold text-gray-500 dark:text-slate-400">Pending Pipeline</span>
                         <span className="text-sm font-black text-blue-600">${comm.pipelineComm.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
                       </div>
                       
-                      <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Expected</span>
+                      <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Total Expected</span>
                         <span className="text-xl font-black text-purple-600">${memberTotal.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
                       </div>
                     </div>
                     
-                    <div className="p-4 bg-gray-50 border-t border-gray-100">
+                    <div className="p-4 bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-800">
                       <button 
                         onClick={() => setSelectedProducer(member.id)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm"
                       >
                         View Gamified Statement <ArrowRightCircle size={16} />
                       </button>
@@ -458,25 +458,25 @@ export default function CommissionTab({
 
           {/* TOP 4 MONEY CARDS */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-gray-200 p-5 flex flex-col justify-center text-center">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Base Salary</p>
-              <p className="text-3xl font-black text-gray-900">${baseSalary.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">Fixed Monthly Pay</p>
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 border-l-4 border-l-gray-200 p-5 flex flex-col justify-center text-center">
+              <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Base Salary</p>
+              <p className="text-3xl font-black text-gray-900 dark:text-slate-100">${baseSalary.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mt-1">Fixed Monthly Pay</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-emerald-400 p-5 flex flex-col justify-center text-center">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Earned (Issued + Bonus)</p>
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 border-l-4 border-l-emerald-400 p-5 flex flex-col justify-center text-center">
+              <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Earned (Issued + Bonus)</p>
               <p className="text-3xl font-black text-emerald-600">${earnedCash.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">Secured Cash</p>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mt-1">Secured Cash</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-blue-400 p-5 flex flex-col justify-center text-center">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Pipeline (Unissued)</p>
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 border-l-4 border-l-blue-400 p-5 flex flex-col justify-center text-center">
+              <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Pipeline (Unissued)</p>
               <p className="text-3xl font-black text-blue-600">${pipelineCash.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">Pending Underwriting</p>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mt-1">Pending Underwriting</p>
             </div>
             <div className="bg-[#111827] rounded-xl shadow-lg border border-gray-800 border-l-4 border-l-purple-500 p-5 flex flex-col justify-center text-center">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Expected</p>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Total Expected</p>
               <p className="text-4xl font-black text-purple-400">${totalExpected.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">Pre-Tax Total</p>
+              <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mt-1">Pre-Tax Total</p>
             </div>
           </div>
 
@@ -484,10 +484,10 @@ export default function CommissionTab({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* PREMIUM COMMISSION BREAKDOWN */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-gray-100 bg-gray-50/50">
-                <h3 className="font-bold text-gray-900 text-sm tracking-wide">PREMIUM COMMISSION BREAKDOWN</h3>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Issued Only - Matches "Earned" Above</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
+                <h3 className="font-bold text-gray-900 dark:text-slate-100 text-sm tracking-wide">PREMIUM COMMISSION BREAKDOWN</h3>
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider mt-0.5">Issued Only - Matches "Earned" Above</p>
               </div>
               <div className="p-4 space-y-2">
                 {/* Life is split into its own Term/Whole rows (Granular Life Commissions) since each
@@ -503,23 +503,23 @@ export default function CommissionTab({
                   const appCount = getLineAppCount(line);
                   const payout = isFlatLine ? (appCount * rate) : (prem * (rate / 100));
                   return (
-                    <div key={line} className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+                    <div key={line} className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-slate-800">
                       <div className="w-1/3">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{lineDisplayName(line)}</p>
-                        <p className="font-black text-gray-900">
+                        <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-0.5">{lineDisplayName(line)}</p>
+                        <p className="font-black text-gray-900 dark:text-slate-100">
                           {isFlatLine
                             ? `${appCount} ${appCount === 1 ? 'policy' : 'policies'}`
                             : `$${prem.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`}
                         </p>
                       </div>
-                      <div className="w-1/3 text-center border-l border-r border-gray-100">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Rate</p>
+                      <div className="w-1/3 text-center border-l border-r border-gray-100 dark:border-slate-800">
+                        <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-0.5">Rate</p>
                         <p className="font-black text-blue-600">
                           {isFlatLine ? `$${rate.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})}/app` : `${rate.toFixed(1)}%`}
                         </p>
                       </div>
                       <div className="w-1/3 text-right">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Payout</p>
+                        <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-0.5">Payout</p>
                         <p className="font-black text-emerald-600">${commissionData.isLocked ? 0 : payout.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
                       </div>
                     </div>
@@ -543,14 +543,14 @@ export default function CommissionTab({
                    ) : (
                      <div className="space-y-3">
                        {Object.entries(commissionData.appliedBumps || {}).map(([key, val]: [string, any]) => val > 0 && (
-                         <div key={key} className="flex justify-between items-center bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
-                           <span className="font-bold text-gray-700 text-sm capitalize">{key.replace('_', ' ')} Bump</span>
+                         <div key={key} className="flex justify-between items-center bg-white dark:bg-slate-900 p-3 rounded-xl border border-blue-100 shadow-sm">
+                           <span className="font-bold text-gray-700 dark:text-slate-200 text-sm capitalize">{key.replace('_', ' ')} Bump</span>
                            <span className="font-black text-blue-600">+{val}%</span>
                          </div>
                        ))}
                        {Object.entries(commissionData.acceleratorBreakdown || {}).map(([key, val]: [string, any]) => val > 0 && (
-                         <div key={key} className="flex justify-between items-center bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
-                           <span className="font-bold text-gray-700 text-sm capitalize">{key.replace('_', ' ')} Bonus</span>
+                         <div key={key} className="flex justify-between items-center bg-white dark:bg-slate-900 p-3 rounded-xl border border-blue-100 shadow-sm">
+                           <span className="font-bold text-gray-700 dark:text-slate-200 text-sm capitalize">{key.replace('_', ' ')} Bonus</span>
                            <span className="font-black text-emerald-600">+{formatDollars(val)}</span>
                          </div>
                        ))}
@@ -575,10 +575,10 @@ export default function CommissionTab({
                         <button 
                           key={idx}
                           onClick={() => openBonusModal({ name: bonus.name, amount: bonus.amount })}
-                          className="bg-white border border-purple-100 p-3 rounded-xl shadow-sm hover:border-purple-300 hover:shadow-md transition-all flex items-center justify-between text-left group"
+                          className="bg-white dark:bg-slate-900 border border-purple-100 p-3 rounded-xl shadow-sm hover:border-purple-300 hover:shadow-md transition-all flex items-center justify-between text-left group"
                         >
                           <div>
-                            <p className="font-bold text-gray-900 text-xs leading-tight">{bonus.name}</p>
+                            <p className="font-bold text-gray-900 dark:text-slate-100 text-xs leading-tight">{bonus.name}</p>
                             <p className="font-black text-purple-600 text-sm mt-0.5">{formatDollars(bonus.amount)}</p>
                           </div>
                           <div className="bg-purple-50 text-purple-400 rounded-md p-1 group-hover:bg-purple-600 group-hover:text-white transition-colors">
@@ -600,13 +600,13 @@ export default function CommissionTab({
                     ) : (
                       <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                         {manualBonuses.map((bonus: any) => (
-                          <div key={bonus.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-purple-100 shadow-sm">
+                          <div key={bonus.id} className="flex justify-between items-center bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-purple-100 shadow-sm">
                             <div>
                               <p className="font-bold text-gray-800 text-xs">
                                 {bonus.bonus_name}
                                 <ClaimedBonusDescription raw={bonus.client_description} agencyId={profile?.agency_id} />
                               </p>
-                              <p className="text-[10px] text-gray-400">{new Date(bonus.logged_at).toLocaleDateString()}</p>
+                              <p className="text-[10px] text-gray-400 dark:text-slate-400">{new Date(bonus.logged_at).toLocaleDateString()}</p>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className={`font-black text-sm ${bonus.amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
@@ -626,8 +626,8 @@ export default function CommissionTab({
 
                   {canViewTeamComm && (
                     <div className="flex gap-2 mt-4 pt-4 border-t border-purple-100">
-                      <input type="text" placeholder="Custom Reason" value={newBonusName} onChange={e => setNewBonusName(e.target.value)} className="flex-1 p-2 bg-white border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500 text-sm font-bold" />
-                      <input type="number" placeholder="$ Amt" value={newBonusAmount} onChange={e => setNewBonusAmount(e.target.value)} className="w-20 p-2 bg-white border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500 text-sm font-bold" />
+                      <input type="text" placeholder="Custom Reason" value={newBonusName} onChange={e => setNewBonusName(e.target.value)} className="flex-1 p-2 bg-white border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500 text-sm font-bold dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
+                      <input type="number" placeholder="$ Amt" value={newBonusAmount} onChange={e => setNewBonusAmount(e.target.value)} className="w-20 p-2 bg-white border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500 text-sm font-bold dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                       <button 
                         onClick={() => {
                           if (newBonusName && newBonusAmount) {
@@ -651,14 +651,14 @@ export default function CommissionTab({
           {/* PER-LINE BOUND VS ISSUED SUMMARY */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-8">
             {(['Auto', 'Fire', 'Commercial', 'Life', 'Health'] as const).map(line => (
-              <div key={line} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Total {line}</p>
+              <div key={line} className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm p-4">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-3">Total {line}</p>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Bound</p>
                     <p className="text-xl font-black text-blue-600">{lineBoundVsIssued[line].bound}</p>
                   </div>
-                  <div className="w-px h-8 bg-gray-100" />
+                  <div className="w-px h-8 bg-gray-100 dark:bg-slate-700" />
                   <div className="text-right">
                     <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Issued</p>
                     <p className="text-xl font-black text-emerald-600">{lineBoundVsIssued[line].issued}</p>
@@ -669,32 +669,32 @@ export default function CommissionTab({
           </div>
 
           {/* ITEMIZED COMMISSION STATEMENT TABLE */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mt-6">
-             <div className="p-6 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mt-6">
+             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center gap-3">
                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><ClipboardList size={20}/></div>
                <div>
-                 <h3 className="font-bold text-gray-900 text-lg tracking-tight">Itemized Commission Statement</h3>
-                 <p className="text-xs text-gray-500">A transparent breakdown of exactly which customers are contributing to this check.</p>
+                 <h3 className="font-bold text-gray-900 dark:text-slate-100 text-lg tracking-tight">Itemized Commission Statement</h3>
+                 <p className="text-xs text-gray-500 dark:text-slate-400">A transparent breakdown of exactly which customers are contributing to this check.</p>
                </div>
              </div>
              
              <div className="overflow-x-auto">
                <table className="w-full text-left border-collapse">
                  <thead>
-                   <tr className="bg-gray-50 border-b border-gray-200">
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Identifier</th>
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Line</th>
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Premium</th>
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Rate</th>
-                     <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Estimated Payout</th>
+                   <tr className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-800">
+                     <th className="p-4 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                     <th className="p-4 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Identifier</th>
+                     <th className="p-4 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Line</th>
+                     <th className="p-4 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                     <th className="p-4 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">Premium</th>
+                     <th className="p-4 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">Rate</th>
+                     <th className="p-4 text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">Estimated Payout</th>
                    </tr>
                  </thead>
                  <tbody>
                    {userPolicies.length === 0 && (
                      <tr>
-                       <td colSpan={7} className="p-8 text-center text-gray-400 font-medium">No bound or issued policies logged for this month yet.</td>
+                       <td colSpan={7} className="p-8 text-center text-gray-400 dark:text-slate-400 font-medium">No bound or issued policies logged for this month yet.</td>
                      </tr>
                    )}
                    {userPolicies.map((pol: any, idx: number) => {
@@ -708,11 +708,11 @@ export default function CommissionTab({
                      const isGhost = parentLine === 'Standalone';
                      
                      return (
-                       <tr key={pol.id || idx} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                         <td className="p-4 text-sm font-medium text-gray-500">{new Date(pol.logged_at).toLocaleDateString()}</td>
-                         <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                       <tr key={pol.id || idx} className="border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+                         <td className="p-4 text-sm font-medium text-gray-500 dark:text-slate-400">{new Date(pol.logged_at).toLocaleDateString()}</td>
+                         <td className="p-4 text-sm font-bold text-gray-900 dark:text-slate-100"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="p-4">
-                           <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
+                           <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">
                              {pol.product_line} {isGhost && <span className="ml-1 opacity-50 text-[10px]">(0%)</span>}
                            </span>
                          </td>
@@ -722,8 +722,8 @@ export default function CommissionTab({
                              {pol.status}
                            </span>
                          </td>
-                         <td className="p-4 text-sm font-bold text-gray-900 text-right">${Number(pol.premium_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                         <td className="p-4 text-sm font-bold text-gray-500 text-right">{isFlatRate ? `$${rate.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})}/app` : `${rate.toFixed(1)}%`}</td>
+                         <td className="p-4 text-sm font-bold text-gray-900 dark:text-slate-100 text-right">${Number(pol.premium_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                         <td className="p-4 text-sm font-bold text-gray-500 dark:text-slate-400 text-right">{isFlatRate ? `$${rate.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})}/app` : `${rate.toFixed(1)}%`}</td>
                          <td className="p-4 text-sm font-black text-right">
                            {commissionData.isLocked ? (
                              <span className="text-red-400 flex items-center justify-end gap-1"><Lock size={12}/> Locked</span>
@@ -744,21 +744,21 @@ export default function CommissionTab({
       {/* SPIFF CLAIM VERIFICATION MODAL */}
       {pendingBonus && (
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="bg-purple-50 text-purple-600 p-2.5 rounded-xl"><Gift size={20} /></div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">{pendingBonus.name}</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">{pendingBonus.name}</h3>
                   <p className="text-sm font-black text-purple-600">{formatDollars(pendingBonus.amount)}</p>
                 </div>
               </div>
-              <button type="button" onClick={closeBonusModal} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <button type="button" onClick={closeBonusModal} className="text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300"><X size={20} /></button>
             </div>
 
             <form onSubmit={submitBonusClaim} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Reference / Description</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-1">Reference / Description</label>
                 <input
                   type="text"
                   required
@@ -766,13 +766,13 @@ export default function CommissionTab({
                   value={bonusDescription}
                   onChange={e => setBonusDescription(e.target.value)}
                   placeholder="e.g., Auto Cross-sell or Client Initials"
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-600"
+                  className="w-full p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-purple-600"
                 />
                 {bonusError && <p className="text-xs font-bold text-red-600 mt-1.5">{bonusError}</p>}
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeBonusModal} className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
+                <button type="button" onClick={closeBonusModal} className="flex-1 py-3 px-4 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
                 <button type="submit" disabled={isSubmittingBonus || !bonusDescription.trim()} className="flex-1 py-3 px-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   {isSubmittingBonus ? 'Awarding...' : `Confirm & Award ${formatDollars(pendingBonus.amount)}`}
                 </button>

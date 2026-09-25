@@ -393,8 +393,8 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       {/* SCREEN HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 print:hidden">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2"><FileBarChart size={28} className="text-blue-600" /> Agency Reports</h2>
-          <p className="text-gray-500 mt-1">Build a custom historical report, visualize trends, and export a clean PDF.</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2"><FileBarChart size={28} className="text-blue-600" /> Agency Reports</h2>
+          <p className="text-gray-500 dark:text-slate-400 mt-1">Build a custom historical report, visualize trends, and export a clean PDF.</p>
         </div>
         <button
           onClick={handlePrint}
@@ -406,13 +406,13 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       </header>
 
       {/* CONTROL PANEL — screen only */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 print:hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 space-y-5 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 sm:w-40"><Users size={14} /> Team Member</label>
+          <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 sm:w-40"><Users size={14} /> Team Member</label>
           <select
             value={selectedUserId}
             onChange={e => setSelectedUserId(e.target.value)}
-            className="w-full sm:w-64 p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full sm:w-64 p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-400 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
           >
             <option value="all">Entire Agency</option>
             {(team || []).map((t: any) => (
@@ -422,53 +422,53 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 sm:w-40"><Layers size={14} /> Report View</label>
+          <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 sm:w-40"><Layers size={14} /> Report View</label>
           <select
             value={reportView}
             onChange={e => changeReportView(e.target.value as ReportView)}
-            className="w-full sm:w-64 p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full sm:w-64 p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-400 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
           >
             {REPORT_VIEWS.map(v => <option key={v.key} value={v.key}>{v.label}</option>)}
           </select>
         </div>
 
         <div>
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2"><Calendar size={14} /> Date Range</label>
+          <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2"><Calendar size={14} /> Date Range</label>
           <div className="flex flex-wrap gap-2">
             {DATE_PRESETS.map(preset => (
               <button
                 key={preset}
                 onClick={() => applyPreset(preset)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors border ${activePreset === preset ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'}`}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors border ${activePreset === preset ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-800 hover:border-blue-300 hover:text-blue-600'}`}
               >
                 {preset}
               </button>
             ))}
             <button
               onClick={() => { setShowCustomRange(prev => !prev); setActivePreset('custom'); }}
-              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors border ${activePreset === 'custom' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors border ${activePreset === 'custom' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-800 hover:border-indigo-300 hover:text-indigo-600'}`}
             >
               Custom Range
             </button>
           </div>
 
           {(showCustomRange || activePreset === 'custom') && (
-            <div className="flex flex-wrap items-center gap-3 mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="flex flex-wrap items-center gap-3 mt-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <label className="text-[11px] font-bold text-gray-500 uppercase">Start</label>
-                <input type="date" value={startDate} onChange={e => handleCustomDateChange('start', e.target.value)} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold" />
+                <label className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase">Start</label>
+                <input type="date" value={startDate} onChange={e => handleCustomDateChange('start', e.target.value)} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-[11px] font-bold text-gray-500 uppercase">End</label>
-                <input type="date" value={endDate} onChange={e => handleCustomDateChange('end', e.target.value)} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold" />
+                <label className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase">End</label>
+                <input type="date" value={endDate} onChange={e => handleCustomDateChange('end', e.target.value)} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
               </div>
             </div>
           )}
         </div>
 
-        <div className="text-xs font-semibold text-gray-400 pt-1 border-t border-gray-100 flex items-center gap-2">
+        <div className="text-xs font-semibold text-gray-400 dark:text-slate-400 pt-1 border-t border-gray-100 dark:border-slate-800 flex items-center gap-2">
           {loading && <Loader2 size={12} className="animate-spin text-blue-500" />}
-          Showing <span className="text-gray-700 font-bold">{selectedName}</span> from <span className="text-gray-700 font-bold">{startDate}</span> to <span className="text-gray-700 font-bold">{endDate}</span>
+          Showing <span className="text-gray-700 dark:text-slate-200 font-bold">{selectedName}</span> from <span className="text-gray-700 dark:text-slate-200 font-bold">{startDate}</span> to <span className="text-gray-700 dark:text-slate-200 font-bold">{endDate}</span>
         </div>
         {fetchError && (
           <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{fetchError}</div>
@@ -479,16 +479,16 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       <div className="space-y-6 relative print:hidden">
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 rounded-2xl">
-            <div className="flex items-center gap-2 bg-white shadow-md border border-gray-100 rounded-xl px-4 py-2.5">
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 shadow-md border border-gray-100 dark:border-slate-800 rounded-xl px-4 py-2.5">
               <Loader2 size={16} className="animate-spin text-blue-600" />
-              <span className="text-sm font-bold text-gray-600">Loading report data...</span>
+              <span className="text-sm font-bold text-gray-600 dark:text-slate-300">Loading report data...</span>
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-bold text-gray-900 mb-1">Activity Trends</h3>
-          <p className="text-xs text-gray-400 font-semibold mb-6">Live data from activities &amp; policies for the selected range.</p>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-1">Activity Trends</h3>
+          <p className="text-xs text-gray-400 dark:text-slate-400 font-semibold mb-6">Live data from activities &amp; policies for the selected range.</p>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -506,33 +506,33 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <h3 className="font-bold text-gray-900">Team Production Summary</h3>
-            <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm">{sortedRows.length} Producer{sortedRows.length === 1 ? '' : 's'}</span>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-gray-900 dark:text-slate-100">Team Production Summary</h3>
+            <span className="text-xs font-bold text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3 py-1 rounded-lg shadow-sm">{sortedRows.length} Producer{sortedRows.length === 1 ? '' : 's'}</span>
           </div>
           <div className="overflow-x-auto max-h-[600px]">
             <table className="w-full text-left text-sm">
-              <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100 sticky top-0 z-[1]">
+              <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-[1]">
                 <tr>
                   {columns.map(col => (
                     <th
                       key={col.key}
                       onClick={() => requestSort(col.key)}
-                      className={`px-6 py-3 bg-white cursor-pointer select-none hover:text-gray-600 whitespace-nowrap ${col.align || ''}`}
+                      className={`px-6 py-3 bg-white dark:bg-slate-900 cursor-pointer select-none hover:text-gray-600 dark:hover:text-slate-300 whitespace-nowrap ${col.align || ''}`}
                     >
                       {col.label}<SortIcon column={col.key} />
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                 {sortedRows.map(row => (
-                  <tr key={row.userId} className="hover:bg-gray-50 transition-colors">
+                  <tr key={row.userId} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
                     {columns.map(col => (
                       <td
                         key={col.key}
-                        className={`px-6 py-3 whitespace-nowrap ${col.key === 'teamMember' ? 'font-bold text-gray-900' : 'font-medium text-gray-600'} ${col.align || ''}`}
+                        className={`px-6 py-3 whitespace-nowrap ${col.key === 'teamMember' ? 'font-bold text-gray-900 dark:text-slate-100' : 'font-medium text-gray-600 dark:text-slate-300'} ${col.align || ''}`}
                       >
                         {formatCell(col, row)}
                       </td>
@@ -540,15 +540,15 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
                   </tr>
                 ))}
                 {!loading && sortedRows.length === 0 && (
-                  <tr><td colSpan={columns.length} className="px-6 py-10 text-center text-gray-400 font-semibold">No data for the selected range.</td></tr>
+                  <tr><td colSpan={columns.length} className="px-6 py-10 text-center text-gray-400 dark:text-slate-400 font-semibold">No data for the selected range.</td></tr>
                 )}
               </tbody>
               {sortedRows.length > 0 && (
                 <tfoot className="sticky bottom-0 z-[1]">
-                  <tr className="bg-gray-50 border-t-2 border-gray-200">
+                  <tr className="bg-gray-50 dark:bg-slate-800 border-t-2 border-gray-200 dark:border-slate-800">
                     {columns.map((col, idx) => (
-                      <td key={col.key} className={`px-6 py-3 font-black text-gray-900 whitespace-nowrap ${col.align || ''}`}>
-                        {!col.numeric ? (idx === 0 ? <span className="text-gray-700 text-xs uppercase tracking-wider">Totals</span> : '') : formatTotalCell(col)}
+                      <td key={col.key} className={`px-6 py-3 font-black text-gray-900 dark:text-slate-100 whitespace-nowrap ${col.align || ''}`}>
+                        {!col.numeric ? (idx === 0 ? <span className="text-gray-700 dark:text-slate-200 text-xs uppercase tracking-wider">Totals</span> : '') : formatTotalCell(col)}
                       </td>
                     ))}
                   </tr>
@@ -560,11 +560,11 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
       </div>
 
       {/* PRINT-ONLY PDF TEMPLATE — targeted by react-to-print; never shown on screen */}
-      <div ref={printRef} className="hidden print:block text-black bg-white p-8">
+      <div ref={printRef} className="hidden print:block text-black bg-white dark:bg-slate-900 p-8">
         <header className="border-b-2 border-gray-800 pb-4 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">Centravity Production Report</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-1">Centravity Production Report</p>
           <h1 className="text-2xl font-bold text-black leading-tight">{agencyName}</h1>
-          <div className="mt-3 grid grid-cols-2 gap-x-8 gap-y-1 text-sm text-gray-700">
+          <div className="mt-3 grid grid-cols-2 gap-x-8 gap-y-1 text-sm text-gray-700 dark:text-slate-200">
             <p><span className="font-semibold text-black">Report View:</span> {reportViewLabel}</p>
             <p><span className="font-semibold text-black">Scope:</span> {selectedName}</p>
             <p><span className="font-semibold text-black">Date Range:</span> {rangeLabel}</p>
@@ -575,7 +575,7 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
         <h2 className="text-sm font-bold uppercase tracking-wider text-black mb-3">Team Production Summary</h2>
 
         {sortedRows.length === 0 ? (
-          <p className="text-sm text-gray-600 py-6">No data for the selected range.</p>
+          <p className="text-sm text-gray-600 dark:text-slate-300 py-6">No data for the selected range.</p>
         ) : (
           <table className="w-full text-left text-xs border-collapse">
             <thead>
@@ -583,7 +583,7 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
                 {columns.map(col => (
                   <th
                     key={col.key}
-                    className={`border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black uppercase tracking-wide whitespace-nowrap ${col.align || ''}`}
+                    className={`border border-gray-300 bg-gray-100 dark:bg-slate-700 px-3 py-2 font-bold text-black uppercase tracking-wide whitespace-nowrap ${col.align || ''}`}
                   >
                     {col.label}
                   </th>
@@ -609,7 +609,7 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
                 {columns.map((col, idx) => (
                   <td
                     key={col.key}
-                    className={`border border-gray-300 bg-gray-100 px-3 py-2 font-bold text-black whitespace-nowrap ${col.align || ''}`}
+                    className={`border border-gray-300 bg-gray-100 dark:bg-slate-700 px-3 py-2 font-bold text-black whitespace-nowrap ${col.align || ''}`}
                   >
                     {!col.numeric ? (idx === 0 ? 'TOTALS' : '') : formatTotalCell(col)}
                   </td>
@@ -619,7 +619,7 @@ export default function ReportsTab({ team, profile, agencySettings }: any) {
           </table>
         )}
 
-        <footer className="mt-8 pt-3 border-t border-gray-300 text-[10px] text-gray-500">
+        <footer className="mt-8 pt-3 border-t border-gray-300 text-[10px] text-gray-500 dark:text-slate-400">
           Confidential — {agencyName} · Generated via Centravity · {sortedRows.length} producer{sortedRows.length === 1 ? '' : 's'}
         </footer>
       </div>

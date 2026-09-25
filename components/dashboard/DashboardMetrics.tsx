@@ -52,46 +52,46 @@ export default function DashboardMetrics({ monthlyPremium, monthlyPremiumGoal, e
     // Waiting for lg guarantees real room is left over once the sidebar is
     // already taking its own fixed slice.
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-      <div className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
+      <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <p className="min-w-0 truncate text-xs font-bold text-gray-400 uppercase tracking-wider">Monthly Premium</p>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <p className="min-w-0 truncate text-xs font-bold text-gray-400 dark:text-slate-100 uppercase tracking-wider">Monthly Premium</p>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
             <DollarSign size={18} />
           </div>
         </div>
-        <p className="text-2xl sm:text-3xl font-black text-gray-900 truncate">{formatCurrency(monthlyPremium)}</p>
-        <p className="text-xs text-gray-400 mt-1.5">Written month-to-date</p>
+        <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-slate-100 truncate">{formatCurrency(monthlyPremium)}</p>
+        <p className="text-xs text-gray-400 dark:text-slate-400 mt-1.5">Written month-to-date</p>
       </div>
 
-      <div className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
+      <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <p className="min-w-0 truncate text-xs font-bold text-gray-400 uppercase tracking-wider">Team Pacing</p>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+          <p className="min-w-0 truncate text-xs font-bold text-gray-400 dark:text-slate-100 uppercase tracking-wider">Team Pacing</p>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400">
             <Target size={18} />
           </div>
         </div>
-        <p className="text-2xl sm:text-3xl font-black text-gray-900 truncate">{pacingLabel}</p>
-        <div className="mt-3 h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+        <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-slate-100 truncate">{pacingLabel}</p>
+        <div className="mt-3 h-2 w-full rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
           <div className={`h-full rounded-full transition-all ${pacingBarClass}`} style={{ width: `${pacingBarPct}%` }} />
         </div>
-        <p className="text-xs text-gray-400 mt-1.5 break-words">
+        <p className="text-xs text-gray-400 dark:text-slate-400 mt-1.5 break-words">
           {monthlyPremiumGoal > 0
             ? `${formatCurrency(monthlyPremium)} of ${formatCurrency(monthlyPremiumGoal)} goal`
             : "No monthly goal set for this office"}
         </p>
       </div>
 
-      <div className="min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
+      <div className="min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <p className="min-w-0 truncate text-xs font-bold text-gray-400 uppercase tracking-wider">Team Commissions</p>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+          <p className="min-w-0 truncate text-xs font-bold text-gray-400 dark:text-slate-100 uppercase tracking-wider">Team Commissions</p>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
             <Wallet size={18} />
           </div>
         </div>
-        <p className="text-2xl sm:text-3xl font-black text-gray-900 truncate">{formatCurrency(estimatedCommission)}</p>
-        <p className="text-xs text-gray-400 mt-1.5">Earned month-to-date (est.) — producers only</p>
+        <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-slate-100 truncate">{formatCurrency(estimatedCommission)}</p>
+        <p className="text-xs text-gray-400 dark:text-slate-400 mt-1.5">Earned month-to-date (est.) — producers only</p>
         {ownerCommission > 0 && (
-          <p className="text-[11px] font-bold text-purple-600 mt-1 truncate">+ {formatCurrency(ownerCommission)} Owner (tracked separately)</p>
+          <p className="text-[11px] font-bold text-purple-600 dark:text-purple-400 mt-1 truncate">+ {formatCurrency(ownerCommission)} Owner (tracked separately)</p>
         )}
       </div>
     </div>

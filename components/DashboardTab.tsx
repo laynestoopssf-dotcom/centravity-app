@@ -762,16 +762,16 @@ export default function DashboardTab({
           for that control than the button cluster it used to share with the
           Daily/Weekly/Monthly toggle. */}
       {isManagerLevelRole(profile?.role) && offices && offices.length > 1 && (
-        <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm">
-          <MapPin size={16} className="text-blue-500 shrink-0" />
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Viewing Location:</span>
+        <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 dark:border-slate-700 rounded-xl px-5 py-3 shadow-sm">
+          <MapPin size={16} className="text-blue-500 dark:text-blue-400 shrink-0" />
+          <span className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Viewing Location:</span>
           <select
             value={activeOfficeVal}
             onChange={(e) => {
               updateOffice(e.target.value);
               if (e.target.value !== 'all') setSelectedProducer('all');
             }}
-            className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-bold text-gray-900 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"
+            className="bg-gray-50 dark:bg-slate-800 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm font-bold text-gray-900 dark:text-slate-100 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Locations (Combined)</option>
             {offices.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -781,8 +781,8 @@ export default function DashboardTab({
 
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{isManagerLevelRole(profile?.role) ? scoreboardName : 'My Scoreboard'}</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">{isService ? 'Track retention and cross-sells.' : 'Track pacing and pipeline.'}</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100 dark:text-white">{isManagerLevelRole(profile?.role) ? scoreboardName : 'My Scoreboard'}</h2>
+          <p className="text-gray-500 dark:text-slate-400 dark:text-gray-400 mt-1">{isService ? 'Track retention and cross-sells.' : 'Track pacing and pipeline.'}</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -790,27 +790,27 @@ export default function DashboardTab({
             type="button"
             onClick={handleLaunchLogger}
             title="Pop out a compact Quick Actions window you can dock anywhere on your screen"
-            className="flex items-center gap-1.5 bg-white border border-gray-200 hover:border-blue-200 hover:bg-blue-50 text-gray-600 hover:text-blue-600 px-3 py-1.5 rounded-xl shadow-sm h-[40px] text-xs font-bold transition-colors"
+            className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-gray-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-1.5 rounded-xl shadow-sm h-[40px] text-xs font-bold transition-colors"
           >
             <ExternalLink size={14} />
             Pop Out Logger
           </button>
 
-          <div className="flex bg-gray-50 border border-gray-200 p-1 rounded-xl shadow-sm h-[40px]">
-            <button onClick={() => setTimeframe('daily')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'daily' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Daily</button>
-            <button onClick={() => setTimeframe('weekly')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'weekly' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Weekly</button>
-            <button onClick={() => setTimeframe('monthly')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'monthly' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Monthly</button>
+          <div className="flex bg-gray-50 dark:bg-slate-800 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 dark:border-slate-700 p-1 rounded-xl shadow-sm h-[40px]">
+            <button onClick={() => setTimeframe('daily')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'daily' ? 'bg-white dark:bg-slate-900 dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 dark:hover:text-slate-200'}`}>Daily</button>
+            <button onClick={() => setTimeframe('weekly')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'weekly' ? 'bg-white dark:bg-slate-900 dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 dark:hover:text-slate-200'}`}>Weekly</button>
+            <button onClick={() => setTimeframe('monthly')} className={`px-4 py-1 text-xs font-bold rounded-lg transition-colors ${timeframe === 'monthly' ? 'bg-white dark:bg-slate-900 dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 dark:hover:text-slate-200'}`}>Monthly</button>
           </div>
 
           {isManagerLevelRole(profile?.role) && (
             <div className="flex gap-2">
               {/* UPDATED TEAM FILTER UI */}
-              <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TEAM:</span>
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 dark:border-slate-700 rounded-xl px-4 py-1.5 shadow-sm h-[40px]">
+                <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">TEAM:</span>
                 <select 
                   value={selectedProducer} 
                   onChange={(e) => setSelectedProducer(e.target.value)}
-                  className="bg-transparent text-sm font-bold text-gray-900 outline-none cursor-pointer"
+                  className="bg-transparent text-sm font-bold text-gray-900 dark:text-slate-100 outline-none cursor-pointer"
                 >
                   <option value="all">{activeOfficeVal === 'all' ? 'Entire Agency' : 'Office Team'}</option>
                   {team?.filter((t: any) => activeOfficeVal === 'all' || t.office_id === activeOfficeVal).map((t: any) => (
@@ -865,17 +865,17 @@ export default function DashboardTab({
             <Plus size={16}/> Log Activity <ChevronDown size={14} className={`transition-transform ${showLogMenu ? 'rotate-180' : ''}`} />
           </button>
           {showLogMenu && (
-            <div className="absolute z-20 mt-2 w-60 bg-white border border-gray-100 rounded-xl shadow-xl py-1.5 animate-in fade-in zoom-in-95 duration-150 origin-top-left">
-              <button onClick={() => { logInboundCall(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">
+            <div className="absolute z-20 mt-2 w-60 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 dark:border-slate-700 rounded-xl shadow-xl py-1.5 animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+              <button onClick={() => { logInboundCall(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">
                 <PhoneIncoming size={15}/> Inbound Call
               </button>
-              <button onClick={() => { logTouchpoint(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors">
+              <button onClick={() => { logTouchpoint(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400 transition-colors">
                 <PhoneCall size={15}/> Outbound Touch
               </button>
-              <button onClick={() => { openLogModal(isService ? 'complex_res' : 'quote'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors">
+              <button onClick={() => { openLogModal(isService ? 'complex_res' : 'quote'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-700 dark:hover:text-purple-400 transition-colors">
                 {isService ? <RefreshCw size={15}/> : <FileText size={15}/>} {isService ? 'Complex Res.' : 'Quote'}
               </button>
-              <button onClick={() => { openLogModal(isService ? 'cross_sell' : 'bound'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">
+              <button onClick={() => { openLogModal(isService ? 'cross_sell' : 'bound'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">
                 {isService ? <Users size={15}/> : <ShieldCheck size={15}/>} {isService ? 'Cross-Sell' : 'Bound'}
               </button>
             </div>
@@ -885,7 +885,7 @@ export default function DashboardTab({
         {openBackdateModal && (
           <button
             onClick={openBackdateModal}
-            className="flex items-center gap-2 bg-white border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
+            className="flex items-center gap-2 bg-white dark:bg-slate-900 border-2 border-blue-200 dark:border-blue-800/60 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-700 dark:text-blue-400 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
           >
             <Calendar size={16}/> Log Past Data
           </button>
@@ -897,7 +897,7 @@ export default function DashboardTab({
         {openPivotModal && (
           <button
             onClick={openPivotModal}
-            className="flex items-center gap-2 bg-white border-2 border-amber-200 hover:border-amber-400 hover:bg-amber-50 text-amber-700 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
+            className="flex items-center gap-2 bg-white dark:bg-slate-900 border-2 border-amber-200 dark:border-amber-800/60 hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
           >
             <Shuffle size={16}/> Pivot
           </button>
@@ -905,7 +905,7 @@ export default function DashboardTab({
         {openReviewModal && (
           <button
             onClick={openReviewModal}
-            className="flex items-center gap-2 bg-white border-2 border-teal-200 hover:border-teal-400 hover:bg-teal-50 text-teal-700 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
+            className="flex items-center gap-2 bg-white dark:bg-slate-900 border-2 border-teal-200 dark:border-teal-800/60 hover:border-teal-400 dark:hover:border-teal-600 hover:bg-teal-50 dark:hover:bg-teal-500/10 text-teal-700 dark:text-teal-400 pl-4 pr-4 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-colors"
           >
             <MessageSquareHeart size={16}/> Ask for Review
           </button>
@@ -917,12 +917,12 @@ export default function DashboardTab({
         {/* Calls tile: top half = Outbound touches (counts toward the Touches target/streak), bottom
             half = Inbound calls (logged separately - see logInboundCall). Split so reps can distinguish
             activity they generated vs. activity that came to them. */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden relative">
-           <div onClick={logTouchpoint} className="p-5 pb-4 flex-1 flex flex-col justify-between cursor-pointer hover:bg-blue-50/40 transition-colors border-b border-gray-100 group">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden relative">
+           <div onClick={logTouchpoint} className="p-5 pb-4 flex-1 flex flex-col justify-between cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-500/10 transition-colors border-b border-gray-100 dark:border-slate-800 group">
               <div className="flex justify-between items-start mb-4">
                  <div className="flex items-center gap-2">
-                   <div className="bg-blue-50 text-blue-500 p-2 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors"><PhoneCall size={16}/></div>
-                   <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Outbound</span>
+                   <div className="bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 p-2 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors"><PhoneCall size={16}/></div>
+                   <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 tracking-widest uppercase">Outbound</span>
                  </div>
                  <div className="flex items-center gap-2 z-10">
                    {streaks.touches > 0 && (
@@ -930,30 +930,30 @@ export default function DashboardTab({
                        🔥 {streaks.touches}
                      </div>
                    )}
-                   <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase bg-white/80 px-1 rounded">{tfText}</span>
+                   <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 tracking-widest uppercase bg-white/80 dark:bg-slate-800/80 px-1 rounded">{tfText}</span>
                  </div>
               </div>
               <div>
-                 <div className="text-3xl font-black text-gray-900 mb-3">{currents.t}</div>
-                 <div className="flex justify-between text-xs font-semibold text-gray-500 mb-2"><span>Touches / {targets.t} Target</span></div>
-                 <div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, targets.t > 0 ? (currents.t/targets.t)*100 : 0)}%`}}></div></div>
+                 <div className="text-3xl font-black text-gray-900 dark:text-slate-100 mb-3">{currents.t}</div>
+                 <div className="flex justify-between text-xs font-semibold text-gray-500 dark:text-slate-400 mb-2"><span>Touches / {targets.t} Target</span></div>
+                 <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-1.5"><div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, targets.t > 0 ? (currents.t/targets.t)*100 : 0)}%`}}></div></div>
               </div>
            </div>
-           <div onClick={logInboundCall} className="p-5 pt-4 flex-1 flex flex-col justify-between cursor-pointer hover:bg-emerald-50/40 transition-colors group">
+           <div onClick={logInboundCall} className="p-5 pt-4 flex-1 flex flex-col justify-between cursor-pointer hover:bg-emerald-50/40 dark:hover:bg-emerald-500/10 transition-colors group">
               <div className="flex items-center gap-2 mb-4">
-                <div className="bg-emerald-50 text-emerald-500 p-2 rounded-lg group-hover:bg-emerald-500 group-hover:text-white transition-colors"><PhoneIncoming size={16}/></div>
-                <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Inbound</span>
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 p-2 rounded-lg group-hover:bg-emerald-500 group-hover:text-white transition-colors"><PhoneIncoming size={16}/></div>
+                <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 tracking-widest uppercase">Inbound</span>
               </div>
               <div>
-                <div className="text-3xl font-black text-gray-900 mb-1">{currents.inbound}</div>
-                <div className="text-xs font-semibold text-gray-500">Calls Logged ({tfText})</div>
+                <div className="text-3xl font-black text-gray-900 dark:text-slate-100 mb-1">{currents.inbound}</div>
+                <div className="text-xs font-semibold text-gray-500 dark:text-slate-400">Calls Logged ({tfText})</div>
               </div>
            </div>
         </div>
 
-        <div onClick={() => openLogModal(isService ? 'complex_res' : 'quote')} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-between cursor-pointer hover:border-purple-400 hover:shadow-md transition-all group relative overflow-hidden">
+        <div onClick={() => openLogModal(isService ? 'complex_res' : 'quote')} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 flex flex-col justify-between cursor-pointer hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-md transition-all group relative overflow-hidden">
            <div className="flex justify-between items-start mb-6">
-              <div className="bg-purple-50 text-purple-500 p-2.5 rounded-xl group-hover:bg-purple-500 group-hover:text-white transition-colors">
+              <div className="bg-purple-50 dark:bg-purple-500/10 text-purple-500 dark:text-purple-400 p-2.5 rounded-xl group-hover:bg-purple-500 group-hover:text-white transition-colors">
                 {isService ? <RefreshCw size={20}/> : <FileText size={20}/>}
               </div>
               <div className="flex items-center gap-2 z-10">
@@ -962,19 +962,19 @@ export default function DashboardTab({
                     🔥 {streaks.quotes}
                   </div>
                 )}
-                <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase bg-white/80 px-1 rounded">{tfText}</span>
+                <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 tracking-widest uppercase bg-white/80 dark:bg-slate-800/80 px-1 rounded">{tfText}</span>
               </div>
            </div>
            <div>
-              <div className="text-4xl font-black text-gray-900 mb-4">{isService ? currents.cr : currents.q}</div>
-              <div className="flex justify-between text-xs font-semibold text-gray-500 mb-2"><span>{isService ? 'Complex Res.' : 'Quotes'} / {isService ? targets.cr : targets.q} Target</span></div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, (isService ? targets.cr : targets.q) > 0 ? ((isService ? currents.cr : currents.q)/(isService ? targets.cr : targets.q))*100 : 0)}%`}}></div></div>
+              <div className="text-4xl font-black text-gray-900 dark:text-slate-100 mb-4">{isService ? currents.cr : currents.q}</div>
+              <div className="flex justify-between text-xs font-semibold text-gray-500 dark:text-slate-400 mb-2"><span>{isService ? 'Complex Res.' : 'Quotes'} / {isService ? targets.cr : targets.q} Target</span></div>
+              <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, (isService ? targets.cr : targets.q) > 0 ? ((isService ? currents.cr : currents.q)/(isService ? targets.cr : targets.q))*100 : 0)}%`}}></div></div>
            </div>
         </div>
 
-        <div onClick={() => openLogModal(isService ? 'cross_sell' : 'bound')} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-between cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all group relative overflow-hidden">
+        <div onClick={() => openLogModal(isService ? 'cross_sell' : 'bound')} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 flex flex-col justify-between cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-500 hover:shadow-md transition-all group relative overflow-hidden">
            <div className="flex justify-between items-start mb-6">
-              <div className="bg-emerald-50 text-emerald-500 p-2.5 rounded-xl group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 p-2.5 rounded-xl group-hover:bg-emerald-500 group-hover:text-white transition-colors">
                 {isService ? <Users size={20}/> : <ShieldCheck size={20}/>}
               </div>
               <div className="flex items-center gap-2 z-10">
@@ -983,33 +983,33 @@ export default function DashboardTab({
                     🔥 {streaks.apps}
                   </div>
                 )}
-                <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase bg-white/80 px-1 rounded">{tfText}</span>
+                <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400 tracking-widest uppercase bg-white/80 dark:bg-slate-800/80 px-1 rounded">{tfText}</span>
               </div>
            </div>
            <div>
-              <div className="text-4xl font-black text-gray-900 mb-4">{isService ? currents.cs : currents.a}</div>
-              <div className="flex justify-between text-xs font-semibold text-gray-500 mb-2"><span>{isService ? 'Cross-Sells' : 'Apps'} / {isService ? targets.cs : targets.a} Target</span></div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, (isService ? targets.cs : targets.a) > 0 ? ((isService ? currents.cs : currents.a)/(isService ? targets.cs : targets.a))*100 : 0)}%`}}></div></div>
+              <div className="text-4xl font-black text-gray-900 dark:text-slate-100 mb-4">{isService ? currents.cs : currents.a}</div>
+              <div className="flex justify-between text-xs font-semibold text-gray-500 dark:text-slate-400 mb-2"><span>{isService ? 'Cross-Sells' : 'Apps'} / {isService ? targets.cs : targets.a} Target</span></div>
+              <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-1.5"><div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, (isService ? targets.cs : targets.a) > 0 ? ((isService ? currents.cs : currents.a)/(isService ? targets.cs : targets.a))*100 : 0)}%`}}></div></div>
            </div>
         </div>
 
         <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-xl p-6 flex flex-col justify-between text-white">
            <div className="flex justify-between items-start mb-6">
               <div className="bg-emerald-500/20 text-emerald-400 p-2.5 rounded-xl"><DollarSign size={20}/></div>
-              <span className="text-[10px] font-bold text-gray-500 tracking-widest uppercase">{tfText}</span>
+              <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 tracking-widest uppercase">{tfText}</span>
            </div>
            <div>
               <div className="text-4xl font-black text-white mb-4">${Math.round(currents.p).toLocaleString()}</div>
-              <div className="flex justify-between text-xs font-semibold text-gray-400 mb-2"><span>Premium / ${Math.round(targets.p).toLocaleString()} Target</span></div>
+              <div className="flex justify-between text-xs font-semibold text-gray-400 dark:text-slate-400 mb-2"><span>Premium / ${Math.round(targets.p).toLocaleString()} Target</span></div>
               <div className="w-full bg-gray-800 rounded-full h-1.5 mb-6"><div className="bg-gray-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, targets.p > 0 ? (currents.p/targets.p)*100 : 0)}%`}}></div></div>
 
               <div className="flex justify-between items-end pt-4 border-t border-gray-800">
                  <div>
-                   <div className="text-[9px] font-bold text-gray-500 tracking-wider mb-1 uppercase">Earned (Issued)</div>
+                   <div className="text-[9px] font-bold text-gray-500 dark:text-slate-400 tracking-wider mb-1 uppercase">Earned (Issued)</div>
                    <div className="text-lg font-black text-emerald-400">${Math.round(commissionData.issuedComm).toLocaleString()}</div>
                  </div>
                  <div className="text-right">
-                   <div className="text-[9px] font-bold text-gray-500 tracking-wider mb-1 uppercase">Potential (All)</div>
+                   <div className="text-[9px] font-bold text-gray-500 dark:text-slate-400 tracking-wider mb-1 uppercase">Potential (All)</div>
                    <div className="text-lg font-black text-blue-400">${Math.round(commissionData.total).toLocaleString()}</div>
                  </div>
               </div>
@@ -1019,8 +1019,8 @@ export default function DashboardTab({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2"><BarChart3 size={18} className="text-gray-400"/> 7-Day Activity History</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+            <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2"><BarChart3 size={18} className="text-gray-400 dark:text-slate-400"/> 7-Day Activity History</h3>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -1044,10 +1044,10 @@ export default function DashboardTab({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
              {isService ? (
                <>
-                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-center">
+                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 flex flex-col justify-center">
                    <div className="flex justify-between items-center mb-6">
-                     <h3 className="font-bold text-gray-900 flex items-center gap-2"><Target size={18} className="text-blue-500"/> Weekly Sentiment</h3>
-                     <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded">{totalWeekRes} Logged</span>
+                     <h3 className="font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2"><Target size={18} className="text-blue-500"/> Weekly Sentiment</h3>
+                     <span className="text-xs font-bold text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded">{totalWeekRes} Logged</span>
                    </div>
                    
                    <div className="relative pt-6 pb-2">
@@ -1066,26 +1066,26 @@ export default function DashboardTab({
                    </div>
                  </div>
 
-                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-center">
-                   <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2"><RefreshCw size={18} className="text-purple-500"/> Month-to-Date (MTD) Lapse Trend</h3>
+                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 flex flex-col justify-center">
+                   <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2"><RefreshCw size={18} className="text-purple-500"/> Month-to-Date (MTD) Lapse Trend</h3>
                    <div className="space-y-4">
                       <div className="flex justify-between items-center pb-3 border-b border-gray-50">
                          <div>
-                            <span className="block text-sm font-bold text-gray-500">Auto</span>
-                            <span className="text-[10px] text-gray-400">{agencySettings?.prev_month_lapse_auto || 0}% Prev</span>
+                            <span className="block text-sm font-bold text-gray-500 dark:text-slate-400">Auto</span>
+                            <span className="text-[10px] text-gray-400 dark:text-slate-400">{agencySettings?.prev_month_lapse_auto || 0}% Prev</span>
                          </div>
                          <div className="flex items-center gap-2">
-                            <span className="font-black text-gray-900 text-lg">{agencySettings?.ytd_lapse_cancel_auto || 0}%</span>
+                            <span className="font-black text-gray-900 dark:text-slate-100 text-lg">{agencySettings?.ytd_lapse_cancel_auto || 0}%</span>
                             {autoTrendDiff < 0 ? <TrendingDown className="text-emerald-500" size={20}/> : autoTrendDiff > 0 ? <TrendingUp className="text-red-500" size={20}/> : <span className="text-gray-300 font-bold">-</span>}
                          </div>
                       </div>
                       <div className="flex justify-between items-center">
                          <div>
-                            <span className="block text-sm font-bold text-gray-500">Fire</span>
-                            <span className="text-[10px] text-gray-400">{agencySettings?.prev_month_lapse_fire || 0}% Prev</span>
+                            <span className="block text-sm font-bold text-gray-500 dark:text-slate-400">Fire</span>
+                            <span className="text-[10px] text-gray-400 dark:text-slate-400">{agencySettings?.prev_month_lapse_fire || 0}% Prev</span>
                          </div>
                          <div className="flex items-center gap-2">
-                            <span className="font-black text-gray-900 text-lg">{agencySettings?.ytd_lapse_cancel_fire || 0}%</span>
+                            <span className="font-black text-gray-900 dark:text-slate-100 text-lg">{agencySettings?.ytd_lapse_cancel_fire || 0}%</span>
                             {fireTrendDiff < 0 ? <TrendingDown className="text-emerald-500" size={20}/> : fireTrendDiff > 0 ? <TrendingUp className="text-red-500" size={20}/> : <span className="text-gray-300 font-bold">-</span>}
                          </div>
                       </div>
@@ -1094,18 +1094,18 @@ export default function DashboardTab({
                </>
              ) : (
                <>
-                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-blue-500"/> Daily Conversion</h3>
+                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+                   <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-blue-500"/> Daily Conversion</h3>
                    <div className="space-y-4">
-                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500">Touch to Quote</span><span className="font-black text-blue-600">{dailyQuoteRate}%</span></div>
-                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500">Quote to Bind</span><span className="font-black text-emerald-600">{dailyCloseRate}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Quote</span><span className="font-black text-blue-600">{dailyQuoteRate}%</span></div>
+                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Quote to Bind</span><span className="font-black text-emerald-600">{dailyCloseRate}%</span></div>
                    </div>
                  </div>
-                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={18} className="text-purple-500"/> Month-to-Date (MTD) Conversion</h3>
+                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+                   <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2"><Calendar size={18} className="text-purple-500"/> Month-to-Date (MTD) Conversion</h3>
                    <div className="space-y-4">
-                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500">Touch to Quote</span><span className="font-black text-purple-600">{monthQuoteRate}%</span></div>
-                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500">Quote to Bind</span><span className="font-black text-emerald-600">{monthCloseRate}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Quote</span><span className="font-black text-purple-600">{monthQuoteRate}%</span></div>
+                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Quote to Bind</span><span className="font-black text-emerald-600">{monthCloseRate}%</span></div>
                    </div>
                  </div>
                </>
@@ -1117,8 +1117,8 @@ export default function DashboardTab({
               What-If Machine/Live Goal on the right) specifically so it always has room: when the
               Live Goal card is active it fills the entire right column, but this column always has
               space below its 2-tile row regardless. */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Shuffle size={18} className="text-amber-500"/> Team Pivots &amp; Reviews Today</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+            <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2"><Shuffle size={18} className="text-amber-500"/> Team Pivots &amp; Reviews Today</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 bg-amber-50 rounded-xl border border-amber-100">
                 <div className="text-2xl font-black text-amber-600">{stats.todayPivots || 0}</div>
@@ -1134,11 +1134,11 @@ export default function DashboardTab({
 
         <div className="space-y-6">
            <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-xl p-6 text-white flex flex-col justify-center">
-              <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Calculator size={18} className="text-gray-400"/> What-If Machine</h3>
-              <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">Enter your target extra commission. Based on your current Month-to-Date (MTD) rates, we calculate exactly what you need.</p>
+              <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Calculator size={18} className="text-gray-400 dark:text-slate-400"/> What-If Machine</h3>
+              <p className="text-[11px] text-gray-400 dark:text-slate-400 mb-4 leading-relaxed">Enter your target extra commission. Based on your current Month-to-Date (MTD) rates, we calculate exactly what you need.</p>
               
               <div className="relative mb-6">
-                <span className="absolute left-4 top-3.5 text-gray-400 font-bold">$</span>
+                <span className="absolute left-4 top-3.5 text-gray-400 dark:text-slate-400 font-bold">$</span>
                 <input 
                   type="number" 
                   value={whatIfCommission} 
@@ -1146,19 +1146,19 @@ export default function DashboardTab({
                   className="w-full pl-8 p-3 bg-gray-800 border border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-black text-white text-lg"
                 />
               </div>
-              <p className="text-[10px] text-gray-500 mb-3 uppercase tracking-wider font-bold">You will need:</p>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400 mb-3 uppercase tracking-wider font-bold">You will need:</p>
               {whatIfLoading ? (
                 // RACE-CONDITION GUARD: comp plans are still loading - show an explicit loading
                 // state instead of a real-looking number that might briefly be wrong (see
                 // personalWhatIf's guard in app/dashboard/page.tsx for the full rationale).
-                <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center text-xs font-bold text-gray-400 animate-pulse">
+                <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center text-xs font-bold text-gray-400 dark:text-slate-400 animate-pulse">
                   Syncing comp plan data…
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
-                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Touches</div><div className="text-xl font-black text-blue-400">{isFinite(reqTouches) && reqTouches > 0 ? Math.ceil(reqTouches).toLocaleString() : '0'}</div></div>
-                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{isService ? 'Resolutions' : 'Quotes'}</div><div className="text-xl font-black text-purple-400">{isFinite(reqQuotes) && reqQuotes > 0 ? Math.ceil(reqQuotes).toLocaleString() : '0'}</div></div>
-                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{isService ? 'Cross-Sells' : 'Apps'}</div><div className="text-xl font-black text-emerald-400">{isFinite(reqApps) && reqApps > 0 ? Math.ceil(reqApps).toLocaleString() : '0'}</div></div>
+                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Touches</div><div className="text-xl font-black text-blue-400">{isFinite(reqTouches) && reqTouches > 0 ? Math.ceil(reqTouches).toLocaleString() : '0'}</div></div>
+                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">{isService ? 'Resolutions' : 'Quotes'}</div><div className="text-xl font-black text-purple-400">{isFinite(reqQuotes) && reqQuotes > 0 ? Math.ceil(reqQuotes).toLocaleString() : '0'}</div></div>
+                   <div className="bg-gray-800/80 border border-gray-700/50 p-3 rounded-xl text-center"><div className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">{isService ? 'Cross-Sells' : 'Apps'}</div><div className="text-xl font-black text-emerald-400">{isFinite(reqApps) && reqApps > 0 ? Math.ceil(reqApps).toLocaleString() : '0'}</div></div>
                 </div>
               )}
            </div>
@@ -1201,22 +1201,22 @@ export default function DashboardTab({
           owner-only targets live on the Revenue tab instead. */}
       {customTargets && customTargets.length > 0 && (
         <div className="mt-6">
-          <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-3 flex items-center gap-2"><Target size={14}/> Corporate Targets</h3>
+          <h3 className="font-bold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider mb-3 flex items-center gap-2"><Target size={14}/> Corporate Targets</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {customTargets.map((t: any) => (
-              <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div key={t.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-5">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h4 className="font-bold text-gray-900 text-sm">{t.name}</h4>
-                    <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mt-0.5">{t.metricLabel} • {t.periodLabel} • {t.officeName}</p>
+                    <h4 className="font-bold text-gray-900 dark:text-slate-100 text-sm">{t.name}</h4>
+                    <p className="text-[10px] text-gray-400 dark:text-slate-400 font-semibold uppercase tracking-wide mt-0.5">{t.metricLabel} • {t.periodLabel} • {t.officeName}</p>
                   </div>
                   {t.pct >= 100 && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-2 py-1 rounded-full shrink-0">Hit!</span>}
                 </div>
                 <div className="flex justify-between items-end mb-2">
-                  <span className="text-2xl font-black text-gray-900">{t.isCurrency ? `$${Math.round(t.current).toLocaleString()}` : Math.round(t.current).toLocaleString()}</span>
-                  <span className="text-xs font-bold text-gray-400">/ {t.isCurrency ? `$${Number(t.target_value).toLocaleString()}` : Number(t.target_value).toLocaleString()}</span>
+                  <span className="text-2xl font-black text-gray-900 dark:text-slate-100">{t.isCurrency ? `$${Math.round(t.current).toLocaleString()}` : Math.round(t.current).toLocaleString()}</span>
+                  <span className="text-xs font-bold text-gray-400 dark:text-slate-400">/ {t.isCurrency ? `$${Number(t.target_value).toLocaleString()}` : Number(t.target_value).toLocaleString()}</span>
                 </div>
-                <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                <div className="w-full bg-gray-100 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all duration-1000 ${t.pct >= 100 ? 'bg-green-500' : 'bg-indigo-500'}`} style={{ width: `${t.pct}%` }} />
                 </div>
                 {t.earnedCredits > 0 && (
@@ -1227,7 +1227,7 @@ export default function DashboardTab({
                     {t.tiers.map((tier: any) => {
                       const hit = (t.tiersAchieved || []).some((a: any) => a.id === tier.id);
                       return (
-                        <span key={tier.id} className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full ${hit ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                        <span key={tier.id} className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full ${hit ? 'bg-green-100 text-green-700' : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-slate-400'}`}>
                           {hit ? '✓ ' : ''}{tier.name}
                         </span>
                       );
@@ -1247,9 +1247,9 @@ export default function DashboardTab({
           grid section above. Visible to owners/managers (or an equivalent custom "office manager"
           role with view_agency_dash permission) since it surfaces the whole team's production, not
           just the viewer's own. */}
-      {canViewProductionRoster && <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-6">
-        <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-          <h3 className="font-bold text-gray-900 flex items-center gap-2">
+      {canViewProductionRoster && <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden mt-6">
+        <div className="p-4 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
             <Users size={18} className="text-emerald-500" /> {ROSTER_TIMEFRAME_LABELS[rosterTimeframe]}
             {rosterLoading && <RefreshCw size={13} className="text-gray-300 animate-spin" />}
           </h3>
@@ -1257,14 +1257,14 @@ export default function DashboardTab({
             <select
               value={rosterTimeframe}
               onChange={(e) => setRosterTimeframe(e.target.value as RosterTimeframe)}
-              className="text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400 cursor-pointer"
+              className="text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400 cursor-pointer dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
             >
               <option value="today">Today</option>
               <option value="week">This Week</option>
               <option value="lastWeek">Last Week</option>
               <option value="month">Current Month</option>
             </select>
-            <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm whitespace-nowrap">{producerProductionRows.length} {producerProductionRows.length === 1 ? 'Producer' : 'Producers'} On The Board</span>
+            <span className="text-xs font-bold text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3 py-1 rounded-lg shadow-sm whitespace-nowrap">{producerProductionRows.length} {producerProductionRows.length === 1 ? 'Producer' : 'Producers'} On The Board</span>
           </div>
         </div>
 
@@ -1276,20 +1276,20 @@ export default function DashboardTab({
             <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-2">Owner Production (tracked separately)</p>
             <div className="flex flex-wrap gap-4">
               {ownerProductionRows.map((row: any) => (
-                <div key={row.userId} className="flex items-start gap-2.5 bg-white border border-purple-100 rounded-xl px-4 py-2.5 shadow-sm">
+                <div key={row.userId} className="flex items-start gap-2.5 bg-white dark:bg-slate-900 border border-purple-100 rounded-xl px-4 py-2.5 shadow-sm">
                   <ProfileAvatar src={row.avatarUrl} name={row.name} size="xs" />
                   <div>
-                    <p className="text-sm font-bold text-gray-900">{row.name}</p>
-                    <p className="text-xs text-gray-500 mb-2"><span className="font-black text-purple-600">{row.apps}</span> apps · <span className="font-bold text-gray-700">${Math.round(row.premium).toLocaleString()}</span> premium</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-slate-100">{row.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mb-2"><span className="font-black text-purple-600">{row.apps}</span> apps · <span className="font-bold text-gray-700 dark:text-slate-200">${Math.round(row.premium).toLocaleString()}</span> premium</p>
                     {/* Per-product-line breakdown - mirrors the Auto/Fire/Life/Health/Commercial
                         columns in the producer table below (row.counts.*), so the owner's own
                         production callout shows the exact same level of detail. */}
                     <div className="flex flex-wrap gap-1.5">
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Auto <span className="text-gray-800">{row.counts.Auto}</span></span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Fire <span className="text-gray-800">{row.counts.Fire}</span></span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Life <span className="text-gray-800">{row.counts.Life}</span></span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Health <span className="text-gray-800">{row.counts.Health}</span></span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">Commercial <span className="text-gray-800">{row.counts.Commercial}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded px-1.5 py-0.5">Auto <span className="text-gray-800">{row.counts.Auto}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded px-1.5 py-0.5">Fire <span className="text-gray-800">{row.counts.Fire}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded px-1.5 py-0.5">Life <span className="text-gray-800">{row.counts.Life}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded px-1.5 py-0.5">Health <span className="text-gray-800">{row.counts.Health}</span></span>
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-800 rounded px-1.5 py-0.5">Commercial <span className="text-gray-800">{row.counts.Commercial}</span></span>
                     </div>
                   </div>
                 </div>
@@ -1300,12 +1300,12 @@ export default function DashboardTab({
 
         {producerProductionRows.length === 0 ? (
           <div className="p-10 text-center">
-            <p className="text-gray-400 font-bold">{rosterLoading ? 'Loading...' : "No production yet for this window. Let's get on the board! 🚀"}</p>
+            <p className="text-gray-400 dark:text-slate-400 font-bold">{rosterLoading ? 'Loading...' : "No production yet for this window. Let's get on the board! 🚀"}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-white text-gray-400 text-xs uppercase font-semibold border-b border-gray-100">
+              <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800">
                 <tr>
                   <th className="px-6 py-3 w-8"></th>
                   <th className="px-6 py-3">Name</th>
@@ -1318,47 +1318,47 @@ export default function DashboardTab({
                   <th className="px-6 py-3 text-center">Commercial</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                 {producerProductionRows.map((row: any) => (
                   <React.Fragment key={row.userId}>
                     <tr
                       onClick={() => setExpandedRosterUserId(prev => prev === row.userId ? null : row.userId)}
-                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
-                      <td className="px-6 py-3 text-gray-400">
+                      <td className="px-6 py-3 text-gray-400 dark:text-slate-400">
                         {expandedRosterUserId === row.userId ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </td>
-                      <td className="px-6 py-3 font-bold text-gray-900">
+                      <td className="px-6 py-3 font-bold text-gray-900 dark:text-slate-100">
                         <div className="flex items-center gap-2.5">
                           <ProfileAvatar src={row.avatarUrl} name={row.name} size="xs" />
                           {row.name}
                         </div>
                       </td>
                       <td className="px-6 py-3 text-center font-black text-emerald-600">{row.apps}</td>
-                      <td className="px-6 py-3 text-right font-bold text-gray-700">${Math.round(row.premium).toLocaleString()}</td>
-                      <td className="px-6 py-3 text-center font-medium text-gray-600">{row.counts.Auto}</td>
-                      <td className="px-6 py-3 text-center font-medium text-gray-600">{row.counts.Fire}</td>
-                      <td className="px-6 py-3 text-center font-medium text-gray-600">{row.counts.Life}</td>
-                      <td className="px-6 py-3 text-center font-medium text-gray-600">{row.counts.Health}</td>
-                      <td className="px-6 py-3 text-center font-medium text-gray-600">{row.counts.Commercial}</td>
+                      <td className="px-6 py-3 text-right font-bold text-gray-700 dark:text-slate-200">${Math.round(row.premium).toLocaleString()}</td>
+                      <td className="px-6 py-3 text-center font-medium text-gray-600 dark:text-slate-300">{row.counts.Auto}</td>
+                      <td className="px-6 py-3 text-center font-medium text-gray-600 dark:text-slate-300">{row.counts.Fire}</td>
+                      <td className="px-6 py-3 text-center font-medium text-gray-600 dark:text-slate-300">{row.counts.Life}</td>
+                      <td className="px-6 py-3 text-center font-medium text-gray-600 dark:text-slate-300">{row.counts.Health}</td>
+                      <td className="px-6 py-3 text-center font-medium text-gray-600 dark:text-slate-300">{row.counts.Commercial}</td>
                     </tr>
                     {expandedRosterUserId === row.userId && (
                       <tr>
-                        <td colSpan={9} className="bg-gray-50/70 px-6 py-4">
+                        <td colSpan={9} className="bg-gray-50 dark:bg-slate-800/70 px-6 py-4">
                           <table className="w-full text-xs">
                             <thead>
-                              <tr className="text-gray-400 uppercase font-semibold">
+                              <tr className="text-gray-400 dark:text-slate-400 uppercase font-semibold">
                                 <th className="text-left py-1.5">Identifier</th>
                                 <th className="text-left py-1.5">Product Line</th>
                                 <th className="text-right py-1.5">Premium</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                               {row.policies.map((p: any) => (
                                 <tr key={p.id}>
-                                  <td className="py-1.5 font-semibold text-gray-700"><IdentifierChip policyId={p.id} hash={p.client_identifier_hash} ciphertext={p.client_identifier_ciphertext} iv={p.client_identifier_iv} agencyId={profile?.agency_id} /></td>
-                                  <td className="py-1.5 text-gray-500">{p.product_line}</td>
-                                  <td className="py-1.5 text-right font-bold text-gray-700">${Math.round(Number(p.premium_amount) || 0).toLocaleString()}</td>
+                                  <td className="py-1.5 font-semibold text-gray-700 dark:text-slate-200"><IdentifierChip policyId={p.id} hash={p.client_identifier_hash} ciphertext={p.client_identifier_ciphertext} iv={p.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                                  <td className="py-1.5 text-gray-500 dark:text-slate-400">{p.product_line}</td>
+                                  <td className="py-1.5 text-right font-bold text-gray-700 dark:text-slate-200">${Math.round(Number(p.premium_amount) || 0).toLocaleString()}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1374,29 +1374,29 @@ export default function DashboardTab({
         )}
       </div>}
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden mt-6">
         {coachingErrorMsg && (
           <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs font-bold">{coachingErrorMsg}</div>
         )}
-        <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col gap-4">
+        <div className="p-4 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-           <h3 className="font-bold text-gray-900 flex items-center gap-2">
-             {showArchive ? <Archive size={20} className="text-gray-500" /> : <List size={20} className="text-blue-500" />}
+           <h3 className="font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+             {showArchive ? <Archive size={20} className="text-gray-500 dark:text-slate-400" /> : <List size={20} className="text-blue-500" />}
              {showArchive ? 'Issued Archive' : 'Active Pipeline'}
            </h3>
            <div className="flex items-center gap-2 w-full sm:w-auto">
              <div className="relative flex-1 sm:w-64">
-               <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
+               <Search size={16} className="absolute left-3 top-2.5 text-gray-400 dark:text-slate-400" />
                <input
                  type="text"
                  placeholder="Search Identifier, Line, or Team Member..."
                  value={showArchive ? archiveSearch : activeSearch}
                  onChange={(e) => { setCurrentPage(1); if (showArchive) setArchiveSearch(e.target.value); else setActiveSearch(e.target.value); }}
                  title="Partial text matches any identifier logged/edited recently. Older identifiers (logged before partial search was added) still need the exact text as originally entered - see the note below the table when a search comes up empty."
-                 className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400"
+                 className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold outline-none focus:border-gray-400"
                />
              </div>
-             <button onClick={() => { setShowArchive(!showArchive); setCurrentPage(1); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors whitespace-nowrap ${showArchive ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+             <button onClick={() => { setShowArchive(!showArchive); setCurrentPage(1); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors whitespace-nowrap ${showArchive ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200'}`}>
                {showArchive ? 'View Active Pipeline' : 'View Archive'}
              </button>
            </div>
@@ -1409,7 +1409,7 @@ export default function DashboardTab({
               <select
                 value={pipelineProducerFilter}
                 onChange={(e) => { setCurrentPage(1); setPipelineProducerFilter(e.target.value); }}
-                className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 min-w-[160px]"
+                className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 min-w-[160px] dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
               >
                 <option value="all">All Team Members</option>
                 <option value={profile.id}>Myself</option>
@@ -1420,16 +1420,16 @@ export default function DashboardTab({
             <select
               value={pipelineDateFilter}
               onChange={(e) => { setCurrentPage(1); setPipelineDateFilter(e.target.value as DateRangeKey); }}
-              className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 min-w-[140px]"
+              className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 min-w-[140px] dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
             >
               {DATE_RANGE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
 
             {pipelineDateFilter === 'custom' && (
               <div className="flex gap-2 items-center">
-                <input type="date" value={pipelineCustomStart} onChange={(e) => { setCurrentPage(1); setPipelineCustomStart(e.target.value); }} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400" />
-                <span className="text-gray-400 font-bold">to</span>
-                <input type="date" value={pipelineCustomEnd} onChange={(e) => { setCurrentPage(1); setPipelineCustomEnd(e.target.value); }} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400" />
+                <input type="date" value={pipelineCustomStart} onChange={(e) => { setCurrentPage(1); setPipelineCustomStart(e.target.value); }} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
+                <span className="text-gray-400 dark:text-slate-400 font-bold">to</span>
+                <input type="date" value={pipelineCustomEnd} onChange={(e) => { setCurrentPage(1); setPipelineCustomEnd(e.target.value); }} className="p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-gray-400 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
               </div>
             )}
           </div>
@@ -1438,13 +1438,13 @@ export default function DashboardTab({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-white border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400">
-                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('logged_at')}>Date Logged<SortIcon column="logged_at" /></th>
-                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('producer')}>Team Member<SortIcon column="producer" /></th>
-                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('identifier')}>Identifier<SortIcon column="identifier" /></th>
-                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('product_line')}>Line<SortIcon column="product_line" /></th>
-                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('premium_amount')}>Premium<SortIcon column="premium_amount" /></th>
-                <th className="p-4 font-bold text-right cursor-pointer select-none hover:text-gray-600" onClick={() => requestSort('status')}>Status / Action<SortIcon column="status" /></th>
+              <tr className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 text-[10px] uppercase tracking-wider text-gray-400 dark:text-slate-400">
+                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600 dark:hover:text-slate-300" onClick={() => requestSort('logged_at')}>Date Logged<SortIcon column="logged_at" /></th>
+                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600 dark:hover:text-slate-300" onClick={() => requestSort('producer')}>Team Member<SortIcon column="producer" /></th>
+                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600 dark:hover:text-slate-300" onClick={() => requestSort('identifier')}>Identifier<SortIcon column="identifier" /></th>
+                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600 dark:hover:text-slate-300" onClick={() => requestSort('product_line')}>Line<SortIcon column="product_line" /></th>
+                <th className="p-4 font-bold cursor-pointer select-none hover:text-gray-600 dark:hover:text-slate-300" onClick={() => requestSort('premium_amount')}>Premium<SortIcon column="premium_amount" /></th>
+                <th className="p-4 font-bold text-right cursor-pointer select-none hover:text-gray-600 dark:hover:text-slate-300" onClick={() => requestSort('status')}>Status / Action<SortIcon column="status" /></th>
               </tr>
             </thead>
             <tbody>
@@ -1459,25 +1459,25 @@ export default function DashboardTab({
                     // no way to retroactively compute trigrams from an already one-way-hashed
                     // older row (see utils/crypto.ts). Spelling that out so a teammate's OLDER
                     // customer not turning up doesn't read as "search is broken."
-                    <span className="text-gray-400">
-                      No match for &ldquo;{(showArchive ? archiveSearch : activeSearch).trim()}&rdquo;. Partial text matches any identifier logged or edited recently - older identifiers (logged before partial search was added) still need the <span className="font-bold text-gray-500">exact text</span> as originally entered (case-insensitive). Try the full identifier, or search by product line/team member name instead.
+                    <span className="text-gray-400 dark:text-slate-400">
+                      No match for &ldquo;{(showArchive ? archiveSearch : activeSearch).trim()}&rdquo;. Partial text matches any identifier logged or edited recently - older identifiers (logged before partial search was added) still need the <span className="font-bold text-gray-500 dark:text-slate-400">exact text</span> as originally entered (case-insensitive). Try the full identifier, or search by product line/team member name instead.
                     </span>
                   ) : (
-                    <span className="text-gray-400">{showArchive ? 'No issued policies match your search.' : 'Pipeline is empty. Time to hit the phones!'}</span>
+                    <span className="text-gray-400 dark:text-slate-400">{showArchive ? 'No issued policies match your search.' : 'Pipeline is empty. Time to hit the phones!'}</span>
                   )}
                 </td></tr>
               ) : (
                 paginatedPipelineRows.map((pol: any) => (
-                  <tr key={pol.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${pol.status === 'not_sold' ? 'bg-amber-50/60 border-l-4 border-l-amber-400' : ''}`}>
-                    <td className="p-4 text-sm font-semibold text-gray-500 whitespace-nowrap">{new Date(pol.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td className="p-4 text-sm font-bold text-gray-700 whitespace-nowrap">
+                  <tr key={pol.id} className={`border-b border-gray-50 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors ${pol.status === 'not_sold' ? 'bg-amber-50/60 border-l-4 border-l-amber-400' : ''}`}>
+                    <td className="p-4 text-sm font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap">{new Date(pol.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                    <td className="p-4 text-sm font-bold text-gray-700 dark:text-slate-200 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <ProfileAvatar src={(team || []).find((t: any) => t.id === pol.user_id)?.avatar_url || (archivedTeam || []).find((t: any) => t.id === pol.user_id)?.avatar_url || null} name={nameForUser(pol.user_id)} size="xs" />
                         {nameForUser(pol.user_id)}
                       </div>
                     </td>
-                    <td className="p-4 text-sm font-bold text-gray-900"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
-                    <td className="p-4 text-sm font-bold text-gray-600">
+                    <td className="p-4 text-sm font-bold text-gray-900 dark:text-slate-100"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                    <td className="p-4 text-sm font-bold text-gray-600 dark:text-slate-300">
                        {pol.product_line === 'Complex Resolution' ? <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">Complex Res.</span> : pol.product_line}
                     </td>
                     <td className="p-4 text-sm font-black text-emerald-600">
@@ -1494,7 +1494,7 @@ export default function DashboardTab({
                            <FormattedNumberInput allowDecimal value={editPremium === "" ? "" : Number(editPremium)} onChange={v => setEditPremium(v === '' ? '' : String(v))} className="w-24 p-1.5 border border-gray-300 rounded text-sm font-bold outline-none" placeholder="$ Final Prem" />
                            <button onClick={() => submitStatusUpdate(pol.id, 'bound')} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">Save Bound</button>
                            <button onClick={() => submitStatusUpdate(pol.id, 'issued')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded">Save Issued</button>
-                           <button onClick={() => setEditingPolicyId(null)} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded">Cancel</button>
+                           <button onClick={() => setEditingPolicyId(null)} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:text-slate-200 text-xs font-bold rounded">Cancel</button>
                         </div>
                       ) : notSoldPolicyId === pol.id ? (
                         <div className="flex items-center justify-end gap-2">
@@ -1507,7 +1507,7 @@ export default function DashboardTab({
                              className="w-56 p-1.5 border border-gray-300 rounded text-sm outline-none"
                            />
                            <button onClick={() => submitNotSoldUpdate(pol.id)} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded">Save</button>
-                           <button onClick={() => { setNotSoldPolicyId(null); setNotSoldNotes(""); }} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded">Cancel</button>
+                           <button onClick={() => { setNotSoldPolicyId(null); setNotSoldNotes(""); }} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:text-slate-200 text-xs font-bold rounded">Cancel</button>
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
@@ -1534,7 +1534,7 @@ export default function DashboardTab({
                                 onClick={() => handleSendToCoaching(pol)}
                                 disabled={sendingToCoachingId === pol.id}
                                 title="Flag this deal in the Coaching tab so you can log the objection and get an AI talk-path"
-                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-800 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap"
                               >
                                 <GraduationCap size={13} /> Send to Coaching
                               </button>
@@ -1561,25 +1561,25 @@ export default function DashboardTab({
           </table>
         </div>
         {sortedPipelineRows.length > PIPELINE_PAGE_SIZE && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-            <span className="text-xs font-bold text-gray-400">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800">
+            <span className="text-xs font-bold text-gray-400 dark:text-slate-400">
               Showing {(safePage - 1) * PIPELINE_PAGE_SIZE + 1}-{Math.min(safePage * PIPELINE_PAGE_SIZE, sortedPipelineRows.length)} of {sortedPipelineRows.length}
             </span>
             <div className="flex items-center gap-1">
               <button
                 disabled={safePage === 1}
                 onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
-                className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
+                className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-slate-700"
               >
                 <ChevronLeft size={14} />
               </button>
               {getPipelinePageNumbers().map((p, i) => p === '...' ? (
-                <span key={`ellipsis-${i}`} className="px-2 text-xs font-bold text-gray-400">...</span>
+                <span key={`ellipsis-${i}`} className="px-2 text-xs font-bold text-gray-400 dark:text-slate-400">...</span>
               ) : (
                 <button
                   key={p}
                   onClick={() => setCurrentPage(p as number)}
-                  className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${p === safePage ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                  className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${p === safePage ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
                 >
                   {p}
                 </button>
@@ -1587,7 +1587,7 @@ export default function DashboardTab({
               <button
                 disabled={safePage === totalPipelinePages}
                 onClick={() => setCurrentPage(Math.min(totalPipelinePages, safePage + 1))}
-                className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
+                className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-slate-700"
               >
                 <ChevronRight size={14} />
               </button>
