@@ -184,6 +184,13 @@ export interface OnboardingState {
   city: string;
   state: string;
   ownerName: string;
+  // Added for components/dashboard/HistoricalYtdEditor.tsx (Settings ->
+  // Manage Historical Data) so it can display the caller's own row with an
+  // email, same as every team member row already gets. Sourced from
+  // authenticateCaller's own auth.getUser() lookup — the wizard itself never
+  // needed this (the owner obviously knows their own email), so it was never
+  // plumbed through until now.
+  ownerEmail: string;
   ownerYtd: YtdMatrixFields;
   teamMembers: OnboardingStateTeamMember[];
 

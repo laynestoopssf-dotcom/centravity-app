@@ -10,6 +10,7 @@ import { CUSTOM_TARGET_METRICS, CUSTOM_TARGET_PERIODS, getMetricDef, type Custom
 import InfoTooltip from './ui/InfoTooltip';
 import FormattedNumberInput from './ui/FormattedNumberInput';
 import ProfileAvatar from './ui/ProfileAvatar';
+import HistoricalYtdEditor from './dashboard/HistoricalYtdEditor';
 
 // Mirrors Stripe's own Subscription.status enum (see
 // app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
@@ -57,7 +58,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'view_life_module', label: 'View Life Module', desc: 'Allows access to the Life-specific pipeline and leaderboards.' },
   { id: 'view_team_comm', label: 'View Team Commissions', desc: 'Allows access to the Agency Payroll overview.' },
   { id: 'view_reports', label: 'View Reports', desc: 'Allows access to Agency Reports, historical analytics, and PDF exports.' },
-  { id: 'edit_historical', label: 'Import Historical Data', desc: 'Can bulk import past activities and policies.' },
+  { id: 'edit_historical', label: 'Manage Historical Data', desc: 'Can view/correct onboarding-seeded YTD data and bulk import past activities and policies.' },
   { id: 'delete_records', label: 'Delete Ledger Records', desc: 'Can permanently delete logged policies and activities.' },
   { id: 'manage_settings', label: 'Manage Agency Settings', desc: 'Can create comp plans, locations, and edit agency targets.' },
   // Everyone gets Deal Autopsies + the Sparring Ring in the Coaching tab (self-serve, no
@@ -142,6 +143,7 @@ export default function SettingsTab({
   bulkProducerId, setBulkProducerId, bulkMonth, setBulkMonth,
   bulkTouches, setBulkTouches, bulkData, setBulkData,
   isImporting, submitHistoricalData, bulkOfficeId, setBulkOfficeId, handleCsvUpload,
+  onHistoricalDataSaved,
   archivedTeam, handleArchiveTeamMember, handleReactivateTeamMember,
   teamInvites, fetchTeamInvites, handleRevokeInvite,
   // Lets a caller deep-link straight into a section (e.g. the dashboard
@@ -204,7 +206,7 @@ export default function SettingsTab({
       setIsStartingCheckout(false);
     }
   };
-  const [importMode, setImportMode] = useState<'matrix' | 'csv'>('matrix');
+  const [importMode, setImportMode] = useState<'ytd' | 'matrix' | 'csv'>('ytd');
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
   const [expandedLocationId, setExpandedLocationId] = useState<string | null>(null);
@@ -609,7 +611,7 @@ export default function SettingsTab({
         <button onClick={() => setActiveSettingsSection('promotions')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'promotions' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><Trophy size={16}/> Corporate Promotions</button>
         <button onClick={() => setActiveSettingsSection('corporate_targets')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'corporate_targets' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><ToggleLeft size={16}/> Corporate Targets</button>
         <button onClick={() => setActiveSettingsSection('locations')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'locations' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><MapPin size={16}/> Office Locations</button>
-        <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><DownloadCloud size={16}/> Import Historical Data</button>
+        <button onClick={() => setActiveSettingsSection('historical')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'historical' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><DownloadCloud size={16}/> Manage Historical Data</button>
         {canManageBilling && (
           <button onClick={() => setActiveSettingsSection('billing')} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeSettingsSection === 'billing' ? 'bg-white dark:bg-slate-900 text-blue-700 shadow-sm' : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}><CreditCard size={16}/> Billing</button>
         )}
@@ -2456,11 +2458,17 @@ export default function SettingsTab({
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden max-w-5xl animate-in slide-in-from-bottom-2">
           
           <div className="flex border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800">
+            <button onClick={() => setImportMode('ytd')} className={`flex-1 p-5 text-center font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${importMode === 'ytd' ? 'text-purple-700 bg-white dark:bg-slate-900 border-b-2 border-purple-600' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}><Archive size={18} /> Onboarding YTD Baseline</button>
             <button onClick={() => setImportMode('matrix')} className={`flex-1 p-5 text-center font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${importMode === 'matrix' ? 'text-purple-700 bg-white dark:bg-slate-900 border-b-2 border-purple-600' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}><DownloadCloud size={18} /> Smart Scatter Matrix</button>
             <button onClick={() => setImportMode('csv')} className={`flex-1 p-5 text-center font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${importMode === 'csv' ? 'text-purple-700 bg-white dark:bg-slate-900 border-b-2 border-purple-600' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}><FileSpreadsheet size={18} /> ECRM Global Upload</button>
           </div>
 
           <div className="p-6">
+             {importMode === 'ytd' && (
+               <HistoricalYtdEditor profile={profile} showToast={showToast} onSaved={onHistoricalDataSaved} />
+             )}
+             {importMode !== 'ytd' && (
+             <>
              {/* ONLY SHOW DROPDOWNS FOR MATRIX MODE */}
              {importMode === 'matrix' && (
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 border-b border-gray-100 dark:border-slate-800 pb-8">
@@ -2492,6 +2500,7 @@ export default function SettingsTab({
 
              {importMode === 'matrix' ? (
                 <form onSubmit={submitHistoricalData}>
+                  {/* Smart Scatter Matrix: bulk-synthesizes backdated activities/policies rows for a target month — a separate mechanism from the onboarding YTD baseline above. */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                      <div>
                        <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Target Month</label>
@@ -2521,10 +2530,10 @@ export default function SettingsTab({
                                 <input type="number" min="0" placeholder="0" value={bulkData[line]?.quotes || ""} onChange={e => updateBulkData(line, 'quotes', e.target.value)} className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-center outline-none focus:border-purple-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200" />
                               </div>
                               <div className="px-2">
-                                <input type="number" min="0" placeholder="0" value={bulkData[line]?.bound || ""} onChange={e => updateBulkData(line, 'bound', e.target.value)} className="w-full p-2 bg-purple-50 border border-purple-200 rounded-lg text-sm font-bold text-center outline-none focus:border-purple-500 text-purple-900 placeholder-purple-300" />
+                                <input type="number" min="0" placeholder="0" value={bulkData[line]?.bound || ""} onChange={e => updateBulkData(line, 'bound', e.target.value)} className="w-full p-2 bg-purple-50 dark:bg-slate-950 border border-purple-200 dark:border-slate-700 rounded-lg text-sm font-bold text-center outline-none focus:border-purple-500 text-purple-900 dark:text-slate-200 placeholder-purple-300 dark:placeholder-slate-500" />
                               </div>
                               <div className="px-2">
-                                <input type="number" min="0" placeholder="0" value={bulkData[line]?.issued || ""} onChange={e => updateBulkData(line, 'issued', e.target.value)} className="w-full p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold text-center outline-none focus:border-emerald-500 text-emerald-900 placeholder-emerald-300" />
+                                <input type="number" min="0" placeholder="0" value={bulkData[line]?.issued || ""} onChange={e => updateBulkData(line, 'issued', e.target.value)} className="w-full p-2 bg-emerald-50 dark:bg-slate-950 border border-emerald-200 dark:border-slate-700 rounded-lg text-sm font-bold text-center outline-none focus:border-emerald-500 text-emerald-900 dark:text-slate-200 placeholder-emerald-300 dark:placeholder-slate-500" />
                               </div>
                               <div className="px-2">
                                 <FormattedNumberInput
@@ -2593,6 +2602,8 @@ export default function SettingsTab({
                      {isImporting ? "Parsing ECRM Report..." : "Process & Import Global Data"}
                    </button>
                 </form>
+             )}
+             </>
              )}
           </div>
         </div>

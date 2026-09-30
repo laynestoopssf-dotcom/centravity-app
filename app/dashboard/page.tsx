@@ -1899,6 +1899,23 @@ export default function Home() {
     }
   };
 
+  // Called by SettingsTab's "Manage Historical Data" -> HistoricalYtdEditor
+  // after a successful save (onboarding YTD baseline, agency book-size/
+  // targets, or a team member's temp password). This whole /dashboard view
+  // is a client-rendered SPA fetched via supabase-js (see the architecture
+  // note in app/actions/onboarding.ts) — there's no Next.js fetch/data cache
+  // sitting in front of it, so router.refresh()/revalidatePath would be a
+  // no-op here. The actual "propagate corrected numbers to the UI instantly"
+  // mechanism is the same one every other mutation on this page already
+  // uses: re-run the same fetchers that populated the dashboard in the first
+  // place. See submitHistoricalData above for the identical pattern.
+  const refreshAfterHistoricalEdit = () => {
+    if (profile) {
+      fetchDashboardData(selectedProducer, profile.agency_id, agencySettings);
+      if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
+    }
+  };
+
   const handleUpdateRole = async (memberId: string, newRole: string) => {
     try {
       const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', memberId);
@@ -3713,6 +3730,7 @@ export default function Home() {
             isImporting={isImporting} submitHistoricalData={submitHistoricalData} 
             bulkOfficeId={bulkOfficeId} setBulkOfficeId={setBulkOfficeId}
             handleCsvUpload={handleCsvUpload}
+            onHistoricalDataSaved={refreshAfterHistoricalEdit}
           />
         )}
         {activeTab === 'feedback' && !isBookkeeper && <FeedbackTab profile={profile} showToast={showToast} />}
