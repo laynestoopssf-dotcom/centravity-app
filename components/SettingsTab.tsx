@@ -2014,49 +2014,66 @@ export default function SettingsTab({
                   1. Base Commission Rates
                   <InfoTooltip text="The starting commission this plan pays per line before any accelerator bumps below are applied. Auto/Fire/Commercial are always a % of premium; Term Life, Whole Life, Health (Base), and Health (Medicare Supp) can each independently be switched to a flat $ amount per policy instead." />
                 </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
-                  {[
-                    { key: 'auto_nb', label: 'Auto' },
-                    { key: 'fire_nb', label: 'Fire' },
-                    { key: 'commercial_nb', label: 'Commercial' },
-                    { key: 'term_life_nb', label: 'Term Life', rateTypeKey: 'term_life_rate_type' },
-                    { key: 'whole_life_nb', label: 'Whole Life', rateTypeKey: 'whole_life_rate_type' },
-                    { key: 'health_nb', label: 'Health (Base)', rateTypeKey: 'health_base_rate_type' },
-                    { key: 'health_medicare_rate', label: 'Health (Medicare Supp)', rateTypeKey: 'health_medicare_rate_type' },
-                  ].map(({ key, label, rateTypeKey }) => {
-                    const rateType = rateTypeKey ? (editingPlan.rules?.base_rates?.[rateTypeKey] === 'flat' ? 'flat' : 'percent') : 'percent';
-                    const isFlat = rateType === 'flat';
-                    const fallbackVal = (key === 'term_life_nb' || key === 'whole_life_nb')
-                      ? (editingPlan.rules?.base_rates?.life_nb || 0)
-                      : (key === 'health_medicare_rate' ? (editingPlan.rules?.base_rates?.health_nb || 0) : 0);
-                    return (
-                      <div key={key}>
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">{label}</label>
-                          {rateTypeKey && (
-                            <select
-                              value={rateType}
-                              onChange={e => updateRule('base_rates', rateTypeKey, e.target.value)}
-                              className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
-                            >
-                              <option value="percent">% of Premium</option>
-                              <option value="flat">Flat $ / App</option>
-                            </select>
-                          )}
-                        </div>
+                {/* Grid cells stretch to the row's height (grid default align-items: stretch), and each cell
+                    is a flex column with justify-end, so label -> (optional % / $ dropdown) -> input is
+                    pinned to the cell's bottom edge. A label that wraps to two lines just grows upward;
+                    every input in a row stays on one baseline.
+                    Lines are split into two stacked grids: Property & Casualty (3 cols) on top, Financial
+                    Services (Term, Whole, Health Base, Health Medicare; 4 cols on lg) below. */}
+                <div>
+                  {(() => {
+                    type RateCell = { key: string; label: string; rateTypeKey?: string };
+                    const renderCell = ({ key, label, rateTypeKey }: RateCell) => {
+                      const rateType = rateTypeKey ? (editingPlan.rules?.base_rates?.[rateTypeKey] === 'flat' ? 'flat' : 'percent') : 'percent';
+                      const isFlat = rateType === 'flat';
+                      const fallbackVal = (key === 'term_life_nb' || key === 'whole_life_nb')
+                        ? (editingPlan.rules?.base_rates?.life_nb || 0)
+                        : (key === 'health_medicare_rate' ? (editingPlan.rules?.base_rates?.health_nb || 0) : 0);
+                      return (
+                      <div key={key} className="min-w-0 w-full h-full flex flex-col justify-end">
+                        <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase mb-1 leading-tight">{label}</label>
+                        {rateTypeKey && (
+                          <select
+                            value={rateType}
+                            onChange={e => updateRule('base_rates', rateTypeKey, e.target.value)}
+                            className="w-full mb-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
+                          >
+                            <option value="percent">% of Premium</option>
+                            <option value="flat">Flat $ / App</option>
+                          </select>
+                        )}
                         <div className="relative">
                           {isFlat && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 dark:text-slate-400">$</span>}
                           <input
                             type="number"
                             value={editingPlan.rules?.base_rates?.[key] ?? fallbackVal}
                             onChange={e => updateRule('base_rates', key, Number(e.target.value))}
-                            className={`w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold ${isFlat ? 'pl-6 pr-2.5' : 'pr-6'}`}
+                            className={`w-full min-w-0 p-2.5 bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-bold text-gray-900 dark:text-slate-200 ${isFlat ? 'pl-6 pr-2.5' : 'pr-6'}`}
                           />
                           {!isFlat && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 dark:text-slate-400">%</span>}
                         </div>
                       </div>
+                      );
+                    };
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Property & Casualty (top row) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          {renderCell({ key: 'auto_nb', label: 'Auto' })}
+                          {renderCell({ key: 'fire_nb', label: 'Fire' })}
+                          {renderCell({ key: 'commercial_nb', label: 'Commercial' })}
+                        </div>
+                        {/* Financial Services (bottom row) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {renderCell({ key: 'term_life_nb', label: 'Term Life', rateTypeKey: 'term_life_rate_type' })}
+                          {renderCell({ key: 'whole_life_nb', label: 'Whole Life', rateTypeKey: 'whole_life_rate_type' })}
+                          {renderCell({ key: 'health_nb', label: 'Health (Base)', rateTypeKey: 'health_base_rate_type' })}
+                          {renderCell({ key: 'health_medicare_rate', label: 'Health (Medicare Supp)', rateTypeKey: 'health_medicare_rate_type' })}
+                        </div>
+                      </div>
                     );
-                  })}
+                  })()}
                 </div>
                 {editingPlan.rules?.base_rates?.life_nb !== undefined && editingPlan.rules?.base_rates?.term_life_nb === undefined && editingPlan.rules?.base_rates?.whole_life_nb === undefined && (
                   <p className="text-[11px] text-amber-600 font-semibold mt-3">This plan still uses its legacy blended Life rate ({editingPlan.rules.base_rates.life_nb}%) on both Term and Whole Life until you adjust either field above.</p>
