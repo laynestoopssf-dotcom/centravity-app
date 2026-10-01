@@ -66,6 +66,19 @@ export default function CommissionTab({
   const [newBonusName, setNewBonusName] = useState("");
   const [newBonusAmount, setNewBonusAmount] = useState("");
 
+  // Local calendar day as YYYY-MM-DD (not toISOString(), which would roll to tomorrow's UTC date
+  // for US evenings and make the date input show the wrong day).
+  const todayDateStr = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  // Per-tile backdate for Available Spiffs, keyed per tile so each keeps its own date (default
+  // today). Flows openBonusModal -> pendingBonus.loggedAt -> submitBonusClaim -> addManualBonus,
+  // which writes it as an explicit manual_bonuses.logged_at instead of the DB NOW() default.
+  const [spiffClaimDates, setSpiffClaimDates] = useState<Record<string, string>>({});
+
   // Spiff/bonus claims (Google Review, Personal Referral, Referral, etc.) require noting which
   // customer/win earned the reward before the payout is awarded, instead of firing instantly on
   // click. This used to link to that customer's policy row (a real FK, policy_id) instead of
@@ -76,12 +89,12 @@ export default function CommissionTab({
   // same utils/e2ee.ts mechanism the quote/bind pipeline uses for policy identifiers - so
   // client_description (20260901040000_manual_bonuses_freeform_description.sql) only ever holds
   // ciphertext, never plaintext.
-  const [pendingBonus, setPendingBonus] = useState<{ name: string; amount: number } | null>(null);
+  const [pendingBonus, setPendingBonus] = useState<{ name: string; amount: number; loggedAt: string } | null>(null);
   const [bonusDescription, setBonusDescription] = useState("");
   const [isSubmittingBonus, setIsSubmittingBonus] = useState(false);
   const [bonusError, setBonusError] = useState<string | null>(null);
 
-  const openBonusModal = (bonus: { name: string; amount: number }) => {
+  const openBonusModal = (bonus: { name: string; amount: number; loggedAt: string }) => {
     setPendingBonus(bonus);
     setBonusDescription("");
     setBonusError(null);
@@ -108,7 +121,7 @@ export default function CommissionTab({
       return;
     }
 
-    await addManualBonus(pendingBonus.name, pendingBonus.amount, packed);
+    await addManualBonus(pendingBonus.name, pendingBonus.amount, packed, pendingBonus.loggedAt);
     closeBonusModal();
   };
 
@@ -581,23 +594,39 @@ export default function CommissionTab({
                   
                   {/* AVAILABLE TO CLAIM */}
                   <div>
-                    <p className="text-[10px] font-bold text-purple-800 uppercase tracking-wider mb-3">Available Spiffs (Click to Claim)</p>
+                    <p className="text-[10px] font-bold text-purple-800 uppercase tracking-wider mb-3">Available Spiffs</p>
                     <div className="grid grid-cols-2 gap-3">
-                      {(commissionData.flatBonuses || []).map((bonus: any, idx: number) => (
-                        <button 
-                          key={idx}
-                          onClick={() => openBonusModal({ name: bonus.name, amount: bonus.amount })}
-                          className="bg-white dark:bg-slate-900 border border-purple-100 p-3 rounded-xl shadow-sm hover:border-purple-300 hover:shadow-md transition-all flex items-center justify-between text-left group"
-                        >
-                          <div>
-                            <p className="font-bold text-gray-900 dark:text-slate-100 text-xs leading-tight">{bonus.name}</p>
-                            <p className="font-black text-purple-600 text-sm mt-0.5">{formatDollars(bonus.amount)}</p>
+                      {(commissionData.flatBonuses || []).map((bonus: any, idx: number) => {
+                        const dateKey = `${idx}:${bonus.name}`;
+                        const claimDate = spiffClaimDates[dateKey] || todayDateStr();
+                        return (
+                          <div
+                            key={dateKey}
+                            className="bg-white dark:bg-slate-900 border border-purple-100 dark:border-slate-800 p-3 rounded-xl shadow-sm flex flex-col gap-2 text-left"
+                          >
+                            <div>
+                              <p className="font-bold text-gray-900 dark:text-slate-100 text-xs leading-tight">{bonus.name}</p>
+                              <p className="font-black text-purple-600 text-sm mt-0.5">{formatDollars(bonus.amount)}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="date"
+                                value={claimDate}
+                                onChange={e => setSpiffClaimDates(prev => ({ ...prev, [dateKey]: e.target.value }))}
+                                className="flex-1 min-w-0 p-1.5 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => openBonusModal({ name: bonus.name, amount: bonus.amount, loggedAt: claimDate })}
+                                className="shrink-0 bg-purple-50 text-purple-400 rounded-md p-1.5 hover:bg-purple-600 hover:text-white transition-colors"
+                                aria-label={`Claim ${bonus.name}`}
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
                           </div>
-                          <div className="bg-purple-50 text-purple-400 rounded-md p-1 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                            <Plus size={16} />
-                          </div>
-                        </button>
-                      ))}
+                        );
+                      })}
                       {(commissionData.flatBonuses || []).length === 0 && (
                         <p className="text-xs text-purple-400 font-medium italic col-span-2">No flat bonuses configured in this plan.</p>
                       )}
@@ -643,7 +672,7 @@ export default function CommissionTab({
                       <button 
                         onClick={() => {
                           if (newBonusName && newBonusAmount) {
-                            addManualBonus(newBonusName, Number(newBonusAmount));
+                            addManualBonus(newBonusName, Number(newBonusAmount), undefined, todayDateStr());
                             setNewBonusName(""); setNewBonusAmount("");
                           }
                         }}

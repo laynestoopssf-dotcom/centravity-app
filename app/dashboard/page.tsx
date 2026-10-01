@@ -831,7 +831,7 @@ export default function Home() {
     setChartData(newChartData);
   };
 
-  const addManualBonus = async (name: string, amount: number, clientDescription?: string | null) => {
+  const addManualBonus = async (name: string, amount: number, clientDescription?: string | null, loggedAtDate?: string) => {
     if (!profile) return;
     const targetUserId = selectedProducer === 'all' ? profile.id : selectedProducer;
     // Spiffs like Google Review / Personal Referral / Referral bonuses take a freeform reference
@@ -839,6 +839,19 @@ export default function Home() {
     // 20260901040000_manual_bonuses_freeform_description.sql for why that FK was dropped.
     // clientDescription arrives here ALREADY client-side E2EE-encrypted by CommissionTab.tsx
     // (utils/e2ee.ts, same mechanism as policy identifiers) - this function never sees plaintext.
+    //
+    // loggedAtDate is a local YYYY-MM-DD from the per-tile date picker. Converted to a local-noon
+    // ISO timestamp so a backdated claim lands in the calendar month the producer picked instead
+    // of whatever NOW() the DB would stamp. Missing/invalid input falls back to today (still
+    // written explicitly - never leave logged_at to the column default).
+    const toLoggedAtIso = (ymd: string | undefined) => {
+      const match = (ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).toISOString();
+      }
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0).toISOString();
+    };
 
     try {
       const { data, error } = await supabase.from('manual_bonuses').insert([{
@@ -846,11 +859,18 @@ export default function Home() {
         user_id: targetUserId,
         bonus_name: name,
         client_description: clientDescription || null,
-        amount: amount
+        amount: amount,
+        logged_at: toLoggedAtIso(loggedAtDate),
       }]).select().single();
       
       if (error) throw error;
-      setManualBonuses(prev => [data, ...prev]);
+      // Only show it in the list if it landed in the month currently being viewed; a backdated
+      // claim into another month will appear when the producer navigates to that month.
+      const viewed = commissionMonth ? new Date(`${commissionMonth}-02T00:00:00`) : new Date();
+      const logged = new Date(data.logged_at);
+      if (logged.getFullYear() === viewed.getFullYear() && logged.getMonth() === viewed.getMonth()) {
+        setManualBonuses(prev => [data, ...prev]);
+      }
       showToast("Bonus logged successfully!", "success");
     } catch (err) {
       console.error(err);
