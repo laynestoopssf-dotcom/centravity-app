@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, TrendingUp, Users, ArrowRightCircle, Sparkles, Target, ClipboardList, X, Gift } from 'lucide-react';
-import { resolveParentLine, resolveLifeSubType } from '../utils/productLines';
+import { resolveParentLine, resolveLifeSubType, resolveHealthSubType } from '../utils/productLines';
 import { isManagerLevelRole, isOwnerLevelRole } from '../utils/roles';
 import { encryptIdentifierForAgency, decryptIdentifier } from '../utils/e2ee';
 import IdentifierChip from './ui/IdentifierChip';
@@ -160,6 +160,8 @@ export default function CommissionTab({
     if (parentLine === 'TermLife') return commissionData.rates.termLife || 0;
     if (parentLine === 'WholeLife') return commissionData.rates.wholeLife || 0;
     if (parentLine === 'Life') return commissionData.rates.life || 0;
+    if (parentLine === 'HealthBase') return commissionData.rates.healthBase || 0;
+    if (parentLine === 'HealthMedicare') return commissionData.rates.healthMedicare || 0;
     if (parentLine === 'Health') return commissionData.rates.health || 0;
     return 0;
   };
@@ -176,14 +178,19 @@ export default function CommissionTab({
 
   // Human-readable label for a virtual line key ('TermLife'/'WholeLife') on the breakdown grid below -
   // every real parent category already reads fine as-is.
-  const lineDisplayName = (line: string) => (line === 'TermLife' ? 'Term Life' : line === 'WholeLife' ? 'Whole Life' : line);
+  const lineDisplayName = (line: string) => (
+    line === 'TermLife' ? 'Term Life'
+    : line === 'WholeLife' ? 'Whole Life'
+    : line === 'HealthBase' ? 'Health (Base)'
+    : line === 'HealthMedicare' ? 'Health (Medicare)'
+    : line
+  );
 
-  // Flat-$-per-App Life Commissions: whether a given Life sub-line pays a % of premium (default)
-  // or a flat $ amount per policy - mirrors resolveRates' own normalizeLifeRateType fallback in
-  // utils/commissionMath.ts, so a plan with no rate_type set (or an unrecognized value) always
-  // reads as 'percent' here too.
   const isLifeSubLineFlat = (subLine: 'TermLife' | 'WholeLife') =>
     (subLine === 'TermLife' ? commissionData?.rates?.termLifeRateType : commissionData?.rates?.wholeLifeRateType) === 'flat';
+
+  const isHealthSubLineFlat = (subLine: 'HealthBase' | 'HealthMedicare') =>
+    (subLine === 'HealthBase' ? commissionData?.rates?.healthBaseRateType : commissionData?.rates?.healthMedicareRateType) === 'flat';
 
   // App COUNT for a line (only meaningful for TermLife/WholeLife on a 'flat' plan) - sourced from
   // commissionData.issuedAppsLOB so this always agrees with the real payout math.
@@ -220,8 +227,12 @@ export default function CommissionTab({
     if (parentLine === 'Life') {
       const subLine = resolveLifeSubType(pol.product_line) === 'whole' ? 'WholeLife' : 'TermLife';
       const rate = getRateForLine(subLine);
-      // Flat-$-per-App: this one policy IS the "policy_count" of 1 - premium is ignored entirely.
       return isLifeSubLineFlat(subLine) ? rate : (Number(pol.premium_amount) * (rate / 100));
+    }
+    if (parentLine === 'Health') {
+      const subLine = resolveHealthSubType(pol.product_line) === 'medicare' ? 'HealthMedicare' : 'HealthBase';
+      const rate = getRateForLine(subLine);
+      return isHealthSubLineFlat(subLine) ? rate : (Number(pol.premium_amount) * (rate / 100));
     }
     const rate = getRateForLine(parentLine);
     return (Number(pol.premium_amount) * (rate / 100));
@@ -493,13 +504,14 @@ export default function CommissionTab({
                 {/* Life is split into its own Term/Whole rows (Granular Life Commissions) since each
                     now carries its own distinct rate - getLinePremium/getRateForLine both accept
                     these two virtual line keys directly (see their definitions above). */}
-                {['Auto', 'Fire', 'Commercial', 'TermLife', 'WholeLife', 'Health'].map(line => {
+                {['Auto', 'Fire', 'Commercial', 'TermLife', 'WholeLife', 'HealthBase', 'HealthMedicare'].map(line => {
                   const prem = getLinePremium(line);
                   const rate = getRateForLine(line);
-                  // Flat-$-per-App Life Commissions: a flat line's payout is policy_count * rate,
-                  // completely ignoring premium - swap the basis this whole row displays so the
-                  // "Premium"/"Rate"/"Payout" math shown here always matches calculatePolicyCommission.
-                  const isFlatLine = (line === 'TermLife' && isLifeSubLineFlat('TermLife')) || (line === 'WholeLife' && isLifeSubLineFlat('WholeLife'));
+                  const isFlatLine =
+                    (line === 'TermLife' && isLifeSubLineFlat('TermLife')) ||
+                    (line === 'WholeLife' && isLifeSubLineFlat('WholeLife')) ||
+                    (line === 'HealthBase' && isHealthSubLineFlat('HealthBase')) ||
+                    (line === 'HealthMedicare' && isHealthSubLineFlat('HealthMedicare'));
                   const appCount = getLineAppCount(line);
                   const payout = isFlatLine ? (appCount * rate) : (prem * (rate / 100));
                   return (
@@ -702,8 +714,13 @@ export default function CommissionTab({
                      // Matches calculatePolicyCommission's own sub-type resolution below so the
                      // displayed Rate always agrees with the displayed Estimated Payout $.
                      const lifeSubLine = parentLine === 'Life' ? (resolveLifeSubType(pol.product_line) === 'whole' ? 'WholeLife' : 'TermLife') : null;
-                     const rate = lifeSubLine ? getRateForLine(lifeSubLine) : getRateForLine(parentLine);
-                     const isFlatRate = !!lifeSubLine && isLifeSubLineFlat(lifeSubLine);
+                     const healthSubLine = parentLine === 'Health' ? (resolveHealthSubType(pol.product_line) === 'medicare' ? 'HealthMedicare' : 'HealthBase') : null;
+                     const rate = lifeSubLine
+                       ? getRateForLine(lifeSubLine)
+                       : healthSubLine
+                         ? getRateForLine(healthSubLine)
+                         : getRateForLine(parentLine);
+                     const isFlatRate = (!!lifeSubLine && isLifeSubLineFlat(lifeSubLine)) || (!!healthSubLine && isHealthSubLineFlat(healthSubLine));
                      const comm = calculatePolicyCommission(pol);
                      const isGhost = parentLine === 'Standalone';
                      

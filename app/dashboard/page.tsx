@@ -69,7 +69,7 @@ type CompPlan = { id: string; agency_id: string; name: string; rules: any; creat
 const DEFAULT_PRODUCT_LINES = [
   {name: 'Auto', parent: 'Auto'}, {name: 'Fire', parent: 'Fire'}, 
   {name: 'Commercial', parent: 'Commercial'}, {name: 'Life', parent: 'Life'}, 
-  {name: 'Health', parent: 'Health'}
+  {name: 'Health', parent: 'Health'}, {name: 'Medicare Supplemental', parent: 'Health'}
 ];
 
 // Hoisted to module scope: pure constants with no dependency on props/state, shared by every

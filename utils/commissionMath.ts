@@ -17,7 +17,7 @@
 //      represent the Financial Services bucket, which is Life + Health combined. Health premium and
 //      Health apps always count toward those thresholds, not just Life.
 
-import { resolveParentLine, resolveLifeSubType } from "./productLines";
+import { resolveParentLine, resolveLifeSubType, resolveHealthSubType } from "./productLines";
 
 export type CommissionLineName = "Auto" | "Fire" | "Commercial" | "Life" | "Health";
 export const COMMISSION_LINES: CommissionLineName[] = ["Auto", "Fire", "Commercial", "Life", "Health"];
@@ -30,6 +30,7 @@ export const COMMISSION_LINES: CommissionLineName[] = ["Auto", "Fire", "Commerci
 // remains the sum of TermLife + WholeLife for every existing consumer that only ever cared about
 // the combined figure (e.g. CommissionTab's per-line premium summary cards).
 export type LifeCommissionSubLineName = "TermLife" | "WholeLife";
+export type HealthCommissionSubLineName = "HealthBase" | "HealthMedicare";
 
 export interface CommissionPolicyRow {
   id?: string;
@@ -49,7 +50,7 @@ export interface AcceleratorRule {
   // before the Term/Whole Life split existed - resolveAccelerators below still applies it to BOTH
   // term_life_base and whole_life_base. "term_life_base"/"whole_life_base" are the new, more
   // specific targets a plan can use going forward to bump just one Life sub-line.
-  target_line?: "pnc_base" | "auto_base" | "fire_base" | "life_base" | "term_life_base" | "whole_life_base" | "health_base" | string;
+  target_line?: "pnc_base" | "auto_base" | "fire_base" | "life_base" | "term_life_base" | "whole_life_base" | "health_base" | "health_medicare_base" | string;
   bump_percent?: number | string;
   bonus_amount?: number | string;
 }
@@ -61,12 +62,17 @@ export type FlatBonusRule = Record<string, unknown>;
 // below. A plan created/edited before this split shipped keeps paying exactly what it always paid,
 // uniformly, on every Life policy until an admin explicitly sets one of the two new fields.
 //
-// base_rates.term_life_rate_type / whole_life_rate_type (Flat-$-per-App Life Commissions):
-// 'percent' (default) means `term_life_nb`/`whole_life_nb` above is a % of premium, calculated
-// exactly as every other line always has been. 'flat' means that same numeric field instead reads
-// as a flat dollar amount paid per policy, completely ignoring premium - see sumLineTotals below.
-// Missing/unrecognized values always resolve to 'percent' (see resolveRates' normalizeRateType),
-// so a plan saved before this feature existed keeps its exact original percent-of-premium math.
+// base_rates.term_life_rate_type / whole_life_rate_type / health_base_rate_type /
+// health_medicare_rate_type (Flat-$-per-App):
+// 'percent' (default) means that line's numeric rate is a % of premium. 'flat' means the same
+// number is a flat dollar amount paid per policy, ignoring premium - see sumLineTotals.
+// Missing/unrecognized values always resolve to 'percent' (normalizeRateType), so a plan saved
+// before this feature existed keeps its original percent-of-premium math.
+//
+// Granular Health Commissions: `health_nb` is the existing Health (Base) rate (kept under its
+// original key so every saved plan keeps paying what it always paid). `health_medicare_rate` is
+// the new Medicare Supplemental rate; when missing it falls back to `health_nb`, same as Whole
+// Life falling back to `life_nb`.
 export interface CompPlanRules {
   base_rates?: Record<string, unknown>;
   baseRates?: Record<string, unknown>;
@@ -85,16 +91,17 @@ export interface RateBumps {
   term_life_base: number;
   whole_life_base: number;
   health_base: number;
+  health_medicare_base: number;
 }
 
 // "Life" remains the sum of TermLife + WholeLife (backward compat - see the header note on
 // LifeCommissionSubLineName above). TermLife/WholeLife are the new sub-buckets the real payout
 // math (sumLineTotals) actually multiplies rates against.
-export type CommissionLineTotals = Record<CommissionLineName | LifeCommissionSubLineName, number>;
+export type CommissionLineTotals = Record<CommissionLineName | LifeCommissionSubLineName | HealthCommissionSubLineName, number>;
 
-export const emptyCommissionLineTotals = (): CommissionLineTotals => ({ Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0, TermLife: 0, WholeLife: 0 });
+export const emptyCommissionLineTotals = (): CommissionLineTotals => ({ Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0, TermLife: 0, WholeLife: 0, HealthBase: 0, HealthMedicare: 0 });
 const emptyLineTotals = emptyCommissionLineTotals;
-const emptyBumps = (): RateBumps => ({ pnc_base: 0, auto_base: 0, fire_base: 0, life_base: 0, term_life_base: 0, whole_life_base: 0, health_base: 0 });
+const emptyBumps = (): RateBumps => ({ pnc_base: 0, auto_base: 0, fire_base: 0, life_base: 0, term_life_base: 0, whole_life_base: 0, health_base: 0, health_medicare_base: 0 });
 
 export interface AggregatedCommissionMetrics {
   monthPotentialPremium: number;
@@ -178,6 +185,12 @@ export function aggregateCommissionMetrics(
         if (status === "issued") { metrics.issuedPremLOB[subLine] += premium; metrics.issuedAppsLOB[subLine] += 1; }
         else if (status === "bound") { metrics.pipelinePremLOB[subLine] += premium; metrics.pipelineAppsLOB[subLine] += 1; }
       }
+
+      if (line === "Health") {
+        const subLine: HealthCommissionSubLineName = resolveHealthSubType(pol.product_line || "") === "medicare" ? "HealthMedicare" : "HealthBase";
+        if (status === "issued") { metrics.issuedPremLOB[subLine] += premium; metrics.issuedAppsLOB[subLine] += 1; }
+        else if (status === "bound") { metrics.pipelinePremLOB[subLine] += premium; metrics.pipelineAppsLOB[subLine] += 1; }
+      }
     }
   });
 
@@ -242,14 +255,17 @@ export function resolveAccelerators(
   return { bumps, flatBonusTotal, acceleratorBreakdown };
 }
 
-/** 'percent' (of premium) is the original, still-default behavior for every line. 'flat' only
- * ever applies to the two Life sub-lines - see the base_rates.term_life_rate_type doc above. */
-export type LifeRateType = "percent" | "flat";
+/** 'percent' (of premium) is the original, still-default behavior for every line. 'flat' applies
+ * to Term/Whole Life and Health Base/Medicare independently - see the rate_type docs above. */
+export type CommissionRateType = "percent" | "flat";
+/** @deprecated Use CommissionRateType. Kept so existing Life-named imports keep compiling. */
+export type LifeRateType = CommissionRateType;
 
 /** Unrecognized/missing input (undefined, null, a legacy plan that predates this field, a typo)
  * always falls back to 'percent' - this is the ONLY place that decides the default, so every
  * caller (resolveRates below, plus any future one) automatically inherits the same safe fallback. */
-const normalizeLifeRateType = (value: unknown): LifeRateType => (value === "flat" ? "flat" : "percent");
+const normalizeRateType = (value: unknown): CommissionRateType => (value === "flat" ? "flat" : "percent");
+const normalizeLifeRateType = normalizeRateType;
 
 export interface ResolvedRates {
   auto: number;
@@ -267,7 +283,12 @@ export interface ResolvedRates {
   /** Which basis termLife/wholeLife above should be read as - see sumLineTotals below. */
   termLifeRateType: LifeRateType;
   wholeLifeRateType: LifeRateType;
+  /** Backward-compat blended figure - simple average of healthBase/healthMedicare below. */
   health: number;
+  healthBase: number;
+  healthMedicare: number;
+  healthBaseRateType: CommissionRateType;
+  healthMedicareRateType: CommissionRateType;
 }
 
 /** Applies stacked bumps on top of a plan's base rates. Rule 1: this rate then multiplies the
@@ -280,13 +301,10 @@ export interface ResolvedRates {
  * resolveAccelerators above) stacks onto BOTH sub-lines, while the new `term_life_base`/
  * `whole_life_base` targets only ever bump their own one.
  *
- * Flat-$-per-App Life Commissions: `term_life_nb`/`whole_life_nb` (and any bumps stacked onto
- * them) are just numbers - whether they mean "% of premium" or "flat $ per policy" is decided
- * entirely by `termLifeRateType`/`wholeLifeRateType` below, per `base_rates.term_life_rate_type` /
- * `whole_life_rate_type`. A rate_bump accelerator targeting `term_life_base`/`whole_life_base`
- * still just adds its `bump_percent` value onto this same number either way - on a 'flat' line
- * that reads as "+$X per policy", not a percentage-point bump, since it's the same underlying
- * dollar-or-percent field being bumped. */
+ * Flat-$-per-App: each Life/Health sub-line's numeric rate is just a number - whether it means
+ * "% of premium" or "flat $ per policy" is decided by that line's own rate_type field. Missing
+ * types always normalize to 'percent'. A rate_bump accelerator targeting health_base still stacks
+ * onto BOTH Health sub-lines (legacy); health_medicare_base only bumps Medicare. */
 export function resolveRates(baseRates: Record<string, unknown> | null | undefined, bumps: RateBumps): ResolvedRates {
   const base = baseRates || {};
   const legacyLife = Number(base.life_nb || 0);
@@ -294,6 +312,10 @@ export function resolveRates(baseRates: Record<string, unknown> | null | undefin
   const wholeLifeBase = base.whole_life_nb !== undefined && base.whole_life_nb !== null && base.whole_life_nb !== "" ? Number(base.whole_life_nb) : legacyLife;
   const termLife = termLifeBase + bumps.life_base + bumps.term_life_base;
   const wholeLife = wholeLifeBase + bumps.life_base + bumps.whole_life_base;
+  const legacyHealth = Number(base.health_nb || 0);
+  const healthMedicareRaw = base.health_medicare_rate !== undefined && base.health_medicare_rate !== null && base.health_medicare_rate !== "" ? Number(base.health_medicare_rate) : legacyHealth;
+  const healthBase = legacyHealth + bumps.health_base;
+  const healthMedicare = healthMedicareRaw + bumps.health_base + bumps.health_medicare_base;
   return {
     auto: Number(base.auto_nb || 0) + bumps.pnc_base + bumps.auto_base,
     fire: Number(base.fire_nb || 0) + bumps.pnc_base + bumps.fire_base,
@@ -303,30 +325,30 @@ export function resolveRates(baseRates: Record<string, unknown> | null | undefin
     wholeLife,
     termLifeRateType: normalizeLifeRateType(base.term_life_rate_type),
     wholeLifeRateType: normalizeLifeRateType(base.whole_life_rate_type),
-    health: Number(base.health_nb || 0) + bumps.health_base,
+    health: (healthBase + healthMedicare) / 2,
+    healthBase,
+    healthMedicare,
+    healthBaseRateType: normalizeRateType(base.health_base_rate_type),
+    healthMedicareRateType: normalizeRateType(base.health_medicare_rate_type),
   };
 }
 
 /**
  * `premTotals`/`appTotals` are the SAME shape (one $ premium bucket, one app-count bucket) per
- * line - see AggregatedCommissionMetrics.issuedPremLOB/issuedAppsLOB above. Every line except the
- * two Life sub-lines is unconditionally percent-of-premium; TermLife/WholeLife each independently
- * check their own resolved rate type and switch to `appTotals * flatRate` (Rule: "policy_count *
- * flat_rate, ignoring premium") instead of `premTotals * (rate / 100)` when it's 'flat'. */
+ * line. P&C is always percent-of-premium. TermLife/WholeLife and HealthBase/HealthMedicare each
+ * independently check their own rate type and switch to `appTotals * flatRate` when it's 'flat'.
+ * Umbrella Life/Health totals are never multiplied here — only the sub-line buckets. */
 const sumLineTotals = (premTotals: CommissionLineTotals, appTotals: CommissionLineTotals, rates: ResolvedRates): number => {
-  const termLifeAmount = rates.termLifeRateType === "flat"
-    ? appTotals.TermLife * rates.termLife
-    : premTotals.TermLife * (rates.termLife / 100);
-  const wholeLifeAmount = rates.wholeLifeRateType === "flat"
-    ? appTotals.WholeLife * rates.wholeLife
-    : premTotals.WholeLife * (rates.wholeLife / 100);
+  const amountFor = (prem: number, apps: number, rate: number, rateType: CommissionRateType) =>
+    rateType === "flat" ? apps * rate : prem * (rate / 100);
 
   return premTotals.Auto * (rates.auto / 100) +
     premTotals.Fire * (rates.fire / 100) +
     premTotals.Commercial * (rates.comm / 100) +
-    termLifeAmount +
-    wholeLifeAmount +
-    premTotals.Health * (rates.health / 100);
+    amountFor(premTotals.TermLife, appTotals.TermLife, rates.termLife, rates.termLifeRateType) +
+    amountFor(premTotals.WholeLife, appTotals.WholeLife, rates.wholeLife, rates.wholeLifeRateType) +
+    amountFor(premTotals.HealthBase, appTotals.HealthBase, rates.healthBase, rates.healthBaseRateType) +
+    amountFor(premTotals.HealthMedicare, appTotals.HealthMedicare, rates.healthMedicare, rates.healthMedicareRateType);
 };
 
 export interface CommissionResult {
@@ -343,9 +365,7 @@ export interface CommissionResult {
   acceleratorBreakdown: Record<string, number>;
   issuedPremLOB: CommissionLineTotals;
   pipelinePremLOB: CommissionLineTotals;
-  /** App counts per line - only meaningful for Term/Whole Life lines on a 'flat' plan; see
-   * sumLineTotals. Exposed here so display consumers (CommissionTab's breakdown cards) can
-   * recompute the same flat-$ payout shown in the totals above without re-deriving it. */
+  /** App counts per line - used for Term/Whole Life and Health Base/Medicare on a 'flat' plan. */
   issuedAppsLOB: CommissionLineTotals;
   pipelineAppsLOB: CommissionLineTotals;
   metrics: AggregatedCommissionMetrics;

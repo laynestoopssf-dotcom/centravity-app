@@ -39,3 +39,35 @@ export const resolveLifeSubType = (productLine: string): LifeSubType => {
   const normalized = (productLine || '').trim().toLowerCase();
   return normalized.includes('whole') ? 'whole' : 'term';
 };
+
+// Granular Health Commissions: same "name-on-product_line, no extra DB column" pattern as
+// resolveLifeSubType above. "Medicare Supplemental" (and the State Farm catalog's existing
+// "Medicare Supp/Medigap") pays the Medicare rate; every other Health parent line — including a
+// bare legacy "Health" product — is Health (Base). Logging UI injects "Medicare Supplemental"
+// into the Health product dropdown when the agency's custom catalog doesn't already have a
+// medicare-matching line (see ensureHealthProductOptions).
+export type HealthSubType = 'base' | 'medicare';
+
+export const MEDICARE_SUPPLEMENTAL_PRODUCT_NAME = 'Medicare Supplemental';
+
+export const resolveHealthSubType = (productLine: string): HealthSubType => {
+  const normalized = (productLine || '').trim().toLowerCase();
+  return (normalized.includes('medicare') || normalized.includes('medigap')) ? 'medicare' : 'base';
+};
+
+/** Health product-dropdown options: agency catalog first, plus Medicare Supplemental if missing. */
+export const ensureHealthProductOptions = (
+  lines: { name: string; parent: string }[] | null | undefined,
+  parentCategory: string
+): { name: string; parent: string }[] => {
+  const available = (lines || []).filter((l) => l.parent === parentCategory);
+  if (parentCategory !== 'Health') {
+    return available.length > 0 ? available : [{ name: parentCategory, parent: parentCategory }];
+  }
+  const hasMedicare = available.some((l) => resolveHealthSubType(l.name) === 'medicare');
+  const result = available.length > 0 ? [...available] : [{ name: 'Health', parent: 'Health' }];
+  if (!hasMedicare) {
+    result.push({ name: MEDICARE_SUPPLEMENTAL_PRODUCT_NAME, parent: 'Health' });
+  }
+  return result;
+};

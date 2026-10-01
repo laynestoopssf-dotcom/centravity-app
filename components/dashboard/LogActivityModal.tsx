@@ -8,6 +8,7 @@ import FormattedNumberInput from "../ui/FormattedNumberInput";
 import { hashIdentifierFull } from "../../utils/crypto";
 import { encryptIdentifierForAgency } from "../../utils/e2ee";
 import { cacheIdentifier, getCachedIdentifierForAny, forgetCachedIdentifier } from "../../utils/identifierCache";
+import { ensureHealthProductOptions } from "../../utils/productLines";
 
 // =============================================================================
 // The full "Log New Quote/Bound/Complex Resolution/Cross-Sell" form - extracted
@@ -45,6 +46,7 @@ export const DEFAULT_PRODUCT_LINES = [
   { name: "Commercial", parent: "Commercial" },
   { name: "Life", parent: "Life" },
   { name: "Health", parent: "Health" },
+  { name: "Medicare Supplemental", parent: "Health" },
 ];
 
 // Explicit per-row ID generator for bulk activity/policy inserts - never rely on every row in a
@@ -478,7 +480,8 @@ export default function LogActivityModal({
                           value={item.parentCategory}
                           onChange={(e) => {
                             const newParent = e.target.value;
-                            const available = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === newParent);
+                            const catalog = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
+                            const available = ensureHealthProductOptions(catalog, newParent);
                             const newProd = available.length > 0 ? available[0].name : newParent;
                             setLineItems((prev) => prev.map((li) => (li.id === item.id ? { ...li, parentCategory: newParent, productLine: newProd } : li)));
                           }}
@@ -495,7 +498,7 @@ export default function LogActivityModal({
                       <div>
                         <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
                           Product
-                          <InfoTooltip text="The specific product within the Category selected to the left. Your agency's own custom product lines (Settings → Custom Product Lines) show up here." />
+                          <InfoTooltip text="The specific product within the Category selected to the left. For Health, pick Medicare Supplemental when the policy is Medigap/Medicare Supp — everything else is Health (Base). Your agency's custom product lines (Settings → Custom Product Lines) also show up here." />
                         </label>
                         <select
                           value={item.productLine}
@@ -503,8 +506,8 @@ export default function LogActivityModal({
                           className="w-full p-2.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900"
                         >
                           {(() => {
-                            const availableLines = (agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES).filter((l: any) => l.parent === item.parentCategory);
-                            if (availableLines.length === 0) return <option value={item.parentCategory}>{item.parentCategory}</option>;
+                            const catalog = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
+                            const availableLines = ensureHealthProductOptions(catalog, item.parentCategory);
                             return availableLines.map((lineObj: any) => (
                               <option key={lineObj.name} value={lineObj.name}>{lineObj.name}</option>
                             ));
