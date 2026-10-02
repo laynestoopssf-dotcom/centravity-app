@@ -198,6 +198,18 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   // silently disappears from the Ledger entirely.
   const outboundTouches = ledgerActivities.filter((a: any) => a.activity_type === 'touchpoint');
   const inboundTouches = ledgerActivities.filter((a: any) => a.activity_type === 'inbound_call');
+  // Call/Text summary (cards at the top of the page). `ledgerActivities` is already scoped to the
+  // selected producer + date range by fetchLedgerData (user_id filter driven by the Producer
+  // dropdown - see app/dashboard/page.tsx), so these totals are derived straight from it every
+  // render and update the moment that dropdown (or any other filter) refetches. Only
+  // 'touchpoint' (outbound) and 'inbound_call' rows are touches; quotes/bounds/etc. are ignored.
+  //   Texts = outbound touchpoints with communication_method === 'text'
+  //   Calls = every other touch: outbound touchpoints with 'call' OR NULL (legacy = Call) plus
+  //           inbound calls - so Calls + Texts always equals Total Touches (percentages sum to 100).
+  const totalTexts = outboundTouches.filter((a: any) => a.communication_method === 'text').length;
+  const totalTouches = outboundTouches.length + inboundTouches.length;
+  const totalCalls = totalTouches - totalTexts;
+  const touchPct = (n: number) => (totalTouches > 0 ? Math.round((n / totalTouches) * 100) : 0);
   const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote' && a.activity_type !== 'touchpoint' && a.activity_type !== 'inbound_call');
 
   // Outbound touches are all activity_type 'touchpoint'; communication_method tells Call from Text.
@@ -257,6 +269,25 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
               {ledgerLoading ? "Refreshing..." : "Refresh"}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Calls vs. Texts summary - reacts to the Producer / date filters above (see totals calc). */}
+      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 transition-opacity ${ledgerLoading ? 'opacity-60' : ''}`}>
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
+          <p className="text-sm text-gray-500 dark:text-slate-400">Total Touches</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalTouches.toLocaleString()}</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">Outbound + Inbound</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
+          <p className="text-sm text-gray-500 dark:text-slate-400"><span aria-hidden>📞</span> Calls</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalCalls.toLocaleString()}</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">{touchPct(totalCalls)}% of total touches</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
+          <p className="text-sm text-gray-500 dark:text-slate-400"><span aria-hidden>💬</span> Texts</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalTexts.toLocaleString()}</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">{touchPct(totalTexts)}% of total touches</p>
         </div>
       </div>
 
