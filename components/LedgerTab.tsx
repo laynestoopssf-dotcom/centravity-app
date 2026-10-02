@@ -202,13 +202,34 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   // selected producer + date range by fetchLedgerData (user_id filter driven by the Producer
   // dropdown - see app/dashboard/page.tsx), so these totals are derived straight from it every
   // render and update the moment that dropdown (or any other filter) refetches. Only
-  // 'touchpoint' (outbound) and 'inbound_call' rows are touches; quotes/bounds/etc. are ignored.
-  //   Texts = outbound touchpoints with communication_method === 'text'
-  //   Calls = every other touch: outbound touchpoints with 'call' OR NULL (legacy = Call) plus
-  //           inbound calls - so Calls + Texts always equals Total Touches (percentages sum to 100).
-  const totalTexts = outboundTouches.filter((a: any) => a.communication_method === 'text').length;
-  const totalTouches = outboundTouches.length + inboundTouches.length;
-  const totalCalls = totalTouches - totalTexts;
+  // 'touchpoint' (outbound) and 'inbound_call' (inbound) rows are touches; quotes/bounds/etc. are
+  // ignored. A single pass buckets each touch by DIRECTION (activity_type) x METHOD
+  // (communication_method), where Text only if communication_method === 'text' and everything else
+  // - 'call' or NULL (legacy rows from before the Call/Text split) - is a Call:
+  //   outboundCalls / outboundTexts  <- 'touchpoint' rows
+  //   inboundCalls  / inboundTexts   <- 'inbound_call' rows (today the app only logs inbound CALLS,
+  //                                     so inboundTexts is 0 until an inbound-text logger exists;
+  //                                     it's still tallied so that data would show up automatically)
+  // Because every touch lands in exactly one bucket, Calls + Texts === Outbound + Inbound ===
+  // Total Touches, and the percentages add up to 100.
+  const touchBuckets = ledgerActivities.reduce(
+    (acc: { outboundCalls: number; outboundTexts: number; inboundCalls: number; inboundTexts: number }, a: any) => {
+      const isText = a.communication_method === 'text';
+      if (a.activity_type === 'touchpoint') {
+        if (isText) acc.outboundTexts++; else acc.outboundCalls++;
+      } else if (a.activity_type === 'inbound_call') {
+        if (isText) acc.inboundTexts++; else acc.inboundCalls++;
+      }
+      return acc;
+    },
+    { outboundCalls: 0, outboundTexts: 0, inboundCalls: 0, inboundTexts: 0 }
+  );
+  const { outboundCalls, outboundTexts, inboundCalls, inboundTexts } = touchBuckets;
+  const totalOutbound = outboundCalls + outboundTexts;
+  const totalInbound = inboundCalls + inboundTexts;
+  const totalTouches = totalOutbound + totalInbound;
+  const totalCalls = outboundCalls + inboundCalls;
+  const totalTexts = outboundTexts + inboundTexts;
   const touchPct = (n: number) => (totalTouches > 0 ? Math.round((n / totalTouches) * 100) : 0);
   const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote' && a.activity_type !== 'touchpoint' && a.activity_type !== 'inbound_call');
 
@@ -277,17 +298,17 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
           <p className="text-sm text-gray-500 dark:text-slate-400">Total Touches</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalTouches.toLocaleString()}</p>
-          <p className="text-sm text-gray-500 dark:text-slate-400">Outbound + Inbound</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400 flex flex-wrap items-center"><span className="text-emerald-600 dark:text-emerald-400 font-semibold">&uarr; {totalOutbound} Out</span><span className="mx-2 text-gray-300 dark:text-slate-600">|</span><span className="text-sky-600 dark:text-sky-400 font-semibold">&darr; {totalInbound} In</span></p>
         </div>
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
           <p className="text-sm text-gray-500 dark:text-slate-400"><span aria-hidden>📞</span> Calls</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalCalls.toLocaleString()}</p>
-          <p className="text-sm text-gray-500 dark:text-slate-400">{touchPct(totalCalls)}% of total touches</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400 flex flex-wrap items-center"><span className="text-emerald-600 dark:text-emerald-400 font-semibold">&uarr; {outboundCalls} Out</span><span className="mx-2 text-gray-300 dark:text-slate-600">|</span><span className="text-sky-600 dark:text-sky-400 font-semibold">&darr; {inboundCalls} In</span><span className="ml-2 text-gray-500 dark:text-slate-400">&middot; {touchPct(totalCalls)}%</span></p>
         </div>
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
           <p className="text-sm text-gray-500 dark:text-slate-400"><span aria-hidden>💬</span> Texts</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalTexts.toLocaleString()}</p>
-          <p className="text-sm text-gray-500 dark:text-slate-400">{touchPct(totalTexts)}% of total touches</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400 flex flex-wrap items-center"><span className="text-emerald-600 dark:text-emerald-400 font-semibold">&uarr; {outboundTexts} Out</span><span className="mx-2 text-gray-300 dark:text-slate-600">|</span><span className="text-sky-600 dark:text-sky-400 font-semibold">&darr; {inboundTexts} In</span><span className="ml-2 text-gray-500 dark:text-slate-400">&middot; {touchPct(totalTexts)}%</span></p>
         </div>
       </div>
 
