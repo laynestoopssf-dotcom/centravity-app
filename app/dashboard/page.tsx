@@ -176,6 +176,10 @@ export default function Home() {
     // Inbound calls are tracked separately from Outbound touches (see logInboundCall) so the
     // Scoreboard can show them as two distinct halves of the "Calls" tile.
     todayInbound: 0, weekInbound: 0, monthInbound: 0,
+    // Texts are a SUBSET of Touches (activities.communication_method = 'text' on activity_type =
+    // 'touchpoint' rows), never added on top. Calls are derived as Touches - Texts so legacy rows
+    // (communication_method NULL) fall into Calls and Calls + Texts always equals Total Touches.
+    todayTexts: 0, weekTexts: 0, monthTexts: 0,
     // Team's daily/MTD Pivot & Ask-for-Review progress - see the Scoreboard tile just below the
     // Daily/MTD Conversion tiles in DashboardTab.tsx, and PivotModal/AskForReviewModal.
     todayPivots: 0, monthPivots: 0, todayReviews: 0, monthReviews: 0,
@@ -557,7 +561,7 @@ export default function Home() {
 
     const officeMemberIds = getActiveOfficeMemberIds();
 
-    let actQuery = supabase.from('activities').select('user_id, office_id, activity_type, logged_at').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
+    let actQuery = supabase.from('activities').select('user_id, office_id, activity_type, communication_method, logged_at').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) actQuery = actQuery.in('user_id', officeMemberIds);
     const { data: activities, error: activitiesError } = await actQuery;
     if (activitiesError) {
@@ -620,6 +624,7 @@ export default function Home() {
       weekPosRes: 0, weekNegRes: 0,
       todayCrossSell: 0, weekCrossSell: 0, monthCrossSell: 0,
       todayInbound: 0, weekInbound: 0, monthInbound: 0,
+      todayTexts: 0, weekTexts: 0, monthTexts: 0,
       todayPivots: 0, monthPivots: 0, todayReviews: 0, monthReviews: 0,
       monthIssuedPremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 },
       monthPipelinePremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 }
@@ -647,7 +652,10 @@ export default function Home() {
       if (userId !== 'all' && act.user_id !== userId) return;
 
       if (isSameMonth(logDate, targetDate)) {
-        if (act.activity_type === 'touchpoint') tempStats.monthTouches++;
+        if (act.activity_type === 'touchpoint') {
+          tempStats.monthTouches++;
+          if (act.communication_method === 'text') tempStats.monthTexts++;
+        }
         // Inbound calls are counted separately from Outbound touches - see logInboundCall / the split
         // Calls tile on the Scoreboard. Never merged into monthTouches so Outbound stays pure.
         if (act.activity_type === 'inbound_call') tempStats.monthInbound++;
@@ -661,13 +669,19 @@ export default function Home() {
         if (act.activity_type === 'review') tempStats.monthReviews++;
       }
       if (isSameWeek(logDate)) {
-        if (act.activity_type === 'touchpoint') tempStats.weekTouches++;
+        if (act.activity_type === 'touchpoint') {
+          tempStats.weekTouches++;
+          if (act.communication_method === 'text') tempStats.weekTexts++;
+        }
         if (act.activity_type === 'inbound_call') tempStats.weekInbound++;
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.weekQuotes++;
         if (act.activity_type === 'cross_sell') tempStats.weekCrossSell++;
       }
       if (isSameDate(logDate, actualToday)) {
-        if (act.activity_type === 'touchpoint') tempStats.todayTouches++;
+        if (act.activity_type === 'touchpoint') {
+          tempStats.todayTouches++;
+          if (act.communication_method === 'text') tempStats.todayTexts++;
+        }
         if (act.activity_type === 'inbound_call') tempStats.todayInbound++;
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.todayQuotes++;
         if (act.activity_type === 'cross_sell') tempStats.todayCrossSell++;
@@ -2186,7 +2200,10 @@ export default function Home() {
     }
   };
 
-  const updatePolicyStatus = async (policyId: string, newStatus: string, finalPremium?: number, notes?: string) => {
+  // boundOrigin ('call' | 'text' | 'inbound_other') is how this deal closed - passed by the quick
+  // quoted -> bound/issued paths (Pipeline inline row, Life tab), which skip LogActivityModal, so
+  // bound_origin is captured here exactly like the modal's own Bound submit does.
+  const updatePolicyStatus = async (policyId: string, newStatus: string, finalPremium?: number, notes?: string, boundOrigin?: string) => {
     if (!profile) return;
     try {
       const updateData: any = { 
@@ -2219,6 +2236,7 @@ export default function Home() {
       }
       
       if (finalPremium !== undefined && finalPremium !== null) updateData.premium_amount = finalPremium;
+      if (boundOrigin && (newStatus === 'bound' || newStatus === 'issued')) updateData.bound_origin = boundOrigin;
 
       await supabase.from('policies').update(updateData).eq('id', policyId);
       const statusLabel = newStatus === 'not_taken' ? 'NOT TAKEN / DECLINED' : newStatus === 'not_sold' ? 'NOT SOLD' : newStatus.toUpperCase();
@@ -2261,11 +2279,17 @@ export default function Home() {
     if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
 
-  const logTouchpoint = async () => {
+  // `method` defaults to 'call' and is normalized (anything but 'text' -> 'call') so a stray click
+  // event passed as the first argument can never write garbage. Both methods are stored as the same
+  // activity_type = 'touchpoint', so Total Touches / targets / streaks / rank all keep counting them
+  // together; communication_method only drives the Call vs. Text breakdown (NULL = legacy = Call).
+  const logTouchpoint = async (method: 'call' | 'text' = 'call') => {
     if (!profile) return;
+    const communicationMethod: 'call' | 'text' = method === 'text' ? 'text' : 'call';
     
     const { error } = await supabase.from('activities').insert([{ 
       activity_type: 'touchpoint', 
+      communication_method: communicationMethod,
       agency_id: profile.agency_id, 
       office_id: profile.office_id,
       user_id: profile.id,
@@ -2274,14 +2298,23 @@ export default function Home() {
     
     if (error) { console.error("Database Error:", error); showToast("Cloud Sync Failed", "error"); return; }
 
-    setStats(prev => ({ ...prev, todayTouches: prev.todayTouches + 1, monthTouches: prev.monthTouches + 1 }));
+    const isText = communicationMethod === 'text';
+    setStats(prev => ({
+      ...prev,
+      todayTouches: prev.todayTouches + 1,
+      weekTouches: prev.weekTouches + 1,
+      monthTouches: prev.monthTouches + 1,
+      todayTexts: prev.todayTexts + (isText ? 1 : 0),
+      weekTexts: prev.weekTexts + (isText ? 1 : 0),
+      monthTexts: prev.monthTexts + (isText ? 1 : 0),
+    }));
     setChartData(prev => {
       if (!prev || prev.length < 7) return prev; 
       const newChart = [...prev];
       newChart[6] = { ...newChart[6], Touches: newChart[6].Touches + 1 };
       return newChart;
     });
-    showToast("+1 Touchpoint!");
+    showToast(isText ? "+1 Text!" : "+1 Call!");
     if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
 
@@ -2325,7 +2358,11 @@ export default function Home() {
       if (!isLoggerMessage(event.data)) return;
       switch (event.data.action) {
         case 'inbound': logInboundCall(); break;
-        case 'outbound': logTouchpoint(); break;
+        // 'outbound' is the pre-split generic action (e.g. a pop-out window still open from before
+        // this deploy) - treated as a Call, matching how legacy touches are interpreted.
+        case 'outbound':
+        case 'outbound_call': logTouchpoint('call'); break;
+        case 'outbound_text': logTouchpoint('text'); break;
       }
     };
     window.addEventListener('message', handleLoggerMessage);
@@ -3635,7 +3672,8 @@ export default function Home() {
         <QuickActionsBar
           isService={profile.role === 'service'}
           onLogInboundCall={logInboundCall}
-          onLogOutboundTouch={logTouchpoint}
+          onLogOutboundCall={() => logTouchpoint('call')}
+          onLogOutboundText={() => logTouchpoint('text')}
           onOpenQuoteModal={() => openLogModal(profile.role === 'service' ? 'complex_res' : 'quote')}
           onOpenBoundModal={() => openLogModal(profile.role === 'service' ? 'cross_sell' : 'bound')}
         />

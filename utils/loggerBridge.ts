@@ -21,7 +21,10 @@
 
 export const LOGGER_MESSAGE_SOURCE = "centravity-logger" as const;
 
-export type LoggerAction = "inbound" | "outbound";
+// "outbound" is the legacy generic touch (kept so a pop-out window opened before the Call/Text
+// split still relays correctly - the dashboard treats it as a Call). New pop-outs send
+// "outbound_call" / "outbound_text".
+export type LoggerAction = "inbound" | "outbound" | "outbound_call" | "outbound_text";
 
 export interface LoggerMessage {
   source: typeof LOGGER_MESSAGE_SOURCE;
@@ -42,7 +45,7 @@ export function isLoggerMessage(data: unknown): data is LoggerMessage {
     !!data &&
     typeof data === "object" &&
     (data as Record<string, unknown>).source === LOGGER_MESSAGE_SOURCE &&
-    ["inbound", "outbound"].includes((data as Record<string, unknown>).action as string)
+    ["inbound", "outbound", "outbound_call", "outbound_text"].includes((data as Record<string, unknown>).action as string)
   );
 }
 

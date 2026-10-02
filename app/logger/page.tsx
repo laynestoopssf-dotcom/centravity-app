@@ -129,8 +129,8 @@ function LoggerContent() {
     loadData();
   }, [loadData]);
 
-  const dispatch = (action: LoggerAction | "quote" | "bound") => {
-    if (action === "inbound" || action === "outbound") {
+  const dispatch = (action: Exclude<LoggerAction, "outbound"> | "quote" | "bound") => {
+    if (action === "inbound" || action === "outbound_call" || action === "outbound_text") {
       if (!window.opener || window.opener.closed) {
         setOpenerAvailable(false);
         return;
@@ -139,7 +139,9 @@ function LoggerContent() {
       // Instant actions need no further input, so just flash a local confirmation - the real
       // toast lands in the (possibly minimized/backgrounded) dashboard tab, which the user has no
       // reason to jump back to for these two.
-      flashMessage(action === "inbound" ? "Inbound Call Logged!" : "Outbound Touch Logged!");
+      flashMessage(
+        action === "inbound" ? "Inbound Call Logged!" : action === "outbound_text" ? "Text Logged!" : "Call Logged!"
+      );
       return;
     }
 
@@ -185,7 +187,7 @@ function LoggerContent() {
           <div className="w-full flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
             <TriangleAlert size={16} className="shrink-0 mt-0.5" />
             <p className="text-xs font-semibold leading-snug">
-              Your Centravity dashboard tab isn&apos;t open anymore. Inbound/Outbound need it open to log - Quote/Bind still work here, but won&apos;t sync back until it is.
+              Your Centravity dashboard tab isn&apos;t open anymore. Inbound/Call/Text need it open to log - Quote/Bind still work here, but won&apos;t sync back until it is.
             </p>
           </div>
         )}
@@ -212,7 +214,8 @@ function LoggerContent() {
           standalone
           isService={isService}
           onLogInboundCall={() => dispatch("inbound")}
-          onLogOutboundTouch={() => dispatch("outbound")}
+          onLogOutboundCall={() => dispatch("outbound_call")}
+          onLogOutboundText={() => dispatch("outbound_text")}
           onOpenQuoteModal={() => dispatch("quote")}
           onOpenBoundModal={() => dispatch("bound")}
         />

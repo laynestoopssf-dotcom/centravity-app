@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { HeartPulse, CheckCircle2, Clock, FileText, Target, TrendingUp, DollarSign } from 'lucide-react';
 import IdentifierChip from './ui/IdentifierChip';
 import ProfileAvatar from './ui/ProfileAvatar';
+import OriginSelect from './ui/OriginSelect';
+import type { QuoteOrigin } from '../utils/quoteOrigin';
 
 export default function LifeTab({ 
   lifeOverviewData, team, updatePolicyStatus, 
   overviewMonth, setOverviewMonth, fetchAgencyOverview, profile 
 }: any) {
-  
+  // Origin picked per pending policy for the quick quoted -> bound/issued buttons below (these skip
+  // LogActivityModal, so the same required Origin is collected inline). Declared before the early
+  // return so hook order never changes.
+  const [originByPolicy, setOriginByPolicy] = useState<Record<string, QuoteOrigin | ''>>({});
+
   if (!lifeOverviewData) return null;
 
   const { totals, leaderboard, pendingPipeline } = lifeOverviewData;
@@ -153,13 +159,22 @@ export default function LifeTab({
                   <p className="text-lg font-black text-gray-800 mb-4">${Number(pol.premium_amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                   
                   {/* Action Buttons */}
+                  {pol.status === 'quoted' && (
+                    <div className="mb-2">
+                      <OriginSelect
+                        className="w-full"
+                        value={originByPolicy[pol.id] || ''}
+                        onChange={(v) => setOriginByPolicy(prev => ({ ...prev, [pol.id]: v }))}
+                      />
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     {pol.status === 'quoted' && (
-                      <button onClick={() => updatePolicyStatus(pol.id, 'bound')} className="flex-1 py-1.5 text-[10px] font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors uppercase tracking-wider">
+                      <button onClick={() => updatePolicyStatus(pol.id, 'bound', undefined, undefined, originByPolicy[pol.id])} disabled={!originByPolicy[pol.id]} title={!originByPolicy[pol.id] ? 'Select an Origin first' : undefined} className="flex-1 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors uppercase tracking-wider">
                         Mark Bound
                       </button>
                     )}
-                    <button onClick={() => updatePolicyStatus(pol.id, 'issued')} className="flex-1 py-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors uppercase tracking-wider">
+                    <button onClick={() => updatePolicyStatus(pol.id, 'issued', undefined, undefined, pol.status === 'quoted' ? originByPolicy[pol.id] : undefined)} disabled={pol.status === 'quoted' && !originByPolicy[pol.id]} title={pol.status === 'quoted' && !originByPolicy[pol.id] ? 'Select an Origin first' : undefined} className="flex-1 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-bold bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors uppercase tracking-wider">
                       Mark Issued
                     </button>
                   </div>

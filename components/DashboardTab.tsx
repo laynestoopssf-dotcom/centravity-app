@@ -14,6 +14,8 @@ import ProfileAvatar from './ui/ProfileAvatar';
 import DashboardSetupWidget from './DashboardSetupWidget';
 import RetentionLoggingWidget from './RetentionLoggingWidget';
 import RetentionMetricsTile from './dashboard/RetentionMetricsTile';
+import OriginSelect from './ui/OriginSelect';
+import type { QuoteOrigin } from '../utils/quoteOrigin';
 
 /** Sort-key helper only now - actual on-screen rendering goes through <IdentifierChip> instead, which keeps the plaintext out of the DOM by default (see components/ui/IdentifierChip.tsx). */
 const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
@@ -26,12 +28,16 @@ export default function DashboardTab({
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
   const [editPremium, setEditPremium] = useState<string>("");
+  // Origin (Call / Text / Inbound-Other) for a quoted -> bound/issued conversion done inline from the
+  // pipeline row. Required there (see the Save Bound / Save Issued buttons) - this path bypasses
+  // LogActivityModal, which collects the same field for new Bound entries.
+  const [editOrigin, setEditOrigin] = useState<QuoteOrigin | "">("");
   // Inline "why didn't they buy" prompt shown only for the quoted -> not_sold transition, mirroring
   // the existing editingPolicyId/editPremium pattern used for bound/issued's final-premium prompt.
   const [notSoldPolicyId, setNotSoldPolicyId] = useState<string | null>(null);
   const [notSoldNotes, setNotSoldNotes] = useState<string>("");
 
-  // "Log Activity" split-button menu (Inbound/Outbound/Quote/Bound) - a single
+  // "Log Activity" split-button menu (Inbound/Call/Text/Quote/Bound) - a single
   // prominent entry point that surfaces all four logging actions the tile
   // grid below already supports, so it can sit right next to "Log Past Data"
   // as an equally-visible pair instead of that being the only thing calling
@@ -412,6 +418,7 @@ export default function DashboardTab({
     if (newStatus === 'bound' || newStatus === 'issued') {
       setEditingPolicyId(id);
       setEditPremium(currentPremium.toString());
+      setEditOrigin("");
     } else if (newStatus === 'not_sold') {
       setNotSoldPolicyId(id);
       setNotSoldNotes("");
@@ -426,8 +433,9 @@ export default function DashboardTab({
     setNotSoldNotes("");
   };
 
-  const submitStatusUpdate = (id: string, newStatus: string) => {
-    updatePolicyStatus(id, newStatus, Number(editPremium));
+  const submitStatusUpdate = (id: string, newStatus: string, requiresOrigin: boolean) => {
+    if (requiresOrigin && !editOrigin) return;
+    updatePolicyStatus(id, newStatus, Number(editPremium), undefined, requiresOrigin ? editOrigin : undefined);
     setEditingPolicyId(null);
   };
 
@@ -633,11 +641,16 @@ export default function DashboardTab({
   const getCurrents = () => {
     // For service accounts, "Cross-Sells" is an activity-based scoreboard metric (moves the instant
     // the cross_sell activity is logged), not a bound/issued policy count like production's "Apps".
-    if (timeframe === 'daily') return { t: stats.todayTouches, q: stats.todayQuotes, a: stats.todayBound, p: stats.todayPotentialPremium, cr: stats.todayQuotes, cs: isService ? stats.todayCrossSell : stats.todayBound, inbound: stats.todayInbound };
-    if (timeframe === 'weekly') return { t: stats.weekTouches, q: stats.weekQuotes, a: stats.weekBound, p: stats.weekPotentialPremium, cr: stats.weekQuotes, cs: isService ? stats.weekCrossSell : stats.weekBound, inbound: stats.weekInbound };
-    return { t: stats.monthTouches, q: stats.monthQuotes, a: stats.monthTotalApps, p: stats.monthPotentialPremium, cr: stats.monthQuotes, cs: isService ? stats.monthCrossSell : stats.monthTotalApps, inbound: stats.monthInbound };
+    if (timeframe === 'daily') return { t: stats.todayTouches, q: stats.todayQuotes, a: stats.todayBound, p: stats.todayPotentialPremium, cr: stats.todayQuotes, cs: isService ? stats.todayCrossSell : stats.todayBound, inbound: stats.todayInbound, texts: stats.todayTexts || 0 };
+    if (timeframe === 'weekly') return { t: stats.weekTouches, q: stats.weekQuotes, a: stats.weekBound, p: stats.weekPotentialPremium, cr: stats.weekQuotes, cs: isService ? stats.weekCrossSell : stats.weekBound, inbound: stats.weekInbound, texts: stats.weekTexts || 0 };
+    return { t: stats.monthTouches, q: stats.monthQuotes, a: stats.monthTotalApps, p: stats.monthPotentialPremium, cr: stats.monthQuotes, cs: isService ? stats.monthCrossSell : stats.monthTotalApps, inbound: stats.monthInbound, texts: stats.monthTexts || 0 };
   };
   const currents = getCurrents();
+  // Calls = Total Touches - Texts. Derived (not counted separately) so legacy touches with no
+  // communication_method are Calls by default and Calls + Texts always equals the Total Touches
+  // number that targets / streaks / pacing are built on.
+  const touchTexts = Math.min(currents.texts || 0, currents.t || 0);
+  const touchCalls = Math.max(0, (currents.t || 0) - touchTexts);
 
   // DYNAMIC STREAK AGGREGATION
   const getStreaks = () => {
@@ -869,8 +882,11 @@ export default function DashboardTab({
               <button onClick={() => { logInboundCall(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">
                 <PhoneIncoming size={15}/> Inbound Call
               </button>
-              <button onClick={() => { logTouchpoint(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400 transition-colors">
-                <PhoneCall size={15}/> Outbound Touch
+              <button onClick={() => { logTouchpoint('call'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400 transition-colors">
+                <span aria-hidden>📞</span> Call
+              </button>
+              <button onClick={() => { logTouchpoint('text'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors">
+                <span aria-hidden>💬</span> Text
               </button>
               <button onClick={() => { openLogModal(isService ? 'complex_res' : 'quote'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-700 dark:hover:text-purple-400 transition-colors">
                 {isService ? <RefreshCw size={15}/> : <FileText size={15}/>} {isService ? 'Complex Res.' : 'Quote'}
@@ -918,7 +934,7 @@ export default function DashboardTab({
             half = Inbound calls (logged separately - see logInboundCall). Split so reps can distinguish
             activity they generated vs. activity that came to them. */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden relative">
-           <div onClick={logTouchpoint} className="p-5 pb-4 flex-1 flex flex-col justify-between cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-500/10 transition-colors border-b border-gray-100 dark:border-slate-800 group">
+           <div className="p-5 pb-4 flex-1 flex flex-col justify-between border-b border-gray-100 dark:border-slate-800 group">
               <div className="flex justify-between items-start mb-4">
                  <div className="flex items-center gap-2">
                    <div className="bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 p-2 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors"><PhoneCall size={16}/></div>
@@ -934,9 +950,19 @@ export default function DashboardTab({
                  </div>
               </div>
               <div>
-                 <div className="text-3xl font-black text-gray-900 dark:text-slate-100 mb-3">{currents.t}</div>
+                 <div className="text-3xl font-black text-gray-900 dark:text-slate-100">{currents.t}</div>
+                 <div className="text-[10px] font-bold text-gray-400 dark:text-slate-400 tracking-widest uppercase mt-0.5">Total Touches</div>
+                 <div className="mt-1.5 mb-3 text-xs font-semibold text-gray-500 dark:text-slate-400" title="Calls + Texts = Total Touches. Touches logged before the Call/Text split count as Calls.">
+                   <span aria-hidden>📞</span> Calls: <span className="font-black text-gray-700 dark:text-slate-200">{touchCalls}</span>
+                   <span className="mx-1.5 text-gray-300 dark:text-slate-600">|</span>
+                   <span aria-hidden>💬</span> Texts: <span className="font-black text-gray-700 dark:text-slate-200">{touchTexts}</span>
+                 </div>
                  <div className="flex justify-between text-xs font-semibold text-gray-500 dark:text-slate-400 mb-2"><span>Touches / {targets.t} Target</span></div>
                  <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-1.5"><div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, targets.t > 0 ? (currents.t/targets.t)*100 : 0)}%`}}></div></div>
+                 <div className="grid grid-cols-2 gap-2 mt-4">
+                   <button type="button" onClick={() => logTouchpoint('call')} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 active:scale-95 transition-all"><span aria-hidden>📞</span> Call</button>
+                   <button type="button" onClick={() => logTouchpoint('text')} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 active:scale-95 transition-all"><span aria-hidden>💬</span> Text</button>
+                 </div>
               </div>
            </div>
            <div onClick={logInboundCall} className="p-5 pt-4 flex-1 flex flex-col justify-between cursor-pointer hover:bg-emerald-50/40 dark:hover:bg-emerald-500/10 transition-colors group">
@@ -1492,8 +1518,12 @@ export default function DashboardTab({
                       ) : editingPolicyId === pol.id ? (
                         <div className="flex items-center justify-end gap-2">
                            <FormattedNumberInput allowDecimal value={editPremium === "" ? "" : Number(editPremium)} onChange={v => setEditPremium(v === '' ? '' : String(v))} className="w-24 p-1.5 border border-gray-300 rounded text-sm font-bold outline-none" placeholder="$ Final Prem" />
-                           <button onClick={() => submitStatusUpdate(pol.id, 'bound')} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">Save Bound</button>
-                           <button onClick={() => submitStatusUpdate(pol.id, 'issued')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded">Save Issued</button>
+                           {/* A quoted policy becoming bound (or issued straight from quoted) is a new close,
+                               so it must be attributed. An already-bound policy being issued keeps whatever
+                               bound_origin it was bound with - no second prompt. */}
+                           {pol.status === 'quoted' && <OriginSelect value={editOrigin} onChange={setEditOrigin} />}
+                           <button onClick={() => submitStatusUpdate(pol.id, 'bound', pol.status === 'quoted')} disabled={pol.status === 'quoted' && !editOrigin} title={pol.status === 'quoted' && !editOrigin ? 'Select an Origin first' : undefined} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed">Save Bound</button>
+                           <button onClick={() => submitStatusUpdate(pol.id, 'issued', pol.status === 'quoted')} disabled={pol.status === 'quoted' && !editOrigin} title={pol.status === 'quoted' && !editOrigin ? 'Select an Origin first' : undefined} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed">Save Issued</button>
                            <button onClick={() => setEditingPolicyId(null)} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:text-slate-200 text-xs font-bold rounded">Cancel</button>
                         </div>
                       ) : notSoldPolicyId === pol.id ? (

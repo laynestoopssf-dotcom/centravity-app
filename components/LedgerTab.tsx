@@ -7,6 +7,7 @@ import { cacheIdentifier } from "../utils/identifierCache";
 import IdentifierChip from "./ui/IdentifierChip";
 import FormattedNumberInput from "./ui/FormattedNumberInput";
 import { DATE_RANGE_OPTIONS } from "../utils/dateRanges";
+import { quoteOriginBadge } from "../utils/quoteOrigin";
 
 // Bulk-Delete row selection - one independent instance per ledger table (Bound Policies,
 // Quotes, Complex Resolutions, Calls & Touches, etc.), NOT shared globally, so checking rows
@@ -199,9 +200,15 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   const inboundTouches = ledgerActivities.filter((a: any) => a.activity_type === 'inbound_call');
   const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote' && a.activity_type !== 'touchpoint' && a.activity_type !== 'inbound_call');
 
-  const activityTypeLabel = (type: string) => {
+  // Outbound touches are all activity_type 'touchpoint'; communication_method tells Call from Text.
+  // NULL (anything logged before the Call/Text split) is shown as a Call, matching how the
+  // Scoreboard's Calls count is derived (Total Touches - Texts).
+  const activityTypeLabel = (type: string, communicationMethod?: string | null) => {
     switch (type) {
-      case 'touchpoint': return { text: 'CALL (TOUCHPOINT)', className: 'bg-blue-100 text-blue-800' };
+      case 'touchpoint':
+        return communicationMethod === 'text'
+          ? { text: '💬 TEXT', className: 'bg-indigo-100 text-indigo-800' }
+          : { text: '📞 CALL', className: 'bg-blue-100 text-blue-800' };
       case 'inbound_call': return { text: 'INBOUND CALL', className: 'bg-sky-100 text-sky-800' };
       case 'complex_res': return { text: 'COMPLEX RESOLUTION', className: 'bg-amber-100 text-amber-800' };
       case 'cross_sell': return { text: 'CROSS-SELL', className: 'bg-emerald-100 text-emerald-800' };
@@ -277,7 +284,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={serviceOutboundTouchSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
-                         <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800">TOUCHPOINT</span></td>
+                         <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${activityTypeLabel(act.activity_type, act.communication_method).className}`}>{activityTypeLabel(act.activity_type, act.communication_method).text}</span></td>
                          <td className="px-6 py-4 text-right">
                            <button onClick={() => openEditActivity(act)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
                            <button onClick={() => deleteActivity(act.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
@@ -425,16 +432,17 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={boundPolicies.map((p: any) => p.id)} selection={boundSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={boundPolicies.map((p: any) => p.id)} selection={boundSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Origin</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
-                   {ledgerLoading ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : boundPolicies.length === 0 ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No bound policies found.</td></tr>) : (
+                   {ledgerLoading ? (<tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : boundPolicies.length === 0 ? (<tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No bound policies found.</td></tr>) : (
                      boundPolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-emerald-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={boundSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
                          <td className="px-6 py-4 font-bold text-gray-700 dark:text-slate-200"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                         <td className="px-6 py-4">{(() => { const o = quoteOriginBadge(pol.bound_origin); return o ? <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold whitespace-nowrap ${o.className}`}>{o.text}</span> : <span className="text-gray-300 dark:text-slate-600 font-bold" title="Logged before Bound Origin was tracked">&mdash;</span>; })()}</td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900 dark:text-slate-100">{pol.product_line}</div><div className="text-xs font-semibold text-emerald-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${pol.status === 'issued' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>{pol.status.toUpperCase()}</span></td>
                          <td className="px-6 py-4 text-right">
@@ -460,16 +468,17 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
              <div className="overflow-x-auto max-h-80 overflow-y-auto">
                <table className="w-full text-left text-sm">
                  <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
-                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={quotedPolicies.map((p: any) => p.id)} selection={quoteSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                   <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={quotedPolicies.map((p: any) => p.id)} selection={quoteSelection} /></th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Producer</th><th className="px-6 py-4">Identifier</th><th className="px-6 py-4">Origin</th><th className="px-6 py-4">Line & Premium</th><th className="px-6 py-4 text-right">Actions</th></tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
-                   {ledgerLoading ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : quotedPolicies.length === 0 ? (<tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No quotes found.</td></tr>) : (
+                   {ledgerLoading ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : quotedPolicies.length === 0 ? (<tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No quotes found.</td></tr>) : (
                      quotedPolicies.map((pol: any) => (
                        <tr key={pol.id} className="hover:bg-purple-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={pol.id} selection={quoteSelection} /></td>
                          <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(pol.logged_at).toLocaleDateString()}</td>
                          <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{pol.profiles?.first_name} {pol.profiles?.last_name}</td>
                          <td className="px-6 py-4 font-bold text-gray-700 dark:text-slate-200"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
+                         <td className="px-6 py-4">{(() => { const o = quoteOriginBadge(pol.quote_origin); return o ? <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold whitespace-nowrap ${o.className}`}>{o.text}</span> : <span className="text-gray-300 dark:text-slate-600 font-bold" title="Logged before Quote Origin was tracked">&mdash;</span>; })()}</td>
                          <td className="px-6 py-4"><div className="font-bold text-gray-900 dark:text-slate-100">{pol.product_line}</div><div className="text-xs font-semibold text-purple-600">${Number(pol.premium_amount).toLocaleString()}</div></td>
                          <td className="px-6 py-4 text-right">
                            <button onClick={() => openEditPolicy(pol)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
@@ -544,7 +553,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                    {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : outboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No outbound touches found.</td></tr>) : (
                      outboundTouches.map((act: any) => {
-                       const label = activityTypeLabel(act.activity_type);
+                       const label = activityTypeLabel(act.activity_type, act.communication_method);
                        return (
                        <tr key={act.id} className="hover:bg-blue-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={outboundTouchSelection} /></td>
@@ -580,7 +589,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                    {ledgerLoading ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : inboundTouches.length === 0 ? (<tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No inbound touches found.</td></tr>) : (
                      inboundTouches.map((act: any) => {
-                       const label = activityTypeLabel(act.activity_type);
+                       const label = activityTypeLabel(act.activity_type, act.communication_method);
                        return (
                        <tr key={act.id} className="hover:bg-sky-50/50 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={inboundTouchSelection} /></td>
@@ -622,7 +631,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                  </thead>
                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
                    {callsAndTouches.map((act: any) => {
-                       const label = activityTypeLabel(act.activity_type);
+                       const label = activityTypeLabel(act.activity_type, act.communication_method);
                        return (
                        <tr key={act.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
                          <td className="px-6 py-4"><RowCheckbox id={act.id} selection={activitySelection} /></td>

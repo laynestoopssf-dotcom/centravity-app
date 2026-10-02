@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { PhoneIncoming, PhoneOutgoing, FileText, ShieldCheck, RefreshCw, Users } from "lucide-react";
+import { PhoneIncoming, FileText, ShieldCheck, RefreshCw, Users } from "lucide-react";
 
 export interface QuickActionsBarProps {
   // Service reps log "Complex Res." / "Cross-Sells" instead of "Quote" /
@@ -12,7 +12,9 @@ export interface QuickActionsBarProps {
   // would silently mislabel their pipeline.
   isService: boolean;
   onLogInboundCall: () => void;
-  onLogOutboundTouch: () => void;
+  // Outbound touches are split into Call vs. Text (both count toward Total Touches).
+  onLogOutboundCall: () => void;
+  onLogOutboundText: () => void;
   onOpenQuoteModal: () => void;
   onOpenBoundModal: () => void;
   // True only for the dedicated /logger pop-out window (see app/logger/page.tsx), which is
@@ -24,6 +26,11 @@ export interface QuickActionsBarProps {
   // just centered in normal document flow so it actually fills the small popup.
   standalone?: boolean;
 }
+
+// Emoji "icons" so the pop-out/dock buttons read as "📞 Call" / "💬 Text" while still fitting
+// ActionButton's icon-component slot (size is ignored - the emoji is sized by the font class).
+const CallEmoji = () => <span className="text-base leading-none" aria-hidden>📞</span>;
+const TextEmoji = () => <span className="text-base leading-none" aria-hidden>💬</span>;
 
 interface ActionButtonProps {
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -51,7 +58,7 @@ function ActionButton({ icon: Icon, label, colorClass, onClick }: ActionButtonPr
 // "Quick Actions" control pad for the compact/narrow-window view.
 // -----------------------------------------------------------------------------
 // Replaces the old single floating "outbound touch" FAB (previously inline in
-// app/dashboard/page.tsx, `md:hidden fixed bottom-6 right-6`) with all four
+// app/dashboard/page.tsx, `md:hidden fixed bottom-6 right-6`) with all five
 // activity-logging actions a rep normally reaches via the full-width
 // Scoreboard tiles (see DashboardTab.tsx's Calls/Quote/Bound tiles), so
 // someone who's docked the window to the side of their screen (this app's
@@ -67,15 +74,17 @@ function ActionButton({ icon: Icon, label, colorClass, onClick }: ActionButtonPr
 export default function QuickActionsBar({
   isService,
   onLogInboundCall,
-  onLogOutboundTouch,
+  onLogOutboundCall,
+  onLogOutboundText,
   onOpenQuoteModal,
   onOpenBoundModal,
   standalone = false,
 }: QuickActionsBarProps) {
   const grid = (
-    <div className={`grid grid-cols-4 gap-1 rounded-2xl border border-gray-200 bg-white/95 backdrop-blur-md p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.18)] ${standalone ? "w-full" : "mx-auto max-w-md"}`}>
+    <div className={`grid grid-cols-5 gap-1 rounded-2xl border border-gray-200 bg-white/95 backdrop-blur-md p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.18)] ${standalone ? "w-full" : "mx-auto max-w-md"}`}>
       <ActionButton icon={PhoneIncoming} label="Inbound" colorClass="bg-emerald-50 text-emerald-600" onClick={onLogInboundCall} />
-      <ActionButton icon={PhoneOutgoing} label="Outbound" colorClass="bg-blue-50 text-blue-600" onClick={onLogOutboundTouch} />
+      <ActionButton icon={CallEmoji} label="Call" colorClass="bg-blue-50 text-blue-600" onClick={onLogOutboundCall} />
+      <ActionButton icon={TextEmoji} label="Text" colorClass="bg-indigo-50 text-indigo-600" onClick={onLogOutboundText} />
       <ActionButton
         icon={isService ? RefreshCw : FileText}
         label={isService ? "Complex Res" : "Quote"}

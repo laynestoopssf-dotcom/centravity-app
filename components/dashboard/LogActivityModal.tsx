@@ -9,6 +9,7 @@ import { hashIdentifierFull } from "../../utils/crypto";
 import { encryptIdentifierForAgency } from "../../utils/e2ee";
 import { cacheIdentifier, getCachedIdentifierForAny, forgetCachedIdentifier } from "../../utils/identifierCache";
 import { ensureHealthProductOptions } from "../../utils/productLines";
+import { QUOTE_ORIGIN_OPTIONS, type QuoteOrigin } from "../../utils/quoteOrigin";
 
 // =============================================================================
 // The full "Log New Quote/Bound/Complex Resolution/Cross-Sell" form - extracted
@@ -132,6 +133,10 @@ export default function LogActivityModal({
   const [lineItems, setLineItems] = useState<LineItemData[]>([]);
   const [logOfficeId, setLogOfficeId] = useState("");
   const [logDate, setLogDate] = useState(todayDateStr());
+  // Mandatory for loggingType === 'quote' (-> quote_origin) and 'bound' (-> bound_origin). Same
+  // value set / same toggle for both. Deliberately starts EMPTY (no default) so a rep
+  // has to actively pick the channel - a silent default would poison the conversion data.
+  const [originChoice, setOriginChoice] = useState<QuoteOrigin | "">("");
 
   // Resets every field each time the modal is (re)opened for a (possibly new) loggingType -
   // mirrors what openLogModal() used to do inline in app/dashboard/page.tsx.
@@ -144,6 +149,7 @@ export default function LogActivityModal({
     setIsExistingQuote(false);
     setLogOfficeId(profile?.office_id || "");
     setLogDate(initialDate || todayDateStr());
+    setOriginChoice("");
     // Only re-run when the modal transitions open (or the type/initialDate changes while open) -
     // not on every profile/agencySettings object identity change, which would blow away
     // in-progress edits.
@@ -164,6 +170,12 @@ export default function LogActivityModal({
     // Blocks a second submission from firing while one is already in flight (e.g. an accidental
     // double-click on Save).
     if (isSubmitting) return;
+    // Origin is required for Quotes and Bound (the radios are also `required` natively; this guard
+    // covers any path that bypasses native form validation).
+    if ((loggingType === "quote" || loggingType === "bound") && !originChoice) {
+      onError(`Select an Origin for this ${loggingType === "quote" ? "quote" : "bound policy"} (Call, Text, or Inbound/Other).`);
+      return;
+    }
     setIsSubmitting(true);
 
     const trimmedIdentifier = custIdentifier.trim();
@@ -231,7 +243,7 @@ export default function LogActivityModal({
       // trigger/rule causing that inside a single atomic multi-row statement, send each row as its
       // own fully separate request/transaction - Postgres has no batch array to collapse if there
       // never is one.
-      const activitiesPayload = expandedUnits.map(() => ({ id: crypto.randomUUID(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: nowWithLogDate() }));
+      const activitiesPayload = expandedUnits.map(() => ({ id: crypto.randomUUID(), activity_type: loggingType, agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, logged_at: nowWithLogDate(), ...(loggingType === "quote" ? { quote_origin: originChoice } : loggingType === "bound" ? { bound_origin: originChoice } : {}) }));
       const insertedActivityIds: string[] = [];
       for (const activity of activitiesPayload) {
         const { error: actErr } = await supabase.from("activities").insert(activity);
@@ -252,7 +264,7 @@ export default function LogActivityModal({
       if (loggingType === "quote" || loggingType === "cross_sell") {
         // Premium is split per-unit (card total / card quantity) so a bundled "$300 for 3 autos"
         // entry books $100/unit instead of multiplying the household's premium by 3.
-        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: "quoted", logged_at: nowWithLogDate(), written_at: nowWithLogDate() }));
+        const policiesPayload = expandedUnits.map((item) => ({ id: crypto.randomUUID(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / qtyOf(item), payment_cycle: item.paymentCycle, status: "quoted", logged_at: nowWithLogDate(), written_at: nowWithLogDate(), ...(loggingType === "quote" ? { quote_origin: originChoice } : {}) }));
         if (trimmedIdentifier) policiesPayload.forEach((p) => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
         const insertedPolicyIds: string[] = [];
         for (const policy of policiesPayload) {
@@ -282,7 +294,7 @@ export default function LogActivityModal({
               // bound_at = currentTime (not stampFor(i) - these rows are a single batch update, not
               // sequential inserts) so this conversion-from-quote is credited to the day it's
               // ACTUALLY bound.
-              const { error: updErr } = await supabase.from("policies").update({ status: "bound", client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime }).in("id", idsToUpdate);
+              const { error: updErr } = await supabase.from("policies").update({ status: "bound", client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime, bound_origin: originChoice }).in("id", idsToUpdate);
               if (updErr) { console.error("[LogActivityModal] bind existing-quote update failed:", updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
               // Refresh (or clear) the local picker cache to match whatever the producer just
               // re-typed here - it may differ from what was cached when this was first quoted.
@@ -290,13 +302,13 @@ export default function LogActivityModal({
             }
             if (item.count > idsToUpdate.length) {
               const extraCount = item.count - idsToUpdate.length;
-              const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+              const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i), bound_origin: originChoice }));
               if (trimmedIdentifier) extraPolicies.forEach((p) => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
               const { error: extraErr } = await supabase.from("policies").insert(extraPolicies);
               if (extraErr) { console.error("[LogActivityModal] bind extra-policies insert failed:", extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
-            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i) }));
+            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i), bound_origin: originChoice }));
             if (trimmedIdentifier) policiesToLog.forEach((p) => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
             const { error: bndErr } = await supabase.from("policies").insert(policiesToLog);
             if (bndErr) { console.error("[LogActivityModal] bound policies insert failed:", bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
@@ -350,6 +362,38 @@ export default function LogActivityModal({
               >
                 {offices.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
+            </div>
+          )}
+
+          {(loggingType === "quote" || loggingType === "bound") && (
+            <div className="p-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl mb-4">
+              <label className="flex items-center gap-1 text-xs font-bold text-gray-500 dark:text-slate-200 mb-2 uppercase tracking-wider">
+                {loggingType === "bound" ? "Origin" : "Quote Origin"} <span className="text-red-500" aria-hidden>*</span>
+                <InfoTooltip text={loggingType === "bound" ? "How this closed business came in - a Call, a Text, or an Inbound/Other lead. Tracked separately from the quote's own origin so you can see which channel actually closes." : "How this quote started - a Call you made, a Text you sent, or an Inbound/Other lead. We use this to show which channel actually converts into bound policies."} />
+              </label>
+              <div role="radiogroup" aria-label={loggingType === "bound" ? "Origin" : "Quote Origin"} className="grid grid-cols-3 gap-2">
+                {QUOTE_ORIGIN_OPTIONS.map((opt) => {
+                  const selected = originChoice === opt.value;
+                  return (
+                    <label
+                      key={opt.value}
+                      className={`relative flex flex-col items-center justify-center gap-0.5 py-2.5 px-1 rounded-lg border-2 cursor-pointer text-center transition-all bg-white dark:bg-slate-900 ${selected ? "border-purple-500 text-purple-700 dark:border-purple-500 dark:text-slate-200 bg-purple-50 dark:bg-purple-500/10" : "border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"}`}
+                    >
+                      <input
+                        type="radio"
+                        name="quote-origin"
+                        value={opt.value}
+                        required
+                        checked={selected}
+                        onChange={() => setOriginChoice(opt.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      <span className="text-base leading-none" aria-hidden>{opt.emoji}</span>
+                      <span className="text-[11px] font-bold leading-tight">{opt.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
 
