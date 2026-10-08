@@ -40,6 +40,38 @@ export interface CommissionPolicyRow {
   product_line?: string | null;
   /** New Business vs Renewal - see Rule 3 above. Missing/false = New Business (commission-eligible). */
   is_renewal?: boolean | null;
+  /**
+   * issued_date: stamped when status flips to 'issued', cleared when it flips back. The ONLY date
+   * commission eligibility looks at - see isCommissionEligible. (bound_at / logged_at are
+   * production dates and deliberately play no part in commission.)
+   */
+  issued_at?: string | null;
+}
+
+/**
+ * COMMISSION ELIGIBILITY - the one rule that decides whether a policy can appear on (and pay out
+ * on) a month's commission statement: its status must be 'issued' AND its issued_at must fall in
+ * `targetMonth` (local calendar month). bound_at / written_at / logged_at are never consulted -
+ * those are PRODUCTION dates (when the work happened, which is what the Scoreboard, Weekly Rank and
+ * pacing credit). A policy bound in August but issued in September is September commission and
+ * August production. Bound-but-not-issued policies, and issued rows missing an issued_at, are
+ * never eligible.
+ */
+export function isCommissionEligible(
+  pol: Pick<CommissionPolicyRow, "status" | "issued_at">,
+  targetMonth: Date
+): boolean {
+  if (pol.status !== "issued" || !pol.issued_at) return false;
+  const issued = new Date(pol.issued_at);
+  if (Number.isNaN(issued.getTime())) return false;
+  return issued.getFullYear() === targetMonth.getFullYear() && issued.getMonth() === targetMonth.getMonth();
+}
+
+export function filterCommissionEligiblePolicies<T extends CommissionPolicyRow>(
+  policies: T[] | null | undefined,
+  targetMonth: Date
+): T[] {
+  return (policies || []).filter((p) => isCommissionEligible(p, targetMonth));
 }
 
 export interface AcceleratorRule {
@@ -372,8 +404,15 @@ export interface CommissionResult {
 }
 
 export interface CalculateCommissionParams {
-  /** Raw policy rows, already scoped to the target month (any/all producers - filtered by userId below). */
+  /**
+   * Candidate policy rows (any/all producers - filtered by userId below). NOT assumed to be
+   * pre-filtered: calculateCommission itself applies isCommissionEligible against `commissionMonth`,
+   * so the engine can never pay on a policy that isn't issued in the statement month no matter what
+   * the caller hands it.
+   */
   policies: CommissionPolicyRow[] | null | undefined;
+  /** The statement month being calculated (any Date inside it). */
+  commissionMonth: Date;
   userId: string;
   rules: CompPlanRules | null | undefined;
   manualBonusTotal: number;
@@ -383,6 +422,7 @@ export interface CalculateCommissionParams {
 /** The full commission engine for one producer for one month, applying all four agency rules. */
 export function calculateCommission({
   policies,
+  commissionMonth,
   userId,
   rules,
   manualBonusTotal,
@@ -398,7 +438,7 @@ export function calculateCommission({
     amount: Number(b.amount || b.value || b.payout || b.bonus || 0),
   }));
 
-  const metrics = aggregateCommissionMetrics(policies, userId, getParentLine);
+  const metrics = aggregateCommissionMetrics(filterCommissionEligiblePolicies(policies, commissionMonth), userId, getParentLine);
 
   const isLocked =
     metrics.monthPotentialPremium < Number(thresholds.required_premium_to_unlock || 0) ||

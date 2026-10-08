@@ -60,7 +60,7 @@ export default function CommissionTab({
   addManualBonus, deleteManualBonus, 
   commissionMonth, setCommissionMonth, 
   team, selectedProducer, setSelectedProducer, teamCommissions,
-  monthPolicies, agencySettings
+  commissionPolicies, agencySettings
 }: any) {
   
   const [newBonusName, setNewBonusName] = useState("");
@@ -211,9 +211,13 @@ export default function CommissionTab({
     return commissionData?.issuedAppsLOB?.[parentLine as keyof typeof commissionData.issuedAppsLOB] || 0;
   };
 
-  const userPolicies = (monthPolicies || []).filter((p: any) => 
-    p.user_id === activeUserId && (p.status === 'bound' || p.status === 'issued')
-  ).sort((a: any, b: any) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime());
+  // Statement rows = this producer's policies ISSUED in the viewed month. commissionPolicies is
+  // already restricted to status = 'issued' with issued_at in that month (page.tsx + the engine's
+  // isCommissionEligible); bound-but-not-issued policies earn production credit elsewhere but never
+  // appear here, and rows are dated/sorted by issued_at, not the bound/logged date.
+  const userPolicies = (commissionPolicies || []).filter((p: any) => 
+    p.user_id === activeUserId && p.status === 'issued' && !!p.issued_at
+  ).sort((a: any, b: any) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime());
 
   // Per-line Bound vs Issued counts for the summary boxes above the Itemized Commission Statement.
   // Sourced from userPolicies, which is already scoped to this producer + this month + bound/issued only.
@@ -689,19 +693,14 @@ export default function CommissionTab({
             </div>
           </div>
 
-          {/* PER-LINE BOUND VS ISSUED SUMMARY */}
+          {/* PER-LINE ISSUED SUMMARY (commission is issued-date based; bound-only policies aren't on the statement) */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-8">
             {(['Auto', 'Fire', 'Commercial', 'Life', 'Health'] as const).map(line => (
               <div key={line} className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm p-4">
                 <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-3">Total {line}</p>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Bound</p>
-                    <p className="text-xl font-black text-blue-600">{lineBoundVsIssued[line].bound}</p>
-                  </div>
-                  <div className="w-px h-8 bg-gray-100 dark:bg-slate-700" />
-                  <div className="text-right">
-                    <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Issued</p>
+                    <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Issued This Month</p>
                     <p className="text-xl font-black text-emerald-600">{lineBoundVsIssued[line].issued}</p>
                   </div>
                 </div>
@@ -735,7 +734,7 @@ export default function CommissionTab({
                  <tbody>
                    {userPolicies.length === 0 && (
                      <tr>
-                       <td colSpan={7} className="p-8 text-center text-gray-400 dark:text-slate-400 font-medium">No bound or issued policies logged for this month yet.</td>
+                       <td colSpan={7} className="p-8 text-center text-gray-400 dark:text-slate-400 font-medium">No policies issued this month yet. Commission is paid in the month a policy is issued.</td>
                      </tr>
                    )}
                    {userPolicies.map((pol: any, idx: number) => {
@@ -755,7 +754,7 @@ export default function CommissionTab({
                      
                      return (
                        <tr key={pol.id || idx} className="border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
-                         <td className="p-4 text-sm font-medium text-gray-500 dark:text-slate-400">{new Date(pol.logged_at).toLocaleDateString()}</td>
+                         <td className="p-4 text-sm font-medium text-gray-500 dark:text-slate-400">{new Date(pol.issued_at).toLocaleDateString()}</td>
                          <td className="p-4 text-sm font-bold text-gray-900 dark:text-slate-100"><IdentifierChip policyId={pol.id} hash={pol.client_identifier_hash} ciphertext={pol.client_identifier_ciphertext} iv={pol.client_identifier_iv} agencyId={profile?.agency_id} /></td>
                          <td className="p-4">
                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">

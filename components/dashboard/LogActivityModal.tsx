@@ -137,6 +137,11 @@ export default function LogActivityModal({
   // value set / same toggle for both. Deliberately starts EMPTY (no default) so a rep
   // has to actively pick the channel - a silent default would poison the conversion data.
   const [originChoice, setOriginChoice] = useState<QuoteOrigin | "">("");
+  // Optional coverage start date for Bound policies (policies.effective_date). Deliberately NOT
+  // capped to today - a bind can be effective in the future (e.g. a home closing next month). It
+  // is informational only: production credit still lands on the Date Logged / bound_at, and
+  // commission still keys off issued_at.
+  const [effectiveDate, setEffectiveDate] = useState("");
 
   // Resets every field each time the modal is (re)opened for a (possibly new) loggingType -
   // mirrors what openLogModal() used to do inline in app/dashboard/page.tsx.
@@ -150,6 +155,7 @@ export default function LogActivityModal({
     setLogOfficeId(profile?.office_id || "");
     setLogDate(initialDate || todayDateStr());
     setOriginChoice("");
+    setEffectiveDate("");
     // Only re-run when the modal transitions open (or the type/initialDate changes while open) -
     // not on every profile/agencySettings object identity change, which would blow away
     // in-progress edits.
@@ -294,7 +300,7 @@ export default function LogActivityModal({
               // bound_at = currentTime (not stampFor(i) - these rows are a single batch update, not
               // sequential inserts) so this conversion-from-quote is credited to the day it's
               // ACTUALLY bound.
-              const { error: updErr } = await supabase.from("policies").update({ status: "bound", client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime, bound_origin: originChoice }).in("id", idsToUpdate);
+              const { error: updErr } = await supabase.from("policies").update({ status: "bound", client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, bound_at: currentTime, bound_origin: originChoice, ...(effectiveDate ? { effective_date: effectiveDate } : {}) }).in("id", idsToUpdate);
               if (updErr) { console.error("[LogActivityModal] bind existing-quote update failed:", updErr); throw new Error(`Bind Update Error: ${updErr.message}`); }
               // Refresh (or clear) the local picker cache to match whatever the producer just
               // re-typed here - it may differ from what was cached when this was first quoted.
@@ -302,13 +308,13 @@ export default function LogActivityModal({
             }
             if (item.count > idsToUpdate.length) {
               const extraCount = item.count - idsToUpdate.length;
-              const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i), bound_origin: originChoice }));
+              const extraPolicies = Array.from({ length: extraCount }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i), bound_origin: originChoice, effective_date: effectiveDate || null }));
               if (trimmedIdentifier) extraPolicies.forEach((p) => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
               const { error: extraErr } = await supabase.from("policies").insert(extraPolicies);
               if (extraErr) { console.error("[LogActivityModal] bind extra-policies insert failed:", extraErr); throw new Error(`Bind Insert Error: ${extraErr.message}`); }
             }
           } else {
-            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i), bound_origin: originChoice }));
+            const policiesToLog = Array.from({ length: item.count }, (_, i) => ({ id: makeRowId(), agency_id: profile.agency_id, office_id: targetOffice, user_id: profile.id, client_identifier_hash: identifierHash, client_identifier_trigrams: identifierTrigrams, client_identifier_ciphertext: identifierCiphertext, client_identifier_iv: identifierIv, product_line: item.productLine, premium_amount: Number(item.premiumAmount) / item.count, payment_cycle: item.paymentCycle, status: "bound", logged_at: stampFor(i), written_at: stampFor(i), bound_at: stampFor(i), bound_origin: originChoice, effective_date: effectiveDate || null }));
             if (trimmedIdentifier) policiesToLog.forEach((p) => cacheIdentifier(p.id, trimmedIdentifier, identifierHash));
             const { error: bndErr } = await supabase.from("policies").insert(policiesToLog);
             if (bndErr) { console.error("[LogActivityModal] bound policies insert failed:", bndErr); throw new Error(`Bind Insert Error: ${bndErr.message}`); }
@@ -348,6 +354,23 @@ export default function LogActivityModal({
             />
             {logDate !== todayDateStr() && <p className="text-[11px] font-semibold text-amber-600 mt-1.5">Backdating this entry to {new Date(`${logDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}.</p>}
           </div>
+
+          {loggingType === "bound" && (
+            <div className="p-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl mb-4">
+              <label htmlFor="effectiveDate" className="flex items-center gap-1.5 text-xs font-bold text-gray-500 dark:text-slate-200 mb-1 uppercase tracking-wider">
+                <CalendarDays size={13} /> Effective Date (Optional)
+                <InfoTooltip text="When coverage actually starts - it can be in the future (e.g. a home closing next month). You still get production credit for the bind on the Date Logged above; commission is paid in the month the carrier issues the policy." />
+              </label>
+              <input
+                id="effectiveDate"
+                type="date"
+                value={effectiveDate}
+                onChange={(e) => setEffectiveDate(e.target.value)}
+                className="w-full p-2 bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-gray-900 dark:text-slate-200"
+              />
+              <p className="text-[11px] font-semibold text-gray-400 dark:text-slate-400 mt-1.5">Future dates are fine. Credit for the bind still lands on {logDate === todayDateStr() ? "today" : "the Date Logged"}.</p>
+            </div>
+          )}
 
           {profile?.is_floater && offices.length > 1 && (
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl mb-4">

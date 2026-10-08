@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../../utils/supabase";
 import { resolveParentLine } from "../../utils/productLines";
-import { calculateCommission, makeParentLineResolver, resolveAccelerators, resolveRates, emptyCommissionLineTotals } from "../../utils/commissionMath";
+import { calculateCommission, filterCommissionEligiblePolicies, makeParentLineResolver, resolveAccelerators, resolveRates, emptyCommissionLineTotals } from "../../utils/commissionMath";
 import { enrichCustomTargets, type CustomTargetRow } from "../../utils/customTargets";
 import { isOwnerLevelRole, isManagerLevelRole } from "../../utils/roles";
 import { resolveDateRange, type DateRangeKey } from "../../utils/dateRanges";
@@ -63,7 +63,7 @@ type Agency = { id: string; name: string; timezone?: string; production_days_per
 // - there is no plaintext name on this object, by design. Any "readable label"
 // shown for a policy row comes only from utils/identifierCache.ts's local,
 // browser-only cache (see components consuming this type), never from here.
-type Policy = { id: string; user_id: string; client_identifier_hash?: string | null; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken' | 'not_sold'; notes?: string | null; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; profiles?: { first_name: string; last_name: string }; };
+type Policy = { id: string; user_id: string; client_identifier_hash?: string | null; product_line: string; premium_amount: number; payment_cycle: string; status: 'quoted' | 'bound' | 'issued' | 'positive' | 'negative' | 'not_taken' | 'not_sold'; notes?: string | null; logged_at: string; written_at?: string | null; bound_at?: string | null; issued_at?: string | null; effective_date?: string | null; profiles?: { first_name: string; last_name: string }; };
 type CompPlan = { id: string; agency_id: string; name: string; rules: any; created_at: string; };
 
 const DEFAULT_PRODUCT_LINES = [
@@ -201,7 +201,12 @@ export default function Home() {
   const teamBaselineRef = useRef<Profile[]>([]);
   const [archivedTeam, setArchivedTeam] = useState<Profile[]>([]);
   const [teamInvites, setTeamInvites] = useState<any[]>([]);
+  // monthPolicies = PRODUCTION feed for the viewed month (dated by bound_at - when the work happened).
+  // commissionPolicies = COMMISSION feed (status 'issued' AND issued_at in the viewed month). They are
+  // deliberately separate: a policy bound in August and issued in September is August production
+  // and September commission. Never feed one into the other's math.
   const [monthPolicies, setMonthPolicies] = useState<any[]>([]);
+  const [commissionPolicies, setCommissionPolicies] = useState<any[]>([]);
   const [whatIfCommission, setWhatIfCommission] = useState<number>(1000);
 
   const [agencyActivities, setAgencyActivities] = useState<any[]>([]);
@@ -569,13 +574,10 @@ export default function Home() {
       showToast('Failed to load activity data — numbers below may be incomplete.', 'error');
     }
 
-    // NOTE: `id` must be selected here - monthPolicies feeds CommissionTab's itemized statement
-    // table, which keys each <tr> off pol.id. Omitting it left every row keyed as undefined,
-    // triggering React's "missing unique key" warning for the whole list.
-    // `bound_at`/`written_at` are also required here - see the `boundDate` note below in the
+    // `bound_at`/`written_at` are required here - see the `boundDate` note below in the
     // policies.forEach loop for why MTD/QTD/YTD Bound Apps must key off them instead of `logged_at`.
-    // `issued_at` is required for monthPolicies' own commission-month anchor immediately below -
-    // see that comment for why it (not bound_at/written_at) has to drive commission bucketing.
+    // (This is the PRODUCTION fetch; the separate commissionPolicies query further down is what
+    // carries `id` + the client identifier columns for CommissionTab's itemized statement.)
     let polQuery = supabase.from('policies').select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, issued_at, client_identifier_hash, client_identifier_ciphertext, client_identifier_iv, is_renewal').eq('agency_id', agencyId).gte('logged_at', fetchStartDate.toISOString()).limit(100000);
     if (officeMemberIds) polQuery = polQuery.in('user_id', officeMemberIds);
     const { data: policies, error: policiesError } = await polQuery;
@@ -584,22 +586,36 @@ export default function Home() {
       showToast('Failed to load policy data — revenue numbers below may be incomplete.', 'error');
     }
 
-    // COMMISSION MONTH ANCHOR: monthPolicies is the sole feed for every real commission
-    // calculation (commissionData + teamCommissions below, both via utils/commissionMath.ts's
-    // calculateCommission) - this is deliberately NOT the same date basis as the Scoreboard's
-    // production KPIs (`boundDate` in the policies.forEach loop further down), which are correctly
-    // anchored to bound_at because "production" is meant to reflect when a producer did the work.
-    // Commission payout timing is different: the agency pays on the month a policy actually
-    // ISSUES, not the month it was written/bound - a policy bound in August but issued in
-    // September must land in September's commission run, not August's, even though it's the exact
-    // same policy row throughout. So: an issued policy anchors on `issued_at` (stamped exactly
-    // once, at the moment status first becomes 'issued' - see updatePolicyStatus); anything not yet
-    // issued (still 'bound'/pipeline) has no issue date yet and keeps the existing bound_at ->
-    // written_at -> logged_at chain, since that pipeline premium's only meaningful date is when it
-    // was bound. Falls back to logged_at for any legacy row from before issued_at/bound_at existed.
-    const commissionAnchorDate = (p: { issued_at?: string | null; bound_at?: string | null; written_at?: string | null; logged_at: string }) =>
-      p.issued_at || p.bound_at || p.written_at || p.logged_at;
-    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(commissionAnchorDate(p)), targetDate)) || []);
+    // PRODUCTION vs. COMMISSION date basis (kept strictly separate):
+    //   - monthPolicies (below) is the PRODUCTION-side month feed, dated by bound_at (falling back to
+    //     written_at -> logged_at for legacy rows) - "when the work happened". It no longer feeds any
+    //     commission calculation; it's only used by the production-based What-If fallback.
+    //   - commissionPolicies is the ONLY feed for real commission math (commissionData,
+    //     teamCommissions, CommissionTab's statement). A policy is on a month's statement only if
+    //     status = 'issued' AND issued_at falls in that month. bound_at / logged_at never decide
+    //     commission eligibility - see isCommissionEligible in utils/commissionMath.ts, which the
+    //     engine also re-applies itself. Fetched with its own query (not carved out of `policies`
+    //     above) so a policy bound long ago but issued this month is never missed by the
+    //     logged_at-based production fetch window.
+    const productionAnchorDate = (p: { bound_at?: string | null; written_at?: string | null; logged_at: string }) =>
+      p.bound_at || p.written_at || p.logged_at;
+    setMonthPolicies(policies?.filter(p => isSameMonth(new Date(productionAnchorDate(p)), targetDate)) || []);
+
+    const nextMonthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1);
+    let commissionQuery = supabase.from('policies')
+      .select('id, user_id, office_id, status, premium_amount, payment_cycle, product_line, logged_at, written_at, bound_at, issued_at, effective_date, client_identifier_hash, client_identifier_ciphertext, client_identifier_iv, is_renewal')
+      .eq('agency_id', agencyId)
+      .eq('status', 'issued')
+      .gte('issued_at', firstDayOfMonth.toISOString())
+      .lt('issued_at', nextMonthStart.toISOString())
+      .limit(100000);
+    if (officeMemberIds) commissionQuery = commissionQuery.in('user_id', officeMemberIds);
+    const { data: issuedRows, error: issuedError } = await commissionQuery;
+    if (issuedError) {
+      console.error('[Dashboard] commission policies fetch failed', issuedError);
+      showToast('Failed to load issued policies — commission numbers may be incomplete.', 'error');
+    }
+    setCommissionPolicies(filterCommissionEligiblePolicies(issuedRows || [], targetDate));
 
     let bonusQuery = supabase.from('manual_bonuses').select('*').eq('agency_id', agencyId).gte('logged_at', firstDayOfMonth.toISOString());
     const { data: fetchedBonuses, error: bonusesError } = await bonusQuery;
@@ -2215,24 +2231,30 @@ export default function Home() {
       // the seeded Sparring Ring context if the producer hits "Send to Coaching" (see
       // sendNotSoldDealToSparring below).
       if (newStatus === 'not_sold' && notes !== undefined) updateData.notes = notes || null;
-      // issued_at is stamped the moment a policy actually becomes issued; written_at is left untouched
-      // so it keeps reflecting whenever the policy was originally written/bound.
-      if (newStatus === 'issued') updateData.issued_at = new Date().toISOString();
+      // THREE DISTINCT DATES (see 20260924000000_policy_effective_and_issued_dates.sql):
+      //   bound_at (production) - stamped ONCE, the first time status becomes 'bound' (or when a
+      //     quote jumps straight to 'issued'), never moved afterward - so flipping issued -> bound
+      //     can't shift an agent's production credit to today. Drives Scoreboard/Weekly Rank/pacing.
+      //   issued_at (commission) - stamped when status flips TO 'issued' (kept as-is if it was
+      //     already issued, so re-saving an issued row can't move it to a different commission
+      //     month) and CLEARED (null) on any move away from 'issued' (e.g. back to 'bound').
+      //     Commission statements include a policy only while it is 'issued' and only in the month
+      //     of its issued_at.
+      //   written_at is left untouched.
+      const { data: existing } = await supabase.from('policies').select('status, bound_at, issued_at').eq('id', policyId).maybeSingle();
+      const nowIso = new Date().toISOString();
 
-      // bound_at is stamped exactly once, at the moment status first becomes 'bound' - this is what
-      // the Scoreboard/custom-targets date-window checks (Today/Week/Month/Quarter/Year Bound Apps)
-      // key off, instead of written_at (only correct for brand-new bound rows, stale for an
-      // existing quote converted to bound later) or logged_at (re-stamped above on every later
-      // transition, e.g. bound -> issued, which would look like a fresh bind on the issue date).
-      if (newStatus === 'bound') {
-        updateData.bound_at = new Date().toISOString();
-      } else if (newStatus === 'issued') {
-        // Edge case: the status dropdown allows jumping straight from 'quoted' to 'issued',
-        // skipping 'bound' entirely, so bound_at may never have been set. Backfill it here (best
-        // approximation: "now") only if it's still missing, so it never overwrites a real bind
-        // timestamp set on an earlier quoted -> bound transition.
-        const { data: existing } = await supabase.from('policies').select('bound_at').eq('id', policyId).maybeSingle();
-        if (!existing?.bound_at) updateData.bound_at = new Date().toISOString();
+      if (newStatus === 'issued') {
+        updateData.issued_at = existing?.status === 'issued' && existing?.issued_at ? existing.issued_at : nowIso;
+      } else {
+        updateData.issued_at = null;
+      }
+
+      // Edge case: the status dropdown allows jumping straight from 'quoted' to 'issued', skipping
+      // 'bound' entirely, so bound_at may never have been set - backfill it (best approximation:
+      // "now") only if it's still missing, so it never overwrites a real bind timestamp.
+      if ((newStatus === 'bound' || newStatus === 'issued') && !existing?.bound_at) {
+        updateData.bound_at = nowIso;
       }
       
       if (finalPremium !== undefined && finalPremium !== null) updateData.premium_amount = finalPremium;
@@ -2780,7 +2802,8 @@ export default function Home() {
     // the two can never drift out of sync again.
     const lines = agencySettings?.custom_product_lines || DEFAULT_PRODUCT_LINES;
     const result = calculateCommission({
-      policies: monthPolicies,
+      policies: commissionPolicies,
+      commissionMonth: commissionMonth ? new Date(`${commissionMonth}-02T00:00:00`) : new Date(),
       userId: activeUserId || '',
       rules: plan.rules,
       manualBonusTotal,
@@ -2788,7 +2811,7 @@ export default function Home() {
     });
 
     return { ...result, planName: plan.name };
-  }, [profile, team, selectedProducer, compPlans, monthPolicies, agencySettings, manualBonuses, canViewTeamComm]);
+  }, [profile, team, selectedProducer, compPlans, commissionPolicies, commissionMonth, agencySettings, manualBonuses, canViewTeamComm]);
 
   const blendedCommRate = useMemo(() => {
     const totalPrem = stats.monthAutoPrem + stats.monthFirePrem + stats.monthCommPrem + stats.monthLifePrem + stats.monthHealthPrem;
@@ -2850,7 +2873,8 @@ export default function Home() {
       // additive stacking, renewal exclusion, and Financial Services = Life+Health all applied
       // identically for every team member.
       result[member.id] = calculateCommission({
-        policies: monthPolicies,
+        policies: commissionPolicies,
+        commissionMonth: commissionMonth ? new Date(`${commissionMonth}-02T00:00:00`) : new Date(),
         userId: member.id,
         rules: plan.rules,
         manualBonusTotal,
@@ -2859,7 +2883,7 @@ export default function Home() {
     });
 
     return result;
-  }, [team, compPlans, selectedProducer, profile, monthPolicies, manualBonuses, agencySettings, canViewTeamComm]);
+  }, [team, compPlans, selectedProducer, profile, commissionPolicies, commissionMonth, manualBonuses, agencySettings, canViewTeamComm]);
 
   const weeklyOverviewData = useMemo(() => {
     if (!profile || !canViewWeeklyRank) return null;
@@ -3744,7 +3768,7 @@ export default function Home() {
           offices={offices} selectedOffice={selectedOffice} setSelectedOffice={setSelectedOffice}
         />}
 
-        {activeTab === 'commission' && <CommissionTab profile={profile} stats={stats} commissionData={commissionData} manualBonuses={manualBonuses} addManualBonus={addManualBonus} deleteManualBonus={deleteManualBonus} commissionMonth={commissionMonth} setCommissionMonth={setCommissionMonth} team={team} selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} teamCommissions={teamCommissions} monthPolicies={monthPolicies} agencySettings={agencySettings} />}
+        {activeTab === 'commission' && <CommissionTab profile={profile} stats={stats} commissionData={commissionData} manualBonuses={manualBonuses} addManualBonus={addManualBonus} deleteManualBonus={deleteManualBonus} commissionMonth={commissionMonth} setCommissionMonth={setCommissionMonth} team={team} selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} teamCommissions={teamCommissions} commissionPolicies={commissionPolicies} agencySettings={agencySettings} />}
         
         {activeTab === 'ledger' && !isBookkeeper && <LedgerTab profile={profile} team={team} agencySettings={agencySettings} ledgerActivities={ledgerActivities} ledgerPolicies={ledgerPolicies} ledgerDateFilter={ledgerDateFilter} setLedgerDateFilter={setLedgerDateFilter} ledgerCustomStart={ledgerCustomStart} setLedgerCustomStart={setLedgerCustomStart} ledgerCustomEnd={ledgerCustomEnd} setLedgerCustomEnd={setLedgerCustomEnd} ledgerProducerFilter={ledgerProducerFilter} setLedgerProducerFilter={setLedgerProducerFilter} ledgerLoading={ledgerLoading} fetchLedgerData={fetchLedgerData} deleteActivity={deleteActivity} deletePolicy={deletePolicy} deleteActivitiesBulk={deleteActivitiesBulk} deletePoliciesBulk={deletePoliciesBulk} updateLedgerActivity={updateLedgerActivity} updateLedgerPolicy={updateLedgerPolicy} />}
 
