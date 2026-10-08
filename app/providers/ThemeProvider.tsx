@@ -33,9 +33,23 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 // suppressHydrationWarning — the class it sets there is expected to differ from
 // whatever the server rendered, and that mismatch is intentional/safe.
 // =============================================================================
-export default function ThemeProvider({ children }: { children: ReactNode }) {
+//
+// Per-user storage key: `userId` (resolved server-side in app/layout.tsx from the Supabase auth
+// cookies) namespaces the stored preference as `theme-<userId>`, so two people who share a
+// browser profile / synced profile / office terminal each keep their OWN theme instead of
+// overwriting one shared `theme` entry. Signed out (or id unavailable) -> plain `theme`, same
+// as before. The key is passed straight to next-themes' native `storageKey` prop, which is also
+// what its blocking pre-paint script reads, so there's no flash and no custom script here -
+// and it's known at SSR time (not fetched after mount), so the script and the provider always
+// agree on the key.
+export default function ThemeProvider({ children, userId }: { children: ReactNode; userId?: string }) {
   return (
-    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem>
+    <NextThemesProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      storageKey={userId ? `theme-${userId}` : "theme"}
+    >
       {children}
     </NextThemesProvider>
   );
