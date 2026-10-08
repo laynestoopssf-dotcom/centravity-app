@@ -3,10 +3,32 @@ import { Trophy, PhoneCall, FileText, ShieldCheck, Calendar, Users } from "lucid
 import ProfileAvatar from "./ui/ProfileAvatar";
 import { isOwnerLevelRole } from "../utils/roles";
 
-const getPacingColor = (pacing: number) => {
-  if (pacing >= 100) return "bg-green-500";
-  if (pacing >= 90) return "bg-yellow-400";
-  return "bg-red-500";
+// 3-tier progress bar for the "Pacing Target" columns (Touches, Quotes, Primary leaderboard).
+// percent = current / FULL weekly target (the same "x / target" the row displays); a target of 0
+// (none set) reads as already complete (100%) rather than dividing by zero.
+//   <  50%          -> rose    (red)
+//   >= 50% & < 100% -> amber   (yellow)
+//   >= 100%         -> emerald (green)
+// Width is clamped to 100% so overachieving never overflows the track, while the tier still
+// reflects the real (uncapped) percent. Rose-500 / amber-400 / emerald-500 are all mid-to-bright
+// tones, so they read clearly on both the light (bg-gray-200) and dark (bg-slate-700, inside
+// dark:bg-slate-900 rows) tracks without needing separate dark variants.
+const getProgress = (current: number, target: number) => {
+  const percent = target > 0 ? (current / target) * 100 : 100;
+  const colorClass = percent >= 100 ? "bg-emerald-500" : percent >= 50 ? "bg-amber-400" : "bg-rose-500";
+  return { percent, widthPct: Math.min(percent, 100), colorClass };
+};
+
+const PacingBar = ({ current, target }: { current: number; target: number }) => {
+  const { percent, widthPct, colorClass } = getProgress(current, target);
+  return (
+    <div
+      className="w-16 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden"
+      title={`${Math.round(percent)}% of weekly target`}
+    >
+      <div className={`h-full rounded-full transition-all duration-500 ${colorClass}`} style={{ width: `${Math.min(percent, 100)}%` }} />
+    </div>
+  );
 };
 
 // Helper for individual agent WoW
@@ -197,16 +219,11 @@ export default function WeeklyRankTab({ weeklyOverviewData, selectedWeekStart, s
               {weeklyOverviewData?.touchesRank?.map((member: any, idx: number) => {
                 const target = member.weekly_target_touchpoints || 0;
                 // "expected" is the prorated goal-to-date (e.g. Monday of a 5-day week = ~1/5th of the
-                // weekly target) - it drives the on-pace color/width, but is NOT the actual weekly goal.
-                // Early in the week it can look numerically identical to a daily target, which is
-                // coincidental, not a data bug - the denominator shown to the user must be the real
-                // full weekly target so it doesn't read as "pulling the daily number".
+                // weekly target) - now only used for the on-pace tooltip, NOT the bar (the bar's tier and
+                // width come from current / full weekly target - see getProgress). Early in the week it
+                // can look numerically identical to a daily target, which is coincidental, not a data
+                // bug - the denominator shown to the user must be the real full weekly target.
                 const expected = (target / (weeklyOverviewData.prodDays || 5)) * (weeklyOverviewData.currentPacingDay || 1);
-                // Color: are they on/off pace for today, relative to the prorated goal-to-date.
-                const pacingPct = target > 0 ? (member.wTouches / expected) * 100 : 0;
-                // Width: absolute progress toward the FULL weekly target, so the bar visually reflects
-                // how much of the week's goal is actually done (independent of pacing color).
-                const fillPct = target > 0 ? Math.min((member.wTouches / target) * 100, 100) : 0;
                 
                 // STEALTH MODE LOGIC (Bypassed for Owners and Managers)
 const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.id && profile?.role !== 'owner' && profile?.role !== 'manager';
@@ -224,7 +241,7 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
                     <td className="px-6 py-4 text-xl font-black text-blue-600">{member.wTouches}</td>
                     <td className="px-6 py-4 text-center">{renderWoW(member.wTouches, member.prevTouches)}</td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-3"><span className="font-semibold text-gray-500 dark:text-slate-400" title={`On-pace goal for today: ${Math.round(expected)}`}>{member.wTouches} / {target}</span><div className="w-16 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${getPacingColor(pacingPct)}`} style={{ width: `${fillPct}%` }} /></div></div>
+                      <div className="flex items-center justify-end gap-3"><span className="font-semibold text-gray-500 dark:text-slate-400" title={`On-pace goal for today: ${Math.round(expected)}`}>{member.wTouches} / {target}</span><PacingBar current={member.wTouches} target={target} /></div>
                     </td>
                   </tr>
                 );
@@ -255,8 +272,6 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
               {weeklyOverviewData?.quotesRank?.map((member: any, idx: number) => {
                 const target = member.weekly_target_quotes || 0;
                 const expected = (target / (weeklyOverviewData.prodDays || 5)) * (weeklyOverviewData.currentPacingDay || 1);
-                const pacingPct = target > 0 ? (member.wQuotes / expected) * 100 : 0;
-                const fillPct = target > 0 ? Math.min((member.wQuotes / target) * 100, 100) : 0;
 
                 // STEALTH MODE LOGIC (Bypassed for Owners and Managers)
 const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.id && profile?.role !== 'owner' && profile?.role !== 'manager';
@@ -279,7 +294,7 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
                     <td className="px-6 py-4 text-center font-medium text-gray-600 dark:text-slate-300">{member.quotesByLine?.Life || 0}</td>
                     <td className="px-6 py-4 text-center font-medium text-gray-600 dark:text-slate-300">{member.quotesByLine?.Health || 0}</td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-3"><span className="font-semibold text-gray-500 dark:text-slate-400" title={`On-pace goal for today: ${Math.round(expected)}`}>{member.wQuotes} / {target}</span><div className="w-16 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${getPacingColor(pacingPct)}`} style={{ width: `${fillPct}%` }} /></div></div>
+                      <div className="flex items-center justify-end gap-3"><span className="font-semibold text-gray-500 dark:text-slate-400" title={`On-pace goal for today: ${Math.round(expected)}`}>{member.wQuotes} / {target}</span><PacingBar current={member.wQuotes} target={target} /></div>
                     </td>
                   </tr>
                 );
@@ -324,8 +339,6 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
               {primaryRank?.map((member: any, idx: number) => {
                 const target = member.weekly_target_bound || 0;
                 const expected = (target / (weeklyOverviewData.prodDays || 5)) * (weeklyOverviewData.currentPacingDay || 1);
-                const pacingPct = target > 0 ? (member.wBoundApps / expected) * 100 : 0;
-                const fillPct = target > 0 ? Math.min((member.wBoundApps / target) * 100, 100) : 0;
                 
                 const totalPremium = (member.pAndCPremium || 0) + (member.lAndHPremium || 0);
 
@@ -359,7 +372,7 @@ const isStealth = agencySettings?.stealth_mode_active && profile?.id !== member.
                     </td>
                     
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-3"><span className="font-semibold text-gray-500 dark:text-slate-400" title={`On-pace goal for today: ${Math.round(expected * 10) / 10}`}>{member.wBoundApps} / {target}</span><div className="w-16 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${getPacingColor(pacingPct)}`} style={{ width: `${fillPct}%` }} /></div></div>
+                      <div className="flex items-center justify-end gap-3"><span className="font-semibold text-gray-500 dark:text-slate-400" title={`On-pace goal for today: ${Math.round(expected * 10) / 10}`}>{member.wBoundApps} / {target}</span><PacingBar current={member.wBoundApps} target={target} /></div>
                     </td>
                   </tr>
                 );
