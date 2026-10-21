@@ -2292,6 +2292,18 @@ export default function Home() {
   // navigating away and back to Coaching afterwards doesn't keep re-triggering a fresh session.
   const [pendingSparringSeed, setPendingSparringSeed] = useState<{ productLine: string; premiumAmount: number; notes: string | null } | null>(null);
 
+  // Coaching Insights' "Adjust Goals" modal (components/coaching/AdjustGoalsModal.tsx) saves through
+  // here. Writes the producer's goal columns, then re-reads `team` via fetchTeam - which also refreshes
+  // teamBaselineRef, so a later Settings save doesn't see this change as a stale diff - so every
+  // consumer of `team` (Scoreboard, Weekly Rank, Settings) reflects it immediately, no reload.
+  const saveProducerGoals = async (producerId: string, fields: Record<string, any>) => {
+    const { error } = await (supabase.from('profiles') as any).update(fields).eq('id', producerId);
+    if (error) throw new Error(error.message);
+    if (profile?.agency_id) await fetchTeam(profile.agency_id);
+    // The signed-in user's own row lives in `profile` as well as `team` - keep them in step.
+    setProfile((prev: any) => (prev && prev.id === producerId ? { ...prev, ...fields } : prev));
+  };
+
   const sendNotSoldDealToSparring = (pol: Policy) => {
     setPendingSparringSeed({ productLine: pol.product_line, premiumAmount: pol.premium_amount, notes: pol.notes ?? null });
     setActiveTab('coaching');
@@ -3821,7 +3833,7 @@ export default function Home() {
 
         {activeTab === 'reports' && canViewReports && !isBookkeeper && <ReportsTab team={team} profile={profile} agencySettings={agencySettings} />}
 
-        {activeTab === 'coaching' && !isBookkeeper && <CoachingTab profile={profile} team={team} offices={offices} agencySettings={agencySettings} pipeline={pipeline} showToast={showToast} pendingSparringSeed={pendingSparringSeed} onSparringSeedConsumed={() => setPendingSparringSeed(null)} />}
+        {activeTab === 'coaching' && !isBookkeeper && <CoachingTab profile={profile} team={team} offices={offices} agencySettings={agencySettings} pipeline={pipeline} showToast={showToast} pendingSparringSeed={pendingSparringSeed} onSparringSeedConsumed={() => setPendingSparringSeed(null)} canEditGoals={canManageSettings} onSaveProducerGoals={saveProducerGoals} conversionMetricsData={conversionMetricsData} />}
         
         {activeTab === 'weekly' && canViewWeeklyRank && !isBookkeeper && weeklyOverviewData && <WeeklyRankTab 
           weeklyOverviewData={weeklyOverviewData} 

@@ -21,7 +21,9 @@ import { supabase } from "../utils/supabase";
 import { isManagerLevelRole } from "../utils/roles";
 import { computeCoachingSnapshot } from "../utils/coachingMetrics";
 import { computeTrendAlerts } from "../utils/coachingAlerts";
-import DealAutopsyPanel from "./coaching/DealAutopsyPanel";
+import MissedOpportunitiesPanel from "./coaching/MissedOpportunitiesPanel";
+import CoachingInsightsPanel from "./coaching/CoachingInsightsPanel";
+import AdjustGoalsModal from "./coaching/AdjustGoalsModal";
 import SparringRing from "./coaching/SparringRing";
 import SparringHistoryPanel from "./coaching/SparringHistoryPanel";
 import ObjectionSandboxPanel from "./coaching/ObjectionSandboxPanel";
@@ -45,9 +47,9 @@ import ObjectionSandboxPanel from "./coaching/ObjectionSandboxPanel";
 //      why office/agency-blended AEC & lapse rate were deliberately dropped)
 //      + Trend Alerts (Feature 4) + the notes/commitments form that writes
 //      coaching_sessions.
-//   2. Deal Autopsies   — everyone. Producers fill in objections on deals
+//   2. Missed Opportunities (formerly "Deal Autopsies") — everyone. Producers fill in objections on deals
 //      they tagged "Send to Coaching" from the Active Pipeline; managers get
-//      a read-only feed of the whole team's. See coaching/DealAutopsyPanel.tsx.
+//      a read-only feed of the whole team's. See coaching/MissedOpportunitiesPanel.tsx.
 //   3. Sparring Ring     — everyone, self-serve AI objection practice. See
 //      coaching/SparringRing.tsx.
 //   4. Sparring History — everyone (producers see only their own graded
@@ -60,7 +62,7 @@ import ObjectionSandboxPanel from "./coaching/ObjectionSandboxPanel";
 //      here is persisted. See coaching/ObjectionSandboxPanel.tsx.
 // =============================================================================
 
-type InnerTab = "snapshot" | "autopsies" | "sparring" | "sparringHistory" | "sandbox";
+type InnerTab = "snapshot" | "missedOpportunities" | "sparring" | "sparringHistory" | "sandbox";
 
 interface CoachingSession {
   id: string;
@@ -71,7 +73,7 @@ interface CoachingSession {
   created_at: string;
 }
 
-export default function CoachingTab({ profile, team, agencySettings, pipeline, showToast, pendingSparringSeed, onSparringSeedConsumed }: any) {
+export default function CoachingTab({ profile, team, agencySettings, pipeline, showToast, pendingSparringSeed, onSparringSeedConsumed, canEditGoals, onSaveProducerGoals, conversionMetricsData }: any) {
   // Same custom_roles-aware permission pattern as every other manager-gated
   // tab (canViewReports, canViewAgencyDash, etc. in app/dashboard/page.tsx) —
   // `manage_coaching` (see components/SettingsTab.tsx's AVAILABLE_PERMISSIONS/
@@ -81,7 +83,7 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
   // being stuck with the hardcoded fallback.
   const roleConfig = agencySettings?.custom_roles?.find((r: any) => r.id === profile?.role);
   const isManagerLevel = roleConfig?.permissions?.manage_coaching ?? isManagerLevelRole(profile?.role);
-  const [innerTab, setInnerTab] = useState<InnerTab>(isManagerLevel ? "snapshot" : "autopsies");
+  const [innerTab, setInnerTab] = useState<InnerTab>(isManagerLevel ? "snapshot" : "missedOpportunities");
 
   // A `not_sold` deal sent over from the Scoreboard (see DashboardTab.tsx's "Send to Coaching"
   // button + app/dashboard/page.tsx's sendNotSoldDealToSparring) jumps straight to the Sparring
@@ -93,6 +95,9 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
   const producers = useMemo(() => {
     return [...(team || [])].sort((a: any, b: any) => (a.first_name || "").localeCompare(b.first_name || ""));
   }, [team]);
+
+  // Producer whose goals are open in the in-place Adjust Goals modal (Coaching Insights cards).
+  const [adjustGoalsForId, setAdjustGoalsForId] = useState<string | null>(null);
 
   const [selectedProducerId, setSelectedProducerId] = useState<string>("");
   useEffect(() => {
@@ -240,7 +245,7 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
 
   const innerTabs: { id: InnerTab; label: string; icon: any; show: boolean }[] = [
     { id: "snapshot", label: "1-on-1 Snapshot", icon: LineChart, show: isManagerLevel },
-    { id: "autopsies", label: "Deal Autopsies", icon: Stethoscope, show: true },
+    { id: "missedOpportunities", label: "Missed Opportunities", icon: Stethoscope, show: true },
     { id: "sparring", label: "Sparring Ring", icon: Swords, show: true },
     { id: "sparringHistory", label: "Sparring History", icon: History, show: true },
     { id: "sandbox", label: "Objection Sandbox", icon: FlaskConical, show: true },
@@ -253,7 +258,7 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
           <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
             <GraduationCap className="text-indigo-600" size={32} /> Coaching
           </h2>
-          <p className="text-gray-500 mt-1">1-on-1s, deal autopsies, and AI-powered objection practice.</p>
+          <p className="text-gray-500 mt-1">1-on-1s, missed opportunities, and AI-powered objection practice.</p>
         </div>
         <div className="flex bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
           {innerTabs.filter((t) => t.show).map((t) => {
@@ -272,6 +277,22 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
           })}
         </div>
       </header>
+
+      {/* Coaching Insights: auto-flags producers whose trailing-30-day conversion is slipping.
+          Manager-level only, and pinned above every inner tab so it's the first thing seen. */}
+      {isManagerLevel && (
+        <CoachingInsightsPanel profile={profile} team={team} onAdjustGoals={canEditGoals && onSaveProducerGoals ? setAdjustGoalsForId : undefined} showToast={showToast} />
+      )}
+      {adjustGoalsForId && onSaveProducerGoals && (
+        <AdjustGoalsModal
+          producerId={adjustGoalsForId}
+          agencySettings={agencySettings}
+          conversionMetricsData={conversionMetricsData}
+          onSave={onSaveProducerGoals}
+          onClose={() => setAdjustGoalsForId(null)}
+          showToast={showToast}
+        />
+      )}
 
       {innerTab === "snapshot" && isManagerLevel && (
         <div className="space-y-6">
@@ -456,8 +477,8 @@ export default function CoachingTab({ profile, team, agencySettings, pipeline, s
         </div>
       )}
 
-      {innerTab === "autopsies" && (
-        <DealAutopsyPanel profile={profile} team={team} isManagerLevel={isManagerLevel} showToast={showToast} />
+      {innerTab === "missedOpportunities" && (
+        <MissedOpportunitiesPanel profile={profile} team={team} isManagerLevel={isManagerLevel} showToast={showToast} />
       )}
 
       {innerTab === "sparring" && (

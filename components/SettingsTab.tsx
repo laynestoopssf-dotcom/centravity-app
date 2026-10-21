@@ -11,7 +11,8 @@ import InfoTooltip from './ui/InfoTooltip';
 import FormattedNumberInput from './ui/FormattedNumberInput';
 import ProfileAvatar from './ui/ProfileAvatar';
 import HistoricalYtdEditor from './dashboard/HistoricalYtdEditor';
-import { calculateReverseGoals, resolveCallToQuoteRatio, resolveQuoteToAppRatio, sanitizeProductionDays, type RatioSource, type ReverseGoals, type ResolvedRatio } from '../utils/goalMath';
+import { sanitizeProductionDays, deriveProducerGoals, goalFieldsFromReverseGoals, DAILY_WEEKLY_GOAL_FIELDS, type DerivedProducerGoals } from '../utils/goalMath';
+import { GoalModeHeader, ProducerGoalColumns } from './goals/ProducerGoalControls';
 
 // Mirrors Stripe's own Subscription.status enum (see
 // app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
@@ -62,7 +63,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'edit_historical', label: 'Manage Historical Data', desc: 'Can view/correct onboarding-seeded YTD data and bulk import past activities and policies.' },
   { id: 'delete_records', label: 'Delete Ledger Records', desc: 'Can permanently delete logged policies and activities.' },
   { id: 'manage_settings', label: 'Manage Agency Settings', desc: 'Can create comp plans, locations, and edit agency targets.' },
-  // Everyone gets Deal Autopsies + the Sparring Ring in the Coaching tab (self-serve, no
+  // Everyone gets Missed Opportunities (formerly Deal Autopsies) + the Sparring Ring in the Coaching tab (self-serve, no
   // permission gate needed) - this specifically controls the manager-only half: running
   // 1-on-1s against ANY producer in the agency (picker, live snapshot, logging notes/
   // commitments to coaching_sessions). Defaults to Owner/Admin/Manager, same as every other
@@ -422,25 +423,17 @@ export default function SettingsTab({
   // path (handleSaveTeamTargets diffs `team` against its DB baseline) persists exactly what's shown.
   const productionDays = sanitizeProductionDays(agencySettings?.production_days_per_week);
   const derivedGoalsById = useMemo(() => {
-    const out: Record<string, { goals: ReverseGoals; quoteToApp: ResolvedRatio; callToQuote: ResolvedRatio }> = {};
+    const out: Record<string, DerivedProducerGoals> = {};
     (team || []).forEach((m: any) => {
       if (m.role === 'service') return;
-      const stats = conversionMetricsData?.memberRates?.[m.id];
       const draftOverride = individualCloseRatesDraft[m.id];
-      const quoteToApp = resolveQuoteToAppRatio({
-        manualOverridePct: draftOverride !== undefined ? draftOverride : m.close_rate,
-        ytdQuotes: stats?.ytdQuotes,
-        ytdBound: stats?.ytdBound,
-        agencyCloseRatePct: globalCloseRateDraft,
-      });
-      const callToQuote = resolveCallToQuoteRatio({ ytdTouches: stats?.ytdTouches, ytdQuotes: stats?.ytdQuotes });
-      const goals = calculateReverseGoals({
+      out[m.id] = deriveProducerGoals({
         monthlyAppTarget: Number(m.monthly_target_bound) || 0,
-        quoteToApp: quoteToApp.ratio,
-        callToQuote: callToQuote.ratio,
+        manualCloseRatePct: draftOverride !== undefined ? draftOverride : m.close_rate,
+        stats: conversionMetricsData?.memberRates?.[m.id],
+        agencyCloseRatePct: globalCloseRateDraft,
         productionDays,
       });
-      out[m.id] = { goals, quoteToApp, callToQuote };
     });
     return out;
   }, [team, conversionMetricsData, individualCloseRatesDraft, globalCloseRateDraft, productionDays]);
@@ -454,25 +447,15 @@ export default function SettingsTab({
         if (m.is_manual_goals) return m;
         // No Monthly App Target yet -> nothing to derive from; leave whatever is stored untouched.
         if (!d || !(Number(m.monthly_target_bound) > 0)) return m;
-        const g = d.goals;
-        if (
-          m.daily_target_touchpoints === g.dailyCalls && m.daily_target_quotes === g.dailyQuotes && m.daily_target_bound === g.dailyApps &&
-          m.weekly_target_touchpoints === g.weeklyCalls && m.weekly_target_quotes === g.weeklyQuotes && m.weekly_target_bound === g.weeklyApps
-        ) return m;
+        const fields = goalFieldsFromReverseGoals(d.goals);
+        if (DAILY_WEEKLY_GOAL_FIELDS.every((f) => m[f] === fields[f])) return m;
         changed = true;
-        return {
-          ...m,
-          daily_target_touchpoints: g.dailyCalls, daily_target_quotes: g.dailyQuotes, daily_target_bound: g.dailyApps,
-          weekly_target_touchpoints: g.weeklyCalls, weekly_target_quotes: g.weeklyQuotes, weekly_target_bound: g.weeklyApps,
-        };
+        return { ...m, ...fields };
       });
       return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [derivedGoalsById]);
-
-  const ratioSourceLabel = (src: RatioSource) =>
-    src === 'override' ? 'manual override' : src === 'live' ? 'live YTD' : src === 'agency' ? 'agency target' : 'baseline';
 
   // SERVICE-ROLE members only (everyone else uses the reverse goal math above).
   // Daily-goal inputs (Team Management edit panel) auto-populate their Weekly (x5) and, for
@@ -1945,34 +1928,7 @@ export default function SettingsTab({
               </div>
 
               {member.role !== 'service' && (
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-900 dark:text-slate-100">Goal Setting</h4>
-                    <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 max-w-md">
-                      {member.is_manual_goals
-                        ? 'Manual Override: Daily and Weekly targets are hard-coded by you. The reverse math is bypassed for this producer.'
-                        : 'Smart Math: Daily and Weekly targets are derived from the Monthly App Target and this producer\'s conversion history.'}
-                    </p>
-                  </div>
-                  <div role="group" aria-label="Goal mode" className="inline-flex p-1 rounded-full bg-gray-100 dark:bg-slate-950 border border-gray-200 dark:border-slate-700">
-                    <button
-                      type="button"
-                      aria-pressed={!member.is_manual_goals}
-                      onClick={() => updateTeamMember(member.id, 'is_manual_goals', false)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${!member.is_manual_goals ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'}`}
-                    >
-                      Smart Math
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={!!member.is_manual_goals}
-                      onClick={() => updateTeamMember(member.id, 'is_manual_goals', true)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${member.is_manual_goals ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'}`}
-                    >
-                      Manual Override
-                    </button>
-                  </div>
-                </div>
+                <GoalModeHeader isManual={!!member.is_manual_goals} onChange={(manual) => updateTeamMember(member.id, 'is_manual_goals', manual)} />
               )}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                 {member.role === 'service' ? (
@@ -2001,64 +1957,18 @@ export default function SettingsTab({
 
                 </>
                 ) : (
-                (() => {
-                  const derived = derivedGoalsById[member.id];
-                  const hasMonthly = Number(member.monthly_target_bound) > 0;
-                  // With a Monthly App Target set, show the derived figures directly (so the panel is
-                  // right on the very render the target changes); otherwise show what's stored.
-                  // Manual Override: g is null on purpose - the reverse math is bypassed and every field
-                  // shows (and edits) exactly what's stored for this producer.
-                  const isManual = !!member.is_manual_goals;
-                  const g = !isManual && hasMonthly && derived ? derived.goals : null;
-                  const roCls = 'w-full p-2.5 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-black text-gray-700 dark:text-slate-200 cursor-not-allowed';
-                  const editCls = 'w-full p-2.5 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-500/60 rounded-lg text-sm font-bold text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-400 outline-none';
-                  const goalInput = (label: string, derivedVal: number | undefined, field: string) => (
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:text-slate-200">{label}</label>
-                      <input
-                        type="number"
-                        min={0}
-                        readOnly={!isManual}
-                        tabIndex={isManual ? 0 : -1}
-                        value={g && derivedVal !== undefined ? derivedVal : (member[field] ?? 0)}
-                        onChange={e => updateTeamMember(member.id, field, Number(e.target.value))}
-                        className={isManual ? editCls : roCls}
-                      />
-                    </div>
-                  );
-                  return (
+                <ProducerGoalColumns
+                  member={member}
+                  derived={derivedGoalsById[member.id]}
+                  productionDays={productionDays}
+                  onChange={(field, value) => updateTeamMember(member.id, field, value)}
+                  monthlyExtras={
                     <>
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Daily Goals <span className="normal-case text-gray-400">({isManual ? 'manual' : 'auto'})</span></h4>
-                  {goalInput('Calls (Touches)', g?.dailyCalls, 'daily_target_touchpoints')}
-                  {goalInput('Quotes', g?.dailyQuotes, 'daily_target_quotes')}
-                  {goalInput('Apps', g?.dailyApps, 'daily_target_bound')}
-                  <p className="text-[10px] text-gray-400 dark:text-slate-400 leading-snug pt-1">
-                    {isManual
-                      ? 'Hard-coded. Switch back to Smart Math to re-derive these from the Monthly App Target.'
-                      : hasMonthly && derived
-                      ? <>Weekly goal ÷ {productionDays} production day{productionDays === 1 ? '' : 's'}/week. Quote→App {(derived.quoteToApp.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.quoteToApp.source)}) · Call→Quote {(derived.callToQuote.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.callToQuote.source)}).</>
-                      : 'Enter a Monthly App Target to auto-fill every goal, or switch to Manual Override.'}
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Weekly Goals <span className="normal-case text-gray-400">({isManual ? 'manual' : 'auto'})</span></h4>
-                  {goalInput('Calls (Touches)', g?.weeklyCalls, 'weekly_target_touchpoints')}
-                  {goalInput('Quotes', g?.weeklyQuotes, 'weekly_target_quotes')}
-                  {goalInput('Apps', g?.weeklyApps, 'weekly_target_bound')}
-                  <p className="text-[10px] text-gray-400 dark:text-slate-400 leading-snug pt-1">{isManual ? 'Hard-coded - not tied to the Monthly App Target.' : 'Apps = Monthly ÷ 4 · Quotes = Apps ÷ Quote→App · Calls = Quotes ÷ Call→Quote.'}</p>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2">Monthly Goals &amp; Pay</h4>
-                  <div><label className="flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase mb-1">Monthly App Target<InfoTooltip text="The one number you set. Weekly and Daily Calls, Quotes and Apps are all worked out backward from it using this producer's own conversion history and your global Production Days per Week." /></label><input type="number" min={0} value={member.monthly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-blue-50 dark:bg-slate-900 border-2 border-blue-300 dark:border-blue-500/60 rounded-lg text-sm font-black text-blue-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1">Total Prem ($)</label><FormattedNumberInput value={member.monthly_target_premium ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><FormattedNumberInput value={member.monthly_base_salary ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_base_salary', v === '' ? 0 : v)} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
-                </div>
+                      <div><label className="block text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1">Total Prem ($)</label><FormattedNumberInput value={member.monthly_target_premium ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                      <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><FormattedNumberInput value={member.monthly_base_salary ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_base_salary', v === '' ? 0 : v)} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
                     </>
-                  );
-                })()
+                  }
+                />
                 )}
 
                 <div className="space-y-4">

@@ -131,3 +131,85 @@ export function calculateReverseGoals(input: {
     dailyCalls: up(weeklyCalls / days),
   };
 }
+
+// -----------------------------------------------------------------------------
+// Shared producer-goal helpers. Used by BOTH Settings -> Team Management (components/SettingsTab.tsx)
+// and the Coaching tab's Adjust Goals modal (components/coaching/AdjustGoalsModal.tsx) so the two
+// surfaces can never drift apart: one derivation, one set of persisted columns.
+// -----------------------------------------------------------------------------
+
+export interface ProducerConversionStats {
+  ytdQuotes?: number | null;
+  ytdBound?: number | null;
+  ytdTouches?: number | null;
+}
+
+export interface DerivedProducerGoals {
+  goals: ReverseGoals;
+  quoteToApp: ResolvedRatio;
+  callToQuote: ResolvedRatio;
+}
+
+/** Monthly App Target + the producer's conversion history -> every derived goal, plus the ratios
+ * (and where each came from) that produced them. */
+export function deriveProducerGoals(input: {
+  monthlyAppTarget: number;
+  /** profiles.close_rate (percent) or an unsaved draft of it. */
+  manualCloseRatePct?: number | string | null;
+  stats?: ProducerConversionStats | null;
+  /** agencies.global_close_rate (percent). */
+  agencyCloseRatePct?: number | string | null;
+  productionDays: number;
+}): DerivedProducerGoals {
+  const quoteToApp = resolveQuoteToAppRatio({
+    manualOverridePct: input.manualCloseRatePct,
+    ytdQuotes: input.stats?.ytdQuotes,
+    ytdBound: input.stats?.ytdBound,
+    agencyCloseRatePct: input.agencyCloseRatePct,
+  });
+  const callToQuote = resolveCallToQuoteRatio({ ytdTouches: input.stats?.ytdTouches, ytdQuotes: input.stats?.ytdQuotes });
+  const goals = calculateReverseGoals({
+    monthlyAppTarget: input.monthlyAppTarget,
+    quoteToApp: quoteToApp.ratio,
+    callToQuote: callToQuote.ratio,
+    productionDays: input.productionDays,
+  });
+  return { goals, quoteToApp, callToQuote };
+}
+
+/** The six profile columns the Daily/Weekly goals persist to. */
+export const DAILY_WEEKLY_GOAL_FIELDS = [
+  "daily_target_touchpoints", "daily_target_quotes", "daily_target_bound",
+  "weekly_target_touchpoints", "weekly_target_quotes", "weekly_target_bound",
+] as const;
+
+export type DailyWeeklyGoalFields = Record<(typeof DAILY_WEEKLY_GOAL_FIELDS)[number], number>;
+
+export function goalFieldsFromReverseGoals(g: ReverseGoals): DailyWeeklyGoalFields {
+  return {
+    daily_target_touchpoints: g.dailyCalls,
+    daily_target_quotes: g.dailyQuotes,
+    daily_target_bound: g.dailyApps,
+    weekly_target_touchpoints: g.weeklyCalls,
+    weekly_target_quotes: g.weeklyQuotes,
+    weekly_target_bound: g.weeklyApps,
+  };
+}
+
+/**
+ * What to PERSIST for a producer's Daily/Weekly goals:
+ *   Manual Override            -> the hand-typed stored values, untouched (reverse math bypassed)
+ *   Smart Math + Monthly > 0   -> the derived values
+ *   Smart Math + no Monthly    -> whatever is stored (nothing to derive from)
+ */
+export function resolveGoalFieldsToSave(
+  member: Record<string, any>,
+  derived: DerivedProducerGoals | undefined | null
+): DailyWeeklyGoalFields {
+  if (!member.is_manual_goals && derived && Number(member.monthly_target_bound) > 0) {
+    return goalFieldsFromReverseGoals(derived.goals);
+  }
+  const stored = {} as DailyWeeklyGoalFields;
+  DAILY_WEEKLY_GOAL_FIELDS.forEach((f) => { stored[f] = Math.round(Number(member[f]) || 0); });
+  return stored;
+}

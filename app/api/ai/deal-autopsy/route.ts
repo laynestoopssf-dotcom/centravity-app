@@ -3,7 +3,7 @@ import { supabaseAdmin } from "../../../actions/supabaseAdmin";
 import { getGemini, GEMINI_MODEL } from "../geminiClient";
 
 // =============================================================================
-// POST /api/ai/deal-autopsy — Coaching Suite Feature 2 ("Deal Autopsies").
+// POST /api/ai/deal-autopsy — Coaching Suite Feature 2 ("Deal Autopsies", now surfaced to users as "Missed Opportunities").
 // -----------------------------------------------------------------------------
 // A producer types the objection they hit on a Quoted deal they've already
 // tagged "Send to Coaching" (components/DashboardTab.tsx inserts the

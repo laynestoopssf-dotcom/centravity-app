@@ -6,7 +6,9 @@ import { supabase } from "../../utils/supabase";
 import IdentifierChip from "../ui/IdentifierChip";
 
 // =============================================================================
-// Feature 2: Deal Autopsies.
+// Feature 2: Missed Opportunities (formerly "Deal Autopsies"). Only the user-facing language and
+// this component's name changed - the DB table (deal_autopsies) and API route (/api/ai/deal-autopsy)
+// keep their original names so no migration or endpoint rename is needed.
 // -----------------------------------------------------------------------------
 // Lists rows from the new `deal_autopsies` table (see supabase/migrations/
 // 20260827010000_add_coaching_module.sql) - one row per "Send to Coaching" tag
@@ -17,7 +19,7 @@ import IdentifierChip from "../ui/IdentifierChip";
 // see exactly where production is stalling and what advice was already given.
 // =============================================================================
 
-interface DealAutopsyRow {
+interface MissedOpportunityRow {
   id: string;
   producer_id: string;
   policy_id: string;
@@ -28,8 +30,8 @@ interface DealAutopsyRow {
   policies?: { client_identifier_hash?: string | null; client_identifier_ciphertext?: string | null; client_identifier_iv?: string | null; product_line?: string; premium_amount?: number } | null;
 }
 
-export default function DealAutopsyPanel({ profile, team, isManagerLevel, showToast }: any) {
-  const [rows, setRows] = useState<DealAutopsyRow[]>([]);
+export default function MissedOpportunitiesPanel({ profile, team, isManagerLevel, showToast }: any) {
+  const [rows, setRows] = useState<MissedOpportunityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tableMissing, setTableMissing] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -58,7 +60,7 @@ export default function DealAutopsyPanel({ profile, team, isManagerLevel, showTo
       if ((error as any).code === "42P01") {
         setTableMissing(true);
       } else {
-        console.error("[DealAutopsyPanel] fetch failed", error);
+        console.error("[MissedOpportunitiesPanel] fetch failed", error);
       }
       setRows([]);
       setLoading(false);
@@ -100,7 +102,7 @@ export default function DealAutopsyPanel({ profile, team, isManagerLevel, showTo
       setDrafts((prev) => ({ ...prev, [autopsyId]: "" }));
       showToast?.("Talk-path generated.", "success");
     } catch (err) {
-      console.error("[DealAutopsyPanel] submit failed", err);
+      console.error("[MissedOpportunitiesPanel] submit failed", err);
       showToast?.("Something went wrong. Please try again.", "error");
     } finally {
       setSubmittingId(null);
@@ -110,7 +112,7 @@ export default function DealAutopsyPanel({ profile, team, isManagerLevel, showTo
   if (tableMissing) {
     return (
       <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-6 text-sm font-semibold">
-        Deal Autopsies aren&apos;t set up yet — the <code>deal_autopsies</code> database migration hasn&apos;t been applied. Ask your admin to run it.
+        Missed Opportunities aren&apos;t set up yet — the <code>deal_autopsies</code> database migration hasn&apos;t been applied. Ask your admin to run it.
       </div>
     );
   }
@@ -122,7 +124,7 @@ export default function DealAutopsyPanel({ profile, team, isManagerLevel, showTo
           <Stethoscope size={20} />
         </div>
         <div>
-          <h3 className="font-bold text-gray-900">Deal Autopsies</h3>
+          <h3 className="font-bold text-gray-900">Missed Opportunities</h3>
           <p className="text-xs text-gray-500">
             {isManagerLevel ? "Deals your team has tagged \u201cSend to Coaching\u201d from the Active Pipeline." : "Deals you\u2019ve tagged \u201cSend to Coaching\u201d — describe the objection and get an exact talk-path back."}
           </p>

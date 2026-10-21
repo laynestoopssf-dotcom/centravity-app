@@ -58,7 +58,7 @@ export default function DashboardTab({
   const [activeSearch, setActiveSearch] = useState("");
   const [timeframe, setTimeframe] = useState<'daily'|'weekly'|'monthly'>('daily');
 
-  // "Send to Coaching" (Coaching Suite Feature 2 - Deal Autopsies, components/CoachingTab.tsx).
+  // "Send to Coaching" (Coaching Suite Feature 2 - Missed Opportunities (formerly Deal Autopsies), components/CoachingTab.tsx).
   // Tracks which policy_ids already have a deal_autopsies row so the button can flip to a
   // disabled "Sent" state, both right after clicking it and on reload. Table-not-exists (the
   // migration hasn't been applied yet) degrades to "button always available, insert just fails
