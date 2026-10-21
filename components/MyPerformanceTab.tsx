@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Target, Calendar, Award, Mountain, Activity, TrendingUp, Compass, PhoneCall } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { isManagerLevelRole } from '../utils/roles';
+import { formatConversionPct } from '../utils/ratioMath';
 
 export default function MyPerformanceTab({ 
   profile, stats, chartData, agencySettings, team, selectedProducer, setSelectedProducer,
@@ -20,7 +21,9 @@ export default function MyPerformanceTab({
     return Math.min(100, Math.round((current / target) * 100));
   };
 
-  const safePercent = (num: number, den: number) => den > 0 ? ((num / den) * 100).toFixed(1) : "0.0";
+  // Every conversion ratio on this page: 0.0% on a zero denominator, never above 100.0% (a quote logged
+  // without its Contact must not render as "16600%") - see utils/ratioMath.ts.
+  const safePercent = formatConversionPct;
 
   const isAgencyView = selectedProducer === 'all' && isManagerLevelRole(profile.role);
 
@@ -230,40 +233,42 @@ export default function MyPerformanceTab({
       </div>
 
       {/* --- MIDDLE ROW: CONVERSION RATES --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-6">
         
-        {/* Touch-to-Quote Conversion */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
-          <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
-              <PhoneCall className="text-blue-500" size={20}/> Touch-to-Quote Conversion
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">This Week</p>
-                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.weekQuotes, stats.weekTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.weekQuotes} Quotes / {stats.weekTouches} Touches</p>
-             </div>
-             
-             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">This Month</p>
-                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.monthQuotes, stats.monthTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.monthQuotes} Quotes / {stats.monthTouches} Touches</p>
-             </div>
-
-             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl">
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Quarter to Date</p>
-                <p className="text-2xl font-black text-gray-900 dark:text-slate-100 mb-2">{safePercent(stats.qtdQuotes, stats.qtdTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.qtdQuotes} Quotes / {stats.qtdTouches} Touches</p>
-             </div>
-
-             <div className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl relative overflow-hidden">
-                <div className="absolute right-0 top-0 h-full w-1.5 bg-blue-500"></div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Year to Date</p>
-                <p className="text-2xl font-black text-blue-700 mb-2">{safePercent(stats.ytdQuotes, stats.ytdTouches)}%</p>
-                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{stats.ytdQuotes} Quotes / {stats.ytdTouches} Touches</p>
-             </div>
+        {/* Conversion cards: Touch-to-Contact, Contact-to-Quote, Touch-to-Quote, then Quote-to-Bind below. All
+            ratios are zero-guarded and capped at 100% (utils/ratioMath.ts). */}
+        {([
+          { key: 'touchToContact', title: 'Touch-to-Contact Conversion', icon: <PhoneCall className="text-blue-500" size={20}/>, bar: 'bg-blue-500', ytdText: 'text-blue-700',
+            num: { week: stats.weekContacts, month: stats.monthContacts, qtd: stats.qtdContacts, ytd: stats.ytdContacts }, numLabel: 'Contacts',
+            den: { week: stats.weekTouches, month: stats.monthTouches, qtd: stats.qtdTouches, ytd: stats.ytdTouches }, denLabel: 'Touches' },
+          { key: 'contactToQuote', title: 'Contact-to-Quote Conversion', icon: <Activity className="text-emerald-500" size={20}/>, bar: 'bg-emerald-500', ytdText: 'text-emerald-700',
+            num: { week: stats.weekQuotes, month: stats.monthQuotes, qtd: stats.qtdQuotes, ytd: stats.ytdQuotes }, numLabel: 'Quotes',
+            den: { week: stats.weekContacts, month: stats.monthContacts, qtd: stats.qtdContacts, ytd: stats.ytdContacts }, denLabel: 'Contacts' },
+          { key: 'touchToQuote', title: 'Touch-to-Quote Conversion', icon: <TrendingUp className="text-sky-500" size={20}/>, bar: 'bg-sky-500', ytdText: 'text-sky-700',
+            num: { week: stats.weekQuotes, month: stats.monthQuotes, qtd: stats.qtdQuotes, ytd: stats.ytdQuotes }, numLabel: 'Quotes',
+            den: { week: stats.weekTouches, month: stats.monthTouches, qtd: stats.qtdTouches, ytd: stats.ytdTouches }, denLabel: 'Touches' },
+        ] as const).map((card) => (
+          <div key={card.key} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
+            <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-6 flex items-center gap-2">
+                {card.icon} {card.title}
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              {([['week', 'This Week'], ['month', 'This Month'], ['qtd', 'Quarter to Date'], ['ytd', 'Year to Date']] as const).map(([period, label]) => {
+                const n = card.num[period] || 0;
+                const d = card.den[period] || 0;
+                const isYtd = period === 'ytd';
+                return (
+                  <div key={period} className={`p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl ${isYtd ? 'relative overflow-hidden' : ''}`}>
+                    {isYtd && <div className={`absolute right-0 top-0 h-full w-1.5 ${card.bar}`}></div>}
+                    <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+                    <p className={`text-2xl font-black mb-2 ${isYtd ? card.ytdText : 'text-gray-900 dark:text-slate-100'}`}>{safePercent(n, d)}%</p>
+                    <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{n} {card.numLabel} / {d} {card.denLabel}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ))}
 
         {/* Quote-to-Bind Conversion */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">

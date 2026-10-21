@@ -16,6 +16,7 @@ import RetentionLoggingWidget from './RetentionLoggingWidget';
 import RetentionMetricsTile from './dashboard/RetentionMetricsTile';
 import OriginSelect from './ui/OriginSelect';
 import type { QuoteOrigin } from '../utils/quoteOrigin';
+import { formatConversionPct } from '../utils/ratioMath';
 
 /** Sort-key helper only now - actual on-screen rendering goes through <IdentifierChip> instead, which keeps the plaintext out of the DOM by default (see components/ui/IdentifierChip.tsx). */
 const displayIdentifier = (policyId: string, hash?: string | null) => getCachedIdentifier(policyId, hash) || '—';
@@ -23,7 +24,7 @@ const displayIdentifier = (policyId: string, hash?: string | null) => getCachedI
 const ROSTER_LINE_KEYS = ['Auto', 'Fire', 'Life', 'Health', 'Commercial'] as const;
 
 export default function DashboardTab({ 
-  profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, whatIfLoading, logTouchpoint, logInboundCall, openLogModal, openBackdateModal, openPivotModal, openReviewModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
+  profile, team, archivedTeam, stats, chartData, pipeline, commissionData, teamCommissions, dailyQuoteRate, dailyCloseRate, monthQuoteRate, monthCloseRate, whatIfCommission, setWhatIfCommission, reqTouches, reqQuotes, reqApps, whatIfLoading, logTouchpoint, logInboundCall, logContact, openLogModal, openBackdateModal, openPivotModal, openReviewModal, updatePolicyStatus, selectedProducer, setSelectedProducer, agencySettings, agencyStats,
   offices, selectedOffice, setSelectedOffice, customTargets, onSendToSparring
 }: any) {
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
@@ -641,9 +642,9 @@ export default function DashboardTab({
   const getCurrents = () => {
     // For service accounts, "Cross-Sells" is an activity-based scoreboard metric (moves the instant
     // the cross_sell activity is logged), not a bound/issued policy count like production's "Apps".
-    if (timeframe === 'daily') return { t: stats.todayTouches, q: stats.todayQuotes, a: stats.todayBound, p: stats.todayPotentialPremium, cr: stats.todayQuotes, cs: isService ? stats.todayCrossSell : stats.todayBound, inbound: stats.todayInbound, texts: stats.todayTexts || 0 };
-    if (timeframe === 'weekly') return { t: stats.weekTouches, q: stats.weekQuotes, a: stats.weekBound, p: stats.weekPotentialPremium, cr: stats.weekQuotes, cs: isService ? stats.weekCrossSell : stats.weekBound, inbound: stats.weekInbound, texts: stats.weekTexts || 0 };
-    return { t: stats.monthTouches, q: stats.monthQuotes, a: stats.monthTotalApps, p: stats.monthPotentialPremium, cr: stats.monthQuotes, cs: isService ? stats.monthCrossSell : stats.monthTotalApps, inbound: stats.monthInbound, texts: stats.monthTexts || 0 };
+    if (timeframe === 'daily') return { t: stats.todayTouches, q: stats.todayQuotes, a: stats.todayBound, p: stats.todayPotentialPremium, cr: stats.todayQuotes, cs: isService ? stats.todayCrossSell : stats.todayBound, inbound: stats.todayInbound, texts: stats.todayTexts || 0, contacts: stats.todayContacts || 0 };
+    if (timeframe === 'weekly') return { t: stats.weekTouches, q: stats.weekQuotes, a: stats.weekBound, p: stats.weekPotentialPremium, cr: stats.weekQuotes, cs: isService ? stats.weekCrossSell : stats.weekBound, inbound: stats.weekInbound, texts: stats.weekTexts || 0, contacts: stats.weekContacts || 0 };
+    return { t: stats.monthTouches, q: stats.monthQuotes, a: stats.monthTotalApps, p: stats.monthPotentialPremium, cr: stats.monthQuotes, cs: isService ? stats.monthCrossSell : stats.monthTotalApps, inbound: stats.monthInbound, texts: stats.monthTexts || 0, contacts: stats.monthContacts || 0 };
   };
   const currents = getCurrents();
   // Calls = Total Touches - Texts. Derived (not counted separately) so legacy touches with no
@@ -651,6 +652,11 @@ export default function DashboardTab({
   // number that targets / streaks / pacing are built on.
   const touchTexts = Math.min(currents.texts || 0, currents.t || 0);
   const touchCalls = Math.max(0, (currents.t || 0) - touchTexts);
+  // Funnel conversion (Touches -> Contacts -> Quotes -> Apps) for the Daily / MTD Conversion tiles.
+  // 0 when the denominator is 0 so a brand-new day/month reads "0.0%" instead of NaN/Infinity.
+  // Capped at 100% and 0% on a zero denominator (utils/ratioMath.ts) so a forgotten Contact log can't
+  // produce an absurd "16600%".
+  const funnelPct = formatConversionPct;
 
   // DYNAMIC STREAK AGGREGATION
   const getStreaks = () => {
@@ -888,6 +894,9 @@ export default function DashboardTab({
               <button onClick={() => { logTouchpoint('text'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors">
                 <span aria-hidden>💬</span> Text
               </button>
+              <button onClick={() => { logContact(); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors">
+                <span aria-hidden>🗣️</span> Contact
+              </button>
               <button onClick={() => { openLogModal(isService ? 'complex_res' : 'quote'); setShowLogMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-700 dark:hover:text-purple-400 transition-colors">
                 {isService ? <RefreshCw size={15}/> : <FileText size={15}/>} {isService ? 'Complex Res.' : 'Quote'}
               </button>
@@ -952,16 +961,23 @@ export default function DashboardTab({
               <div>
                  <div className="text-3xl font-black text-gray-900 dark:text-slate-100">{currents.t}</div>
                  <div className="text-[10px] font-bold text-gray-400 dark:text-slate-400 tracking-widest uppercase mt-0.5">Total Touches</div>
-                 <div className="mt-1.5 mb-3 text-xs font-semibold text-gray-500 dark:text-slate-400" title="Calls + Texts = Total Touches. Touches logged before the Call/Text split count as Calls.">
+                 <div className="mt-1.5 mb-1 text-xs font-semibold text-gray-500 dark:text-slate-400" title="Calls + Texts = Total Touches. Touches logged before the Call/Text split count as Calls.">
                    <span aria-hidden>📞</span> Calls: <span className="font-black text-gray-700 dark:text-slate-200">{touchCalls}</span>
                    <span className="mx-1.5 text-gray-300 dark:text-slate-600">|</span>
                    <span aria-hidden>💬</span> Texts: <span className="font-black text-gray-700 dark:text-slate-200">{touchTexts}</span>
+                 </div>
+                 {/* Contacts sit between Touches and Quotes in the funnel: real conversations, tracked
+                     separately (NOT part of Total Touches / the Touches target). */}
+                 <div className="mb-3 text-xs font-semibold text-emerald-700 dark:text-emerald-400" title="Contacts = two-way conversations, answered calls, or replied texts. Tracked separately from Touches.">
+                   <span aria-hidden>🗣️</span> Contacts: <span className="font-black">{currents.contacts || 0}</span>
                  </div>
                  <div className="flex justify-between text-xs font-semibold text-gray-500 dark:text-slate-400 mb-2"><span>Touches / {targets.t} Target</span></div>
                  <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-1.5"><div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${Math.min(100, targets.t > 0 ? (currents.t/targets.t)*100 : 0)}%`}}></div></div>
                  <div className="grid grid-cols-2 gap-2 mt-4">
                    <button type="button" onClick={() => logTouchpoint('call')} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 active:scale-95 transition-all"><span aria-hidden>📞</span> Call</button>
                    <button type="button" onClick={() => logTouchpoint('text')} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 active:scale-95 transition-all"><span aria-hidden>💬</span> Text</button>
+                   {/* Solid emerald gradient (vs. the pastel outbound Call/Text above) so a connection feels like a win. */}
+                   <button type="button" onClick={logContact} className="col-span-2 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm hover:from-emerald-600 hover:to-teal-600 active:scale-95 transition-all"><span aria-hidden>🗣️</span> Contact</button>
                  </div>
               </div>
            </div>
@@ -1123,15 +1139,19 @@ export default function DashboardTab({
                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
                    <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-blue-500"/> Daily Conversion</h3>
                    <div className="space-y-4">
-                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Quote</span><span className="font-black text-blue-600">{dailyQuoteRate}%</span></div>
-                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Quote to Bind</span><span className="font-black text-emerald-600">{dailyCloseRate}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Contact</span><span className="font-black text-blue-600">{funnelPct(stats.todayContacts, stats.todayTouches)}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Contact to Quote</span><span className="font-black text-indigo-600">{funnelPct(stats.todayQuotes, stats.todayContacts)}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Quote</span><span className="font-black text-sky-600">{funnelPct(stats.todayQuotes, stats.todayTouches)}%</span></div>
+                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Quote to Bind</span><span className="font-black text-emerald-600">{funnelPct(stats.todayBound, stats.todayQuotes)}%</span></div>
                    </div>
                  </div>
                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6">
                    <h3 className="font-bold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2"><Calendar size={18} className="text-purple-500"/> Month-to-Date (MTD) Conversion</h3>
                    <div className="space-y-4">
-                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Quote</span><span className="font-black text-purple-600">{monthQuoteRate}%</span></div>
-                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Quote to Bind</span><span className="font-black text-emerald-600">{monthCloseRate}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Contact</span><span className="font-black text-purple-600">{funnelPct(stats.monthContacts, stats.monthTouches)}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Contact to Quote</span><span className="font-black text-fuchsia-600">{funnelPct(stats.monthQuotes, stats.monthContacts)}%</span></div>
+                      <div className="flex justify-between items-center pb-3 border-b border-gray-50"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Touch to Quote</span><span className="font-black text-violet-600">{funnelPct(stats.monthQuotes, stats.monthTouches)}%</span></div>
+                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-500 dark:text-slate-400">Quote to Bind</span><span className="font-black text-emerald-600">{funnelPct(stats.monthBound, stats.monthQuotes)}%</span></div>
                    </div>
                  </div>
                </>

@@ -15,6 +15,9 @@ export interface QuickActionsBarProps {
   // Outbound touches are split into Call vs. Text (both count toward Total Touches).
   onLogOutboundCall: () => void;
   onLogOutboundText: () => void;
+  // A successful connection (two-way conversation / answered call / replied text) - its own funnel
+  // stage between Touches and Quotes, not a Touch.
+  onLogContact: () => void;
   onOpenQuoteModal: () => void;
   onOpenBoundModal: () => void;
   // True only for the dedicated /logger pop-out window (see app/logger/page.tsx), which is
@@ -31,6 +34,7 @@ export interface QuickActionsBarProps {
 // ActionButton's icon-component slot (size is ignored - the emoji is sized by the font class).
 const CallEmoji = () => <span className="text-base leading-none" aria-hidden>📞</span>;
 const TextEmoji = () => <span className="text-base leading-none" aria-hidden>💬</span>;
+const ContactEmoji = () => <span className="text-base leading-none" aria-hidden>🗣️</span>;
 
 interface ActionButtonProps {
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -76,15 +80,18 @@ export default function QuickActionsBar({
   onLogInboundCall,
   onLogOutboundCall,
   onLogOutboundText,
+  onLogContact,
   onOpenQuoteModal,
   onOpenBoundModal,
   standalone = false,
 }: QuickActionsBarProps) {
   const grid = (
-    <div className={`grid grid-cols-5 gap-1 rounded-2xl border border-gray-200 bg-white/95 backdrop-blur-md p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.18)] ${standalone ? "w-full" : "mx-auto max-w-md"}`}>
+    <div className={`grid grid-cols-6 gap-1 rounded-2xl border border-gray-200 bg-white/95 backdrop-blur-md p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.18)] ${standalone ? "w-full" : "mx-auto max-w-md"}`}>
       <ActionButton icon={PhoneIncoming} label="Inbound" colorClass="bg-emerald-50 text-emerald-600" onClick={onLogInboundCall} />
       <ActionButton icon={CallEmoji} label="Call" colorClass="bg-blue-50 text-blue-600" onClick={onLogOutboundCall} />
       <ActionButton icon={TextEmoji} label="Text" colorClass="bg-indigo-50 text-indigo-600" onClick={onLogOutboundText} />
+      {/* Solid emerald "win" button - visually distinct from the pastel outbound Call/Text touches. */}
+      <ActionButton icon={ContactEmoji} label="Contact" colorClass="bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm ring-2 ring-emerald-200" onClick={onLogContact} />
       <ActionButton
         icon={isService ? RefreshCw : FileText}
         label={isService ? "Complex Res" : "Quote"}

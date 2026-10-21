@@ -11,7 +11,13 @@
 //
 // "Calls" here is the app's Touches metric (outbound calls + texts, activity_type 'touchpoint') -
 // that is the number every dashboard/pacing surface calls "touches" and the one the
-// `*_target_touchpoints` profile columns are measured against.
+// `*_target_touchpoints` profile columns are measured against (Call -> Quote == Touch -> Quote).
+//
+// CONTACTS ARE DELIBERATELY NOT PART OF THIS CHAIN. Contacts (activity_type 'contact') are a
+// manually-logged, easy-to-forget metric; routing the goal engine through them made a missed log
+// blow the ratios up (quotes / ~0 contacts) and broke daily target generation. They live on as
+// secondary coaching analytics only (utils/coachingMath.ts, the conversion panels) - nothing here
+// reads them.
 //
 // MISSING / ZERO CONVERSION DATA never reaches a division. Every ratio goes through a resolver that
 // walks a fallback chain and always returns a finite value in [MIN_RATIO, 1]:

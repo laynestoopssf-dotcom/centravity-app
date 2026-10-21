@@ -17,7 +17,7 @@ import {
 // =============================================================================
 // Coaching Insights (top of the Coaching tab, manager-level only).
 // -----------------------------------------------------------------------------
-// Flags any producer whose trailing-30-day Call->Quote or Quote->App ratio is more than 15%
+// Flags any producer whose trailing-30-day Touch->Contact, Contact->Quote, Touch->Quote or Quote->App ratio is more than 15%
 // (relative) below their own historical baseline. All math lives in utils/coachingMath.ts; this
 // component owns the data fetching, the acknowledge action and rendering.
 //
@@ -27,9 +27,9 @@ import {
 // so no row can be counted in both, and the last 30 days never pollute the baseline they're
 // compared against.
 //
-//   Touches  - 2 head-only COUNT queries per producer (baseline via .lt, T30 via .gte on
-//              activities.logged_at, activity_type = 'touchpoint'). Counted in the database: a
-//              full-history touch log is far too large to pull as rows.
+//   Touches / Contacts - 2 head-only COUNT queries per producer per type (baseline via .lt, T30 via
+//              .gte on activities.logged_at; activity_type = 'touchpoint' / 'contact'). Counted in the
+//              database: a full-history activity log is far too large to pull as rows.
 //   Policies - ONE row query for the agency (user_id/status/dates only). Each policy's window
 //              depends on a COALESCE across columns (quote date = written_at || logged_at; bound date
 //              = bound_at || written_at || logged_at), which PostgREST can't express in a count
@@ -70,7 +70,7 @@ export default function CoachingInsightsPanel({ profile, team, onAdjustGoals, sh
   const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
 
   // Active producers: not archived (`team` already excludes archived), not on vacation, and not
-  // service-role (they don't run the call -> quote -> app funnel).
+  // service-role (they don't run the touch -> contact -> quote -> app funnel).
   const producers = useMemo(
     () => (team || []).filter((m: any) => m.role !== "service" && !m.on_vacation && !m.is_archived),
     [team]
@@ -93,13 +93,13 @@ export default function CoachingInsightsPanel({ profile, team, onAdjustGoals, sh
       const cooldownStartIso = new Date(Date.now() - ACK_COOLDOWN_DAYS * 24 * 60 * 60 * 1000).toISOString();
       const agencyId = profile.agency_id;
 
-      const countTouches = async (userId: string, window: "baseline" | "t30") => {
+      const countActivities = async (userId: string, activityType: "touchpoint" | "contact", window: "baseline" | "t30") => {
         let q = supabase
           .from("activities")
           .select("id", { count: "exact", head: true })
           .eq("agency_id", agencyId)
           .eq("user_id", userId)
-          .eq("activity_type", "touchpoint");
+          .eq("activity_type", activityType);
         q = window === "baseline" ? q.lt("logged_at", boundaryIso) : q.gte("logged_at", boundaryIso);
         const { count, error } = await q;
         if (error) throw error;
@@ -115,8 +115,13 @@ export default function CoachingInsightsPanel({ profile, team, onAdjustGoals, sh
             .limit(100000),
           Promise.all(
             producers.map(async (p: any) => {
-              const [b, t] = await Promise.all([countTouches(p.id, "baseline"), countTouches(p.id, "t30")]);
-              return [p.id, b, t] as const;
+              const [tb, tt, cb, ct] = await Promise.all([
+                countActivities(p.id, "touchpoint", "baseline"),
+                countActivities(p.id, "touchpoint", "t30"),
+                countActivities(p.id, "contact", "baseline"),
+                countActivities(p.id, "contact", "t30"),
+              ]);
+              return { id: p.id, touchesBaseline: tb, touchesT30: tt, contactsBaseline: cb, contactsT30: ct };
             })
           ),
           supabase
@@ -137,12 +142,14 @@ export default function CoachingInsightsPanel({ profile, team, onAdjustGoals, sh
         const baseline: Record<string, WindowCounts> = {};
         const t30: Record<string, WindowCounts> = {};
         producers.forEach((p: any) => {
-          baseline[p.id] = { touches: 0, quotes: 0, bound: 0 };
-          t30[p.id] = { touches: 0, quotes: 0, bound: 0 };
+          baseline[p.id] = { touches: 0, contacts: 0, quotes: 0, bound: 0 };
+          t30[p.id] = { touches: 0, contacts: 0, quotes: 0, bound: 0 };
         });
-        touchRows.forEach(([id, b, t]) => {
-          baseline[id].touches = b;
-          t30[id].touches = t;
+        touchRows.forEach((r) => {
+          baseline[r.id].touches = r.touchesBaseline;
+          t30[r.id].touches = r.touchesT30;
+          baseline[r.id].contacts = r.contactsBaseline;
+          t30[r.id].contacts = r.contactsT30;
         });
 
         (policyRes.data || []).forEach((pol: any) => {
@@ -202,6 +209,7 @@ export default function CoachingInsightsPanel({ profile, team, onAdjustGoals, sh
       volume_context: {
         window: "T30",
         touches: f.t30Counts.touches,
+        contacts: f.t30Counts.contacts,
         quotes: f.t30Counts.quotes,
         apps: f.t30Counts.bound,
         relative_drop: f.relativeDrop,
@@ -325,7 +333,11 @@ export default function CoachingInsightsPanel({ profile, team, onAdjustGoals, sh
                       <div className="flex flex-wrap items-center justify-between gap-3 mt-auto">
                         {/* Raw T30 volume behind the ratio, so the manager can judge how much weight it carries. */}
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {f.metric === "callToQuote"
+                          {f.metric === "touchToContact"
+                            ? `T30 Volume: ${f.t30Counts.touches.toLocaleString()} Touches | ${f.t30Counts.contacts.toLocaleString()} Contacts`
+                            : f.metric === "contactToQuote"
+                            ? `T30 Volume: ${f.t30Counts.contacts.toLocaleString()} Contacts | ${f.t30Counts.quotes.toLocaleString()} Quotes`
+                            : f.metric === "touchToQuote"
                             ? `T30 Volume: ${f.t30Counts.touches.toLocaleString()} Touches | ${f.t30Counts.quotes.toLocaleString()} Quotes`
                             : `T30 Volume: ${f.t30Counts.quotes.toLocaleString()} Quotes | ${f.t30Counts.bound.toLocaleString()} Apps`}
                         </p>

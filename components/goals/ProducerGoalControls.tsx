@@ -106,7 +106,7 @@ export function ProducerGoalColumns({ member, derived, productionDays, onChange,
             "Hard-coded. Switch back to Smart Math to re-derive these from the Monthly App Target."
           ) : hasMonthly && derived ? (
             <>
-              Weekly goal ÷ {productionDays} production day{productionDays === 1 ? "" : "s"}/week. Quote→App {(derived.quoteToApp.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.quoteToApp.source)}) · Call→Quote {(derived.callToQuote.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.callToQuote.source)}).
+              Weekly goal ÷ {productionDays} production day{productionDays === 1 ? "" : "s"}/week. Quote→App {(derived.quoteToApp.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.quoteToApp.source)}) · Touch→Quote {(derived.callToQuote.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.callToQuote.source)}).
             </>
           ) : (
             "Enter a Monthly App Target to auto-fill every goal, or switch to Manual Override."
@@ -122,7 +122,7 @@ export function ProducerGoalColumns({ member, derived, productionDays, onChange,
         {goalInput("Quotes", g?.weeklyQuotes, "weekly_target_quotes")}
         {goalInput("Apps", g?.weeklyApps, "weekly_target_bound")}
         <p className="text-[10px] text-gray-400 dark:text-slate-400 leading-snug pt-1">
-          {isManual ? "Hard-coded - not tied to the Monthly App Target." : "Apps = Monthly ÷ 4 · Quotes = Apps ÷ Quote→App · Calls = Quotes ÷ Call→Quote."}
+          {isManual ? "Hard-coded - not tied to the Monthly App Target." : "Apps = Monthly ÷ 4 · Quotes = Apps ÷ Quote→App · Touches = Quotes ÷ Touch→Quote."}
         </p>
       </div>
 

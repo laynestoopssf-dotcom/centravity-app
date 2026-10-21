@@ -130,7 +130,7 @@ function LoggerContent() {
   }, [loadData]);
 
   const dispatch = (action: Exclude<LoggerAction, "outbound"> | "quote" | "bound") => {
-    if (action === "inbound" || action === "outbound_call" || action === "outbound_text") {
+    if (action === "inbound" || action === "outbound_call" || action === "outbound_text" || action === "contact") {
       if (!window.opener || window.opener.closed) {
         setOpenerAvailable(false);
         return;
@@ -140,7 +140,7 @@ function LoggerContent() {
       // toast lands in the (possibly minimized/backgrounded) dashboard tab, which the user has no
       // reason to jump back to for these two.
       flashMessage(
-        action === "inbound" ? "Inbound Call Logged!" : action === "outbound_text" ? "Text Logged!" : "Call Logged!"
+        action === "inbound" ? "Inbound Call Logged!" : action === "contact" ? "Contact Logged!" : action === "outbound_text" ? "Text Logged!" : "Call Logged!"
       );
       return;
     }
@@ -216,6 +216,7 @@ function LoggerContent() {
           onLogInboundCall={() => dispatch("inbound")}
           onLogOutboundCall={() => dispatch("outbound_call")}
           onLogOutboundText={() => dispatch("outbound_text")}
+          onLogContact={() => dispatch("contact")}
           onOpenQuoteModal={() => dispatch("quote")}
           onOpenBoundModal={() => dispatch("bound")}
         />

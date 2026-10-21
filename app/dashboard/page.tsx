@@ -180,6 +180,9 @@ export default function Home() {
     // 'touchpoint' rows), never added on top. Calls are derived as Touches - Texts so legacy rows
     // (communication_method NULL) fall into Calls and Calls + Texts always equals Total Touches.
     todayTexts: 0, weekTexts: 0, monthTexts: 0,
+    // Contacts (activity_type = 'contact'): a real two-way conversation / answered call / replied
+    // text. A SEPARATE funnel stage between Touches and Quotes - never added into Touches.
+    todayContacts: 0, weekContacts: 0, monthContacts: 0, qtdContacts: 0, ytdContacts: 0,
     // Team's daily/MTD Pivot & Ask-for-Review progress - see the Scoreboard tile just below the
     // Daily/MTD Conversion tiles in DashboardTab.tsx, and PivotModal/AskForReviewModal.
     todayPivots: 0, monthPivots: 0, todayReviews: 0, monthReviews: 0,
@@ -649,6 +652,7 @@ export default function Home() {
       todayCrossSell: 0, weekCrossSell: 0, monthCrossSell: 0,
       todayInbound: 0, weekInbound: 0, monthInbound: 0,
       todayTexts: 0, weekTexts: 0, monthTexts: 0,
+      todayContacts: 0, weekContacts: 0, monthContacts: 0, qtdContacts: 0, ytdContacts: 0,
       todayPivots: 0, monthPivots: 0, todayReviews: 0, monthReviews: 0,
       monthIssuedPremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 },
       monthPipelinePremLOB: { Auto: 0, Fire: 0, Commercial: 0, Life: 0, Health: 0 }
@@ -683,6 +687,7 @@ export default function Home() {
         // Inbound calls are counted separately from Outbound touches - see logInboundCall / the split
         // Calls tile on the Scoreboard. Never merged into monthTouches so Outbound stays pure.
         if (act.activity_type === 'inbound_call') tempStats.monthInbound++;
+        if (act.activity_type === 'contact') tempStats.monthContacts++;
         // Service team's "Complex Res" scoreboard tile reads monthQuotes, so complex_res activities
         // are explicitly included here alongside regular quotes.
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.monthQuotes++;
@@ -698,6 +703,7 @@ export default function Home() {
           if (act.communication_method === 'text') tempStats.weekTexts++;
         }
         if (act.activity_type === 'inbound_call') tempStats.weekInbound++;
+        if (act.activity_type === 'contact') tempStats.weekContacts++;
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.weekQuotes++;
         if (act.activity_type === 'cross_sell') tempStats.weekCrossSell++;
       }
@@ -707,6 +713,7 @@ export default function Home() {
           if (act.communication_method === 'text') tempStats.todayTexts++;
         }
         if (act.activity_type === 'inbound_call') tempStats.todayInbound++;
+        if (act.activity_type === 'contact') tempStats.todayContacts++;
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.todayQuotes++;
         if (act.activity_type === 'cross_sell') tempStats.todayCrossSell++;
         if (act.activity_type === 'pivot') tempStats.todayPivots++;
@@ -715,10 +722,12 @@ export default function Home() {
       
       if (logDate >= startOfQuarter) {
         if (act.activity_type === 'touchpoint') tempStats.qtdTouches++;
+        if (act.activity_type === 'contact') tempStats.qtdContacts++;
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.qtdQuotes++;
       }
       if (logDate >= startOfYear) {
         if (act.activity_type === 'touchpoint') tempStats.ytdTouches++;
+        if (act.activity_type === 'contact') tempStats.ytdContacts++;
         if (act.activity_type === 'quote' || act.activity_type === 'complex_res') tempStats.ytdQuotes++;
       }
 
@@ -1285,7 +1294,7 @@ export default function Home() {
       let activityQuery = supabase.from('activities')
         .select('*')
         .eq('agency_id', targetAgency)
-        .in('activity_type', ['touchpoint', 'inbound_call', 'quote', 'complex_res', 'cross_sell'])
+        .in('activity_type', ['touchpoint', 'inbound_call', 'contact', 'quote', 'complex_res', 'cross_sell'])
         .gte('logged_at', startDate.toISOString())
         .order('logged_at', { ascending: false })
         .limit(10000); 
@@ -2389,6 +2398,28 @@ export default function Home() {
     if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
   };
 
+  // A "Contact" = a successful connection (two-way conversation, answered call, replied text). Its
+  // own activity_type so it's a distinct funnel stage between Touches and Quotes: it never inflates
+  // Touches / the Touches target / streaks / Touch-to-Contact ratios, which all key off 'touchpoint'.
+  // Like logInboundCall it deliberately doesn't touch the 7-day chart's Touches series.
+  const logContact = async () => {
+    if (!profile) return;
+
+    const { error } = await supabase.from('activities').insert([{
+      activity_type: 'contact',
+      agency_id: profile.agency_id,
+      office_id: profile.office_id,
+      user_id: profile.id,
+      logged_at: new Date().toISOString()
+    }]);
+
+    if (error) { console.error("Database Error:", error); showToast("Cloud Sync Failed", "error"); return; }
+
+    setStats(prev => ({ ...prev, todayContacts: prev.todayContacts + 1, weekContacts: prev.weekContacts + 1, monthContacts: prev.monthContacts + 1 }));
+    showToast("🗣️ +1 Contact!");
+    if (isManagerLevelRole(profile.role)) fetchAgencyOverview(profile.agency_id);
+  };
+
   // Relays "inbound"/"outbound" taps from the /logger pop-out window (see app/logger/page.tsx +
   // utils/loggerBridge.ts) into this exact same tab's own logInboundCall/logTouchpoint - those two
   // are instant one-tap counters with no form, so there's no reason for the pop-out not to relay
@@ -2408,6 +2439,7 @@ export default function Home() {
       if (!isLoggerMessage(event.data)) return;
       switch (event.data.action) {
         case 'inbound': logInboundCall(); break;
+        case 'contact': logContact(); break;
         // 'outbound' is the pre-split generic action (e.g. a pop-out window still open from before
         // this deploy) - treated as a Call, matching how legacy touches are interpreted.
         case 'outbound':
@@ -2417,7 +2449,7 @@ export default function Home() {
     };
     window.addEventListener('message', handleLoggerMessage);
     return () => window.removeEventListener('message', handleLoggerMessage);
-  }, [profile, logInboundCall, logTouchpoint, selectedProducer, agencySettings]);
+  }, [profile, logInboundCall, logTouchpoint, logContact, selectedProducer, agencySettings]);
 
   // "Log Past Data" - opens the date-picker modal below; the actual quote/bound entry itself
   // then reuses the full openLogModal form (product line, premium, payment cycle) so historical
@@ -2654,28 +2686,37 @@ export default function Home() {
   // of the true ~2,556 YTD quotes) while `agencyPolicies` below is already correctly
   // fetched from Jan 1 with no status filter - that mismatch is what previously produced
   // "840 bound / 46 quotes" => an impossible 1826% close rate.
-  // Per-producer YTD touch (outbound call + text) counts - the denominator of the Call -> Quote
-  // ratio that Team Management's reverse goal math (utils/goalMath.ts) needs. Fetched as one cheap
+  // Per-producer YTD touch (outbound call + text) and Contact counts - the inputs of the Touch ->
+  // Contact and Contact -> Quote ratios that Team Management's reverse goal math (utils/goalMath.ts) needs. Fetched as one cheap
   // head-only COUNT per producer rather than pulling rows (the activities feed above only spans ~2
   // months, and a full-year touch log would blow past any row cap). Manager-level only, since that's
   // who can open Team Management.
   const [ytdTouchCounts, setYtdTouchCounts] = useState<Record<string, number>>({});
+  const [ytdContactCounts, setYtdContactCounts] = useState<Record<string, number>>({});
   const teamIdsKey = team.map(m => m.id).join(',');
   useEffect(() => {
     if (!profile?.agency_id || !isManagerLevelRole(profile.role) || team.length === 0) return;
     let cancelled = false;
     const startOfYearIso = new Date(new Date().getFullYear(), 0, 1).toISOString();
-    Promise.all(team.map(async (m) => {
+    const countYtd = async (userId: string, activityType: 'touchpoint' | 'contact') => {
       const { count, error } = await supabase
         .from('activities')
         .select('id', { count: 'exact', head: true })
         .eq('agency_id', profile.agency_id)
-        .eq('user_id', m.id)
-        .eq('activity_type', 'touchpoint')
+        .eq('user_id', userId)
+        .eq('activity_type', activityType)
         .gte('logged_at', startOfYearIso);
-      if (error) console.error('[Goals] YTD touch count failed for', m.id, error);
-      return [m.id, error ? 0 : (count || 0)] as const;
-    })).then(entries => { if (!cancelled) setYtdTouchCounts(Object.fromEntries(entries)); });
+      if (error) console.error(`[Goals] YTD ${activityType} count failed for`, userId, error);
+      return error ? 0 : (count || 0);
+    };
+    Promise.all(team.map(async (m) => {
+      const [touches, contacts] = await Promise.all([countYtd(m.id, 'touchpoint'), countYtd(m.id, 'contact')]);
+      return [m.id, touches, contacts] as const;
+    })).then(entries => {
+      if (cancelled) return;
+      setYtdTouchCounts(Object.fromEntries(entries.map(([id, t]) => [id, t])));
+      setYtdContactCounts(Object.fromEntries(entries.map(([id, , c]) => [id, c])));
+    });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.agency_id, profile?.role, teamIdsKey]);
@@ -2712,7 +2753,7 @@ export default function Home() {
       }
     });
 
-    const memberRates: Record<string, { ytd: number; r30: number; ytdQuotes: number; ytdBound: number; ytdTouches: number }> = {};
+    const memberRates: Record<string, { ytd: number; r30: number; ytdQuotes: number; ytdBound: number; ytdTouches: number; ytdContacts: number }> = {};
     Object.entries(byMember).forEach(([id, v]) => {
       memberRates[id] = {
         ytd: v.ytdQuotes > 0 ? (v.ytdBound / v.ytdQuotes) * 100 : 0,
@@ -2722,6 +2763,8 @@ export default function Home() {
         ytdQuotes: v.ytdQuotes,
         ytdBound: v.ytdBound,
         ytdTouches: ytdTouchCounts[id] || 0,
+        // Analytics only (Settings conversion panel) - the goal engine never reads ytdContacts.
+        ytdContacts: ytdContactCounts[id] || 0,
       };
     });
 
@@ -2731,7 +2774,7 @@ export default function Home() {
       agencyYtdBound,
       memberRates,
     };
-  }, [team, agencyPolicies, ytdTouchCounts]);
+  }, [team, agencyPolicies, ytdTouchCounts, ytdContactCounts]);
 
   // --- USE MEMO DATA ENGINES ---
   const filteredActivities = useMemo(() => {
@@ -3757,6 +3800,7 @@ export default function Home() {
           onLogInboundCall={logInboundCall}
           onLogOutboundCall={() => logTouchpoint('call')}
           onLogOutboundText={() => logTouchpoint('text')}
+          onLogContact={logContact}
           onOpenQuoteModal={() => openLogModal(profile.role === 'service' ? 'complex_res' : 'quote')}
           onOpenBoundModal={() => openLogModal(profile.role === 'service' ? 'cross_sell' : 'bound')}
         />
@@ -3809,7 +3853,7 @@ export default function Home() {
           reqQuotes={personalWhatIf.reqQuotes} 
           reqApps={personalWhatIf.reqApps} 
           whatIfLoading={personalWhatIf.isLoading} 
-          logTouchpoint={logTouchpoint} logInboundCall={logInboundCall} openLogModal={openLogModal} openBackdateModal={openBackdateModal} openPivotModal={openPivotModal} openReviewModal={openReviewModal} 
+          logTouchpoint={logTouchpoint} logInboundCall={logInboundCall} logContact={logContact} openLogModal={openLogModal} openBackdateModal={openBackdateModal} openPivotModal={openPivotModal} openReviewModal={openReviewModal} 
           fetchDashboardData={(pId: any, aId: any) => fetchDashboardData(pId, aId, agencySettings)} 
           fetchPipeline={fetchPipeline} updatePolicyStatus={updatePolicyStatus} 
           selectedProducer={selectedProducer} setSelectedProducer={setSelectedProducer} 

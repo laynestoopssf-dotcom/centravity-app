@@ -111,6 +111,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   const outboundTouchSelection = useRowSelection();
   const inboundTouchSelection = useRowSelection();
   const activitySelection = useRowSelection();
+  // One selection for the Contacts table - only one layout (Service or Standard) ever renders it.
+  const contactSelection = useRowSelection();
 
   const openEditActivity = (act: any) => setEditingEntry({ kind: "activity", id: act.id, loggedAt: act.logged_at });
   // The DB only ever has a hash (or nothing, for legacy rows) - the edit field starts from
@@ -231,7 +233,11 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
   const totalCalls = outboundCalls + inboundCalls;
   const totalTexts = outboundTexts + inboundTexts;
   const touchPct = (n: number) => (totalTouches > 0 ? Math.round((n / totalTouches) * 100) : 0);
-  const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote' && a.activity_type !== 'touchpoint' && a.activity_type !== 'inbound_call');
+  // Contacts (successful connections - two-way conversation / answered call / replied text) are
+  // their own funnel stage between Touches and Quotes: surfaced in a dedicated table, NOT counted
+  // in Total Touches / Calls / Texts above, and kept out of the residual "Other Activity" bucket.
+  const contactActivities = ledgerActivities.filter((a: any) => a.activity_type === 'contact');
+  const callsAndTouches = ledgerActivities.filter((a: any) => a.activity_type !== 'bound' && a.activity_type !== 'quote' && a.activity_type !== 'touchpoint' && a.activity_type !== 'inbound_call' && a.activity_type !== 'contact');
 
   // Outbound touches are all activity_type 'touchpoint'; communication_method tells Call from Text.
   // NULL (anything logged before the Call/Text split) is shown as a Call, matching how the
@@ -243,10 +249,54 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           ? { text: '💬 TEXT', className: 'bg-indigo-100 text-indigo-800' }
           : { text: '📞 CALL', className: 'bg-blue-100 text-blue-800' };
       case 'inbound_call': return { text: 'INBOUND CALL', className: 'bg-sky-100 text-sky-800' };
+      case 'contact': return { text: '🗣️ CONTACT', className: 'bg-emerald-100 text-emerald-800' };
       case 'complex_res': return { text: 'COMPLEX RESOLUTION', className: 'bg-amber-100 text-amber-800' };
       case 'cross_sell': return { text: 'CROSS-SELL', className: 'bg-emerald-100 text-emerald-800' };
       default: return { text: type?.toUpperCase() || 'ACTIVITY', className: 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200' };
     }
+  };
+
+  // Contacts table, shared by the Service and Standard layouts (showProducer = Standard only, where
+  // an owner/manager can be looking at the whole agency; the Service layout is a single rep's own).
+  const renderContactsTable = (showProducer: boolean) => {
+    const colCount = showProducer ? 5 : 4;
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+         <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-emerald-50/30 flex justify-between items-center gap-3">
+           <h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2"><span aria-hidden>🗣️</span> Contacts</h3>
+           <div className="flex items-center gap-2">
+             <DeleteSelectedButton selection={contactSelection} onDelete={deleteActivitiesBulk} />
+             <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">{contactActivities.length} Records</span>
+           </div>
+         </div>
+         <div className="overflow-x-auto max-h-80 overflow-y-auto">
+           <table className="w-full text-left text-sm">
+             <thead className="bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-400 text-xs uppercase font-semibold border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
+               <tr><th className="px-6 py-4 w-8"><SelectAllCheckbox visibleIds={contactActivities.map((a: any) => a.id)} selection={contactSelection} /></th><th className="px-6 py-4">Date & Time</th>{showProducer && <th className="px-6 py-4">Producer</th>}<th className="px-6 py-4">Action Logged</th><th className="px-6 py-4 text-right">Actions</th></tr>
+             </thead>
+             <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+               {ledgerLoading ? (<tr><td colSpan={colCount} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">Querying database...</td></tr>) : contactActivities.length === 0 ? (<tr><td colSpan={colCount} className="px-6 py-8 text-center text-gray-400 dark:text-slate-400 font-medium">No contacts logged.</td></tr>) : (
+                 contactActivities.map((act: any) => {
+                   const label = activityTypeLabel(act.activity_type, act.communication_method);
+                   return (
+                     <tr key={act.id} className="hover:bg-emerald-50/50 dark:hover:bg-emerald-500/10 transition-colors">
+                       <td className="px-6 py-4"><RowCheckbox id={act.id} selection={contactSelection} /></td>
+                       <td className="px-6 py-4 text-gray-500 dark:text-slate-400 font-medium">{new Date(act.logged_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                       {showProducer && <td className="px-6 py-4 font-bold text-gray-900 dark:text-slate-100">{act.profiles?.first_name} {act.profiles?.last_name}</td>}
+                       <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${label.className}`}>{label.text}</span></td>
+                       <td className="px-6 py-4 text-right">
+                         <button onClick={() => openEditActivity(act)} className="text-gray-400 dark:text-slate-400 hover:text-blue-600 transition-colors p-2 hover:bg-blue-50 rounded-lg inline-flex items-center" title="Edit Record"><Pencil size={18}/></button>
+                         <button onClick={() => deleteActivity(act.id)} className="text-gray-400 dark:text-slate-400 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg inline-flex items-center" title="Delete Record"><Trash2 size={18}/></button>
+                       </td>
+                     </tr>
+                   );
+                 })
+               )}
+             </tbody>
+           </table>
+         </div>
+      </div>
+    );
   };
 
   return (
@@ -294,7 +344,7 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
       </div>
 
       {/* Calls vs. Texts summary - reacts to the Producer / date filters above (see totals calc). */}
-      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 transition-opacity ${ledgerLoading ? 'opacity-60' : ''}`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 transition-opacity ${ledgerLoading ? 'opacity-60' : ''}`}>
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
           <p className="text-sm text-gray-500 dark:text-slate-400">Total Touches</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalTouches.toLocaleString()}</p>
@@ -309,6 +359,11 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
           <p className="text-sm text-gray-500 dark:text-slate-400"><span aria-hidden>💬</span> Texts</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{totalTexts.toLocaleString()}</p>
           <p className="text-sm text-gray-500 dark:text-slate-400 flex flex-wrap items-center"><span className="text-emerald-600 dark:text-emerald-400 font-semibold">&uarr; {outboundTexts} Out</span><span className="mx-2 text-gray-300 dark:text-slate-600">|</span><span className="text-sky-600 dark:text-sky-400 font-semibold">&darr; {inboundTexts} In</span><span className="ml-2 text-gray-500 dark:text-slate-400">&middot; {touchPct(totalTexts)}%</span></p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/60 rounded-xl shadow-sm p-4">
+          <p className="text-sm text-gray-500 dark:text-slate-400"><span aria-hidden>🗣️</span> Contacts</p>
+          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{contactActivities.length.toLocaleString()}</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">Conversations (separate from Touches)</p>
         </div>
       </div>
 
@@ -380,6 +435,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                </table>
              </div>
           </div>
+
+          {renderContactsTable(false)}
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
              <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-amber-50/30 flex justify-between items-center gap-3">
@@ -660,6 +717,8 @@ export default function LedgerTab({ profile, team, ledgerActivities, ledgerPolic
                </table>
              </div>
           </div>
+
+          {renderContactsTable(true)}
 
           {/* Residual "Other Activity" - anything that isn't a policy/quote row and isn't a
               touchpoint/inbound_call either (e.g. a stray complex_res/cross_sell activity log

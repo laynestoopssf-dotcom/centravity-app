@@ -13,6 +13,7 @@ import ProfileAvatar from './ui/ProfileAvatar';
 import HistoricalYtdEditor from './dashboard/HistoricalYtdEditor';
 import { sanitizeProductionDays, deriveProducerGoals, goalFieldsFromReverseGoals, DAILY_WEEKLY_GOAL_FIELDS, type DerivedProducerGoals } from '../utils/goalMath';
 import { GoalModeHeader, ProducerGoalColumns } from './goals/ProducerGoalControls';
+import { formatConversionPct } from '../utils/ratioMath';
 
 // Mirrors Stripe's own Subscription.status enum (see
 // app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
@@ -414,8 +415,9 @@ export default function SettingsTab({
   // Non-service producers have ONE editable goal - Monthly App Target - and every other activity
   // goal flows backward from it (see utils/goalMath.ts for the full chain and the fallback rules for
   // missing/zero conversion ratios):
-  //   Weekly Apps = Monthly / 4 -> Weekly Quotes = Apps / (Quote->App) -> Weekly Calls = Quotes /
-  //   (Call->Quote) -> Daily X = Weekly X / (global Production Days per Week).
+  //   Weekly Apps = Monthly / 4 -> Weekly Quotes = Apps / (Quote->App) -> Weekly Touches = Quotes /
+  //   (Touch->Quote) -> Daily X = Weekly X / (global Production Days per Week). Contacts are NOT
+  //   part of this chain (see utils/goalMath.ts).
   // Service-role members keep the original free-form goal inputs (their "Complex Res."/"Cross-Sells"
   // aren't quote->app funnel metrics).
   // Memoised on the inputs that matter, so changing a Monthly Target or the global Production Days
@@ -2509,6 +2511,22 @@ export default function SettingsTab({
                         <p className="text-2xl font-black text-purple-700">{globalCloseRateDraft}%</p>
                       </div>
                     </div>
+                    {/* Secondary Contact analytics (NOT inputs to the goal math): YTD, with the raw counts so the sample
+                        behind each % is visible, capped at 100%. "—" until there's a denominator. */}
+                    {m.role !== 'service' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                        <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-800/60 rounded-xl p-3">
+                          <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Touch → Contact (YTD)</p>
+                          <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">{(rates?.ytdTouches ?? 0) > 0 ? `${formatConversionPct(rates?.ytdContacts, rates?.ytdTouches)}%` : '—'}</p>
+                          <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{rates?.ytdContacts ?? 0} Contacts / {rates?.ytdTouches ?? 0} Touches</p>
+                        </div>
+                        <div className="bg-teal-50 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-800/60 rounded-xl p-3">
+                          <p className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider mb-1">Contact → Quote (YTD)</p>
+                          <p className="text-xl font-black text-teal-700 dark:text-teal-300">{(rates?.ytdContacts ?? 0) > 0 ? `${formatConversionPct(rates?.ytdQuotes, rates?.ytdContacts)}%` : '—'}</p>
+                          <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">{rates?.ytdQuotes ?? 0} Quotes / {rates?.ytdContacts ?? 0} Contacts</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <label className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap flex items-center gap-1">
                         Manual Override
