@@ -95,7 +95,8 @@ export type FlatBonusRule = Record<string, unknown>;
 // uniformly, on every Life policy until an admin explicitly sets one of the two new fields.
 //
 // base_rates.term_life_rate_type / whole_life_rate_type / health_base_rate_type /
-// health_medicare_rate_type (Flat-$-per-App):
+// health_medicare_rate_type, plus auto_rate_type / fire_rate_type / commercial_rate_type for the
+// P&C lines (Flat-$-per-App):
 // 'percent' (default) means that line's numeric rate is a % of premium. 'flat' means the same
 // number is a flat dollar amount paid per policy, ignoring premium - see sumLineTotals.
 // Missing/unrecognized values always resolve to 'percent' (normalizeRateType), so a plan saved
@@ -303,6 +304,11 @@ export interface ResolvedRates {
   auto: number;
   fire: number;
   comm: number;
+  /** Which basis auto/fire/comm above should be read as - 'percent' of premium (default) or
+   * 'flat' $ per policy. Same semantics as the Life/Health rate types below. */
+  autoRateType: CommissionRateType;
+  fireRateType: CommissionRateType;
+  commRateType: CommissionRateType;
   /** Backward-compat blended figure - simple average of termLife/wholeLife below. Real payout
    * math (sumLineTotals) never reads this; it's for consumers that only render one "Life" rate
    * (e.g. the What-If projection engine in app/dashboard/page.tsx, which blends at the parent-
@@ -352,6 +358,9 @@ export function resolveRates(baseRates: Record<string, unknown> | null | undefin
     auto: Number(base.auto_nb || 0) + bumps.pnc_base + bumps.auto_base,
     fire: Number(base.fire_nb || 0) + bumps.pnc_base + bumps.fire_base,
     comm: Number(base.commercial_nb || 0) + bumps.pnc_base,
+    autoRateType: normalizeRateType(base.auto_rate_type),
+    fireRateType: normalizeRateType(base.fire_rate_type),
+    commRateType: normalizeRateType(base.commercial_rate_type),
     life: (termLife + wholeLife) / 2,
     termLife,
     wholeLife,
@@ -367,16 +376,17 @@ export function resolveRates(baseRates: Record<string, unknown> | null | undefin
 
 /**
  * `premTotals`/`appTotals` are the SAME shape (one $ premium bucket, one app-count bucket) per
- * line. P&C is always percent-of-premium. TermLife/WholeLife and HealthBase/HealthMedicare each
- * independently check their own rate type and switch to `appTotals * flatRate` when it's 'flat'.
+ * line. Every line (Auto, Fire, Commercial, TermLife, WholeLife, HealthBase, HealthMedicare)
+ * independently checks its own rate type and switches to `appTotals * flatRate` when it's 'flat';
+ * otherwise it's `premium * rate%` (the default, and what every pre-existing plan resolves to).
  * Umbrella Life/Health totals are never multiplied here — only the sub-line buckets. */
 const sumLineTotals = (premTotals: CommissionLineTotals, appTotals: CommissionLineTotals, rates: ResolvedRates): number => {
   const amountFor = (prem: number, apps: number, rate: number, rateType: CommissionRateType) =>
     rateType === "flat" ? apps * rate : prem * (rate / 100);
 
-  return premTotals.Auto * (rates.auto / 100) +
-    premTotals.Fire * (rates.fire / 100) +
-    premTotals.Commercial * (rates.comm / 100) +
+  return amountFor(premTotals.Auto, appTotals.Auto, rates.auto, rates.autoRateType) +
+    amountFor(premTotals.Fire, appTotals.Fire, rates.fire, rates.fireRateType) +
+    amountFor(premTotals.Commercial, appTotals.Commercial, rates.comm, rates.commRateType) +
     amountFor(premTotals.TermLife, appTotals.TermLife, rates.termLife, rates.termLifeRateType) +
     amountFor(premTotals.WholeLife, appTotals.WholeLife, rates.wholeLife, rates.wholeLifeRateType) +
     amountFor(premTotals.HealthBase, appTotals.HealthBase, rates.healthBase, rates.healthBaseRateType) +

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Wallet, CheckCircle2, Lock, Plus, Trash2, Clock, CalendarDays, TrendingUp, Users, ArrowRightCircle, Sparkles, Target, ClipboardList, X, Gift } from 'lucide-react';
 import { resolveParentLine, resolveLifeSubType, resolveHealthSubType } from '../utils/productLines';
 import { isManagerLevelRole, isOwnerLevelRole } from '../utils/roles';
+import { isCommissionEligible } from '../utils/commissionMath';
 import { encryptIdentifierForAgency, decryptIdentifier } from '../utils/e2ee';
 import IdentifierChip from './ui/IdentifierChip';
 import ProfileAvatar from './ui/ProfileAvatar';
@@ -202,6 +203,18 @@ export default function CommissionTab({
   const isLifeSubLineFlat = (subLine: 'TermLife' | 'WholeLife') =>
     (subLine === 'TermLife' ? commissionData?.rates?.termLifeRateType : commissionData?.rates?.wholeLifeRateType) === 'flat';
 
+  // P&C lines can be paid flat $ per policy too (auto_rate_type / fire_rate_type / commercial_rate_type).
+  const isPncLineFlat = (line: 'Auto' | 'Fire' | 'Commercial') =>
+    (line === 'Auto' ? commissionData?.rates?.autoRateType : line === 'Fire' ? commissionData?.rates?.fireRateType : commissionData?.rates?.commRateType) === 'flat';
+
+  // True when this line's rate is flat $ per policy rather than % of premium - covers every line.
+  const isLineFlat = (line: string) => {
+    if (line === 'Auto' || line === 'Fire' || line === 'Commercial') return isPncLineFlat(line);
+    if (line === 'TermLife' || line === 'WholeLife') return isLifeSubLineFlat(line);
+    if (line === 'HealthBase' || line === 'HealthMedicare') return isHealthSubLineFlat(line);
+    return false;
+  };
+
   const isHealthSubLineFlat = (subLine: 'HealthBase' | 'HealthMedicare') =>
     (subLine === 'HealthBase' ? commissionData?.rates?.healthBaseRateType : commissionData?.rates?.healthMedicareRateType) === 'flat';
 
@@ -215,8 +228,13 @@ export default function CommissionTab({
   // already restricted to status = 'issued' with issued_at in that month (page.tsx + the engine's
   // isCommissionEligible); bound-but-not-issued policies earn production credit elsewhere but never
   // appear here, and rows are dated/sorted by issued_at, not the bound/logged date.
+  // The month check is applied here with the SAME isCommissionEligible rule the engine uses
+  // (status 'issued' AND issued_at in the viewed month - bound_at/logged_at are never consulted), so
+  // the itemized rows and the commission totals can never disagree about which policies count -
+  // even for a moment while a different month's feed is still loading.
+  const viewedMonth = commissionMonth ? new Date(`${commissionMonth}-02T00:00:00`) : new Date();
   const userPolicies = (commissionPolicies || []).filter((p: any) => 
-    p.user_id === activeUserId && p.status === 'issued' && !!p.issued_at
+    p.user_id === activeUserId && isCommissionEligible(p, viewedMonth)
   ).sort((a: any, b: any) => new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime());
 
   // Per-line Bound vs Issued counts for the summary boxes above the Itemized Commission Statement.
@@ -252,7 +270,7 @@ export default function CommissionTab({
       return isHealthSubLineFlat(subLine) ? rate : (Number(pol.premium_amount) * (rate / 100));
     }
     const rate = getRateForLine(parentLine);
-    return (Number(pol.premium_amount) * (rate / 100));
+    return isLineFlat(parentLine) ? rate : (Number(pol.premium_amount) * (rate / 100));
   };
 
   // --- TEAM OVERVIEW CALCS ---
@@ -524,11 +542,7 @@ export default function CommissionTab({
                 {['Auto', 'Fire', 'Commercial', 'TermLife', 'WholeLife', 'HealthBase', 'HealthMedicare'].map(line => {
                   const prem = getLinePremium(line);
                   const rate = getRateForLine(line);
-                  const isFlatLine =
-                    (line === 'TermLife' && isLifeSubLineFlat('TermLife')) ||
-                    (line === 'WholeLife' && isLifeSubLineFlat('WholeLife')) ||
-                    (line === 'HealthBase' && isHealthSubLineFlat('HealthBase')) ||
-                    (line === 'HealthMedicare' && isHealthSubLineFlat('HealthMedicare'));
+                  const isFlatLine = isLineFlat(line);
                   const appCount = getLineAppCount(line);
                   const payout = isFlatLine ? (appCount * rate) : (prem * (rate / 100));
                   return (
@@ -748,7 +762,7 @@ export default function CommissionTab({
                        : healthSubLine
                          ? getRateForLine(healthSubLine)
                          : getRateForLine(parentLine);
-                     const isFlatRate = (!!lifeSubLine && isLifeSubLineFlat(lifeSubLine)) || (!!healthSubLine && isHealthSubLineFlat(healthSubLine));
+                     const isFlatRate = isLineFlat(lifeSubLine || healthSubLine || parentLine);
                      const comm = calculatePolicyCommission(pol);
                      const isGhost = parentLine === 'Standalone';
                      

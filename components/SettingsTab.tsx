@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Save, Plus, Trash2, MapPin, Users, Briefcase, TrendingUp, DollarSign, DownloadCloud, X, Copy, Trophy, Plane, AlertCircle, RefreshCw, Target, Tag, Shield, CheckCircle2, XCircle, Globe, Bell, Sparkles, UploadCloud, FileSpreadsheet, Archive, ArchiveRestore, Percent, HeartPulse, CreditCard, ToggleLeft, UserPlus, Mail, Send, Ban, Loader2 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { isOwnerLevelRole } from '../utils/roles';
@@ -11,6 +11,7 @@ import InfoTooltip from './ui/InfoTooltip';
 import FormattedNumberInput from './ui/FormattedNumberInput';
 import ProfileAvatar from './ui/ProfileAvatar';
 import HistoricalYtdEditor from './dashboard/HistoricalYtdEditor';
+import { calculateReverseGoals, resolveCallToQuoteRatio, resolveQuoteToAppRatio, sanitizeProductionDays, type RatioSource, type ReverseGoals, type ResolvedRatio } from '../utils/goalMath';
 
 // Mirrors Stripe's own Subscription.status enum (see
 // app/actions/stripeAdmin.ts / app/api/stripe/webhook/route.ts, which write
@@ -408,6 +409,72 @@ export default function SettingsTab({
   const removeCustomBonus = (index: number) => { const updated = [...(editingPlan.rules.custom_bonuses || [])]; updated.splice(index, 1); setEditingPlan((prev: any) => ({ ...prev, rules: { ...prev.rules, custom_bonuses: updated } })); };
   const updateTeamMember = (id: string, field: string, value: any) => { setTeam((prev: any[]) => prev.map(m => m.id === id ? { ...m, [field]: value } : m)); };
 
+  // ---- Reverse goal math (Team Management) --------------------------------------------------
+  // Non-service producers have ONE editable goal - Monthly App Target - and every other activity
+  // goal flows backward from it (see utils/goalMath.ts for the full chain and the fallback rules for
+  // missing/zero conversion ratios):
+  //   Weekly Apps = Monthly / 4 -> Weekly Quotes = Apps / (Quote->App) -> Weekly Calls = Quotes /
+  //   (Call->Quote) -> Daily X = Weekly X / (global Production Days per Week).
+  // Service-role members keep the original free-form goal inputs (their "Complex Res."/"Cross-Sells"
+  // aren't quote->app funnel metrics).
+  // Memoised on the inputs that matter, so changing a Monthly Target or the global Production Days
+  // re-derives instantly. The effect below mirrors the result into `team` so the normal "Save"
+  // path (handleSaveTeamTargets diffs `team` against its DB baseline) persists exactly what's shown.
+  const productionDays = sanitizeProductionDays(agencySettings?.production_days_per_week);
+  const derivedGoalsById = useMemo(() => {
+    const out: Record<string, { goals: ReverseGoals; quoteToApp: ResolvedRatio; callToQuote: ResolvedRatio }> = {};
+    (team || []).forEach((m: any) => {
+      if (m.role === 'service') return;
+      const stats = conversionMetricsData?.memberRates?.[m.id];
+      const draftOverride = individualCloseRatesDraft[m.id];
+      const quoteToApp = resolveQuoteToAppRatio({
+        manualOverridePct: draftOverride !== undefined ? draftOverride : m.close_rate,
+        ytdQuotes: stats?.ytdQuotes,
+        ytdBound: stats?.ytdBound,
+        agencyCloseRatePct: globalCloseRateDraft,
+      });
+      const callToQuote = resolveCallToQuoteRatio({ ytdTouches: stats?.ytdTouches, ytdQuotes: stats?.ytdQuotes });
+      const goals = calculateReverseGoals({
+        monthlyAppTarget: Number(m.monthly_target_bound) || 0,
+        quoteToApp: quoteToApp.ratio,
+        callToQuote: callToQuote.ratio,
+        productionDays,
+      });
+      out[m.id] = { goals, quoteToApp, callToQuote };
+    });
+    return out;
+  }, [team, conversionMetricsData, individualCloseRatesDraft, globalCloseRateDraft, productionDays]);
+
+  useEffect(() => {
+    setTeam((prev: any[]) => {
+      let changed = false;
+      const next = prev.map((m: any) => {
+        const d = derivedGoalsById[m.id];
+        // Manual Override producers are hands-off: the reverse math must never touch what the owner typed.
+        if (m.is_manual_goals) return m;
+        // No Monthly App Target yet -> nothing to derive from; leave whatever is stored untouched.
+        if (!d || !(Number(m.monthly_target_bound) > 0)) return m;
+        const g = d.goals;
+        if (
+          m.daily_target_touchpoints === g.dailyCalls && m.daily_target_quotes === g.dailyQuotes && m.daily_target_bound === g.dailyApps &&
+          m.weekly_target_touchpoints === g.weeklyCalls && m.weekly_target_quotes === g.weeklyQuotes && m.weekly_target_bound === g.weeklyApps
+        ) return m;
+        changed = true;
+        return {
+          ...m,
+          daily_target_touchpoints: g.dailyCalls, daily_target_quotes: g.dailyQuotes, daily_target_bound: g.dailyApps,
+          weekly_target_touchpoints: g.weeklyCalls, weekly_target_quotes: g.weeklyQuotes, weekly_target_bound: g.weeklyApps,
+        };
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedGoalsById]);
+
+  const ratioSourceLabel = (src: RatioSource) =>
+    src === 'override' ? 'manual override' : src === 'live' ? 'live YTD' : src === 'agency' ? 'agency target' : 'baseline';
+
+  // SERVICE-ROLE members only (everyone else uses the reverse goal math above).
   // Daily-goal inputs (Team Management edit panel) auto-populate their Weekly (x5) and, for
   // Apps only, Monthly (x20) counterparts on every keystroke — a "Daily: 4" entry instantly
   // suggests "Weekly: 20" / "Monthly: 80" instead of an owner hand-computing them. Weekly and
@@ -1394,10 +1461,9 @@ export default function SettingsTab({
                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Life Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_life ?? 20} onChange={e => updateLocalOffice(office.id, 'base_comm_life', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Health Base (%)</label><input type="number" value={localOfficeData[office.id]?.base_comm_health ?? 20} onChange={e => updateLocalOffice(office.id, 'base_comm_health', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                        </div>
-                       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Auto Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_auto || 0} onChange={v => updateLocalOffice(office.id, 'book_size_auto', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Fire Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_fire || 0} onChange={v => updateLocalOffice(office.id, 'book_size_fire', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Comm. Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_commercial || 0} onChange={v => updateLocalOffice(office.id, 'book_size_commercial', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Life Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_life || 0} onChange={v => updateLocalOffice(office.id, 'book_size_life', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Health Book ($)</label><FormattedNumberInput value={localOfficeData[office.id]?.book_size_health || 0} onChange={v => updateLocalOffice(office.id, 'book_size_health', v === '' ? 0 : v)} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                        </div>
@@ -1413,12 +1479,10 @@ export default function SettingsTab({
                          <div className="bg-red-50 border border-red-100 p-3 rounded-lg dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Auto Last Month (%)</label><input type="number" value={localOfficeData[office.id]?.prev_month_lapse_auto || 0} onChange={e => updateLocalOffice(office.id, 'prev_month_lapse_auto', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-red-200 rounded-lg text-sm font-bold" /></div>
                          <div className="bg-red-50 border border-red-100 p-3 rounded-lg dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200"><label className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Fire Last Month (%)</label><input type="number" value={localOfficeData[office.id]?.prev_month_lapse_fire || 0} onChange={e => updateLocalOffice(office.id, 'prev_month_lapse_fire', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-red-200 rounded-lg text-sm font-bold" /></div>
                        </div>
-                       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Global Rate</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_rate || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_rate', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Auto</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_auto || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_auto', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                          <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Fire</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_fire || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_fire', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Comm.</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_commercial || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_commercial', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
-                         <div><label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">YTD Health</label><input type="number" value={localOfficeData[office.id]?.ytd_lapse_cancel_health || 0} onChange={e => updateLocalOffice(office.id, 'ytd_lapse_cancel_health', Number(e.target.value))} className="w-full p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-bold" /></div>
                        </div>
 
                        {/* VARIABLE COMP */}
@@ -1880,7 +1944,39 @@ export default function SettingsTab({
                 </label>
               </div>
 
+              {member.role !== 'service' && (
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-slate-100">Goal Setting</h4>
+                    <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 max-w-md">
+                      {member.is_manual_goals
+                        ? 'Manual Override: Daily and Weekly targets are hard-coded by you. The reverse math is bypassed for this producer.'
+                        : 'Smart Math: Daily and Weekly targets are derived from the Monthly App Target and this producer\'s conversion history.'}
+                    </p>
+                  </div>
+                  <div role="group" aria-label="Goal mode" className="inline-flex p-1 rounded-full bg-gray-100 dark:bg-slate-950 border border-gray-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      aria-pressed={!member.is_manual_goals}
+                      onClick={() => updateTeamMember(member.id, 'is_manual_goals', false)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${!member.is_manual_goals ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'}`}
+                    >
+                      Smart Math
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={!!member.is_manual_goals}
+                      onClick={() => updateTeamMember(member.id, 'is_manual_goals', true)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${member.is_manual_goals ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200'}`}
+                    >
+                      Manual Override
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                {member.role === 'service' ? (
+                <>
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Daily Goals</h4>
                   <div><label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-200">Touches</label><input type="number" value={member.daily_target_touchpoints ?? 0} onChange={e => updateDailyTargetWithCascade(member.id, 'daily_target_touchpoints', Number(e.target.value))} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
@@ -1902,6 +1998,68 @@ export default function SettingsTab({
                   <div><label className="block text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1">Total Prem ($)</label><FormattedNumberInput value={member.monthly_target_premium ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
                   <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><FormattedNumberInput value={member.monthly_base_salary ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_base_salary', v === '' ? 0 : v)} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
                 </div>
+
+                </>
+                ) : (
+                (() => {
+                  const derived = derivedGoalsById[member.id];
+                  const hasMonthly = Number(member.monthly_target_bound) > 0;
+                  // With a Monthly App Target set, show the derived figures directly (so the panel is
+                  // right on the very render the target changes); otherwise show what's stored.
+                  // Manual Override: g is null on purpose - the reverse math is bypassed and every field
+                  // shows (and edits) exactly what's stored for this producer.
+                  const isManual = !!member.is_manual_goals;
+                  const g = !isManual && hasMonthly && derived ? derived.goals : null;
+                  const roCls = 'w-full p-2.5 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-black text-gray-700 dark:text-slate-200 cursor-not-allowed';
+                  const editCls = 'w-full p-2.5 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-500/60 rounded-lg text-sm font-bold text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-400 outline-none';
+                  const goalInput = (label: string, derivedVal: number | undefined, field: string) => (
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1 dark:text-slate-200">{label}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        readOnly={!isManual}
+                        tabIndex={isManual ? 0 : -1}
+                        value={g && derivedVal !== undefined ? derivedVal : (member[field] ?? 0)}
+                        onChange={e => updateTeamMember(member.id, field, Number(e.target.value))}
+                        className={isManual ? editCls : roCls}
+                      />
+                    </div>
+                  );
+                  return (
+                    <>
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Daily Goals <span className="normal-case text-gray-400">({isManual ? 'manual' : 'auto'})</span></h4>
+                  {goalInput('Calls (Touches)', g?.dailyCalls, 'daily_target_touchpoints')}
+                  {goalInput('Quotes', g?.dailyQuotes, 'daily_target_quotes')}
+                  {goalInput('Apps', g?.dailyApps, 'daily_target_bound')}
+                  <p className="text-[10px] text-gray-400 dark:text-slate-400 leading-snug pt-1">
+                    {isManual
+                      ? 'Hard-coded. Switch back to Smart Math to re-derive these from the Monthly App Target.'
+                      : hasMonthly && derived
+                      ? <>Weekly goal ÷ {productionDays} production day{productionDays === 1 ? '' : 's'}/week. Quote→App {(derived.quoteToApp.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.quoteToApp.source)}) · Call→Quote {(derived.callToQuote.ratio * 100).toFixed(1)}% ({ratioSourceLabel(derived.callToQuote.source)}).</>
+                      : 'Enter a Monthly App Target to auto-fill every goal, or switch to Manual Override.'}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Weekly Goals <span className="normal-case text-gray-400">({isManual ? 'manual' : 'auto'})</span></h4>
+                  {goalInput('Calls (Touches)', g?.weeklyCalls, 'weekly_target_touchpoints')}
+                  {goalInput('Quotes', g?.weeklyQuotes, 'weekly_target_quotes')}
+                  {goalInput('Apps', g?.weeklyApps, 'weekly_target_bound')}
+                  <p className="text-[10px] text-gray-400 dark:text-slate-400 leading-snug pt-1">{isManual ? 'Hard-coded - not tied to the Monthly App Target.' : 'Apps = Monthly ÷ 4 · Quotes = Apps ÷ Quote→App · Calls = Quotes ÷ Call→Quote.'}</p>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2">Monthly Goals &amp; Pay</h4>
+                  <div><label className="flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase mb-1">Monthly App Target<InfoTooltip text="The one number you set. Weekly and Daily Calls, Quotes and Apps are all worked out backward from it using this producer's own conversion history and your global Production Days per Week." /></label><input type="number" min={0} value={member.monthly_target_bound ?? 0} onChange={e => updateTeamMember(member.id, 'monthly_target_bound', Number(e.target.value))} className="w-full p-2.5 bg-blue-50 dark:bg-slate-900 border-2 border-blue-300 dark:border-blue-500/60 rounded-lg text-sm font-black text-blue-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1">Total Prem ($)</label><FormattedNumberInput value={member.monthly_target_premium ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_target_premium', v === '' ? 0 : v)} className="w-full p-2.5 bg-white dark:bg-slate-900 border border-gray-300 rounded-lg text-sm font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Base Salary ($)</label><FormattedNumberInput value={member.monthly_base_salary ?? 0} onChange={v => updateTeamMember(member.id, 'monthly_base_salary', v === '' ? 0 : v)} className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500" /></div>
+                </div>
+                    </>
+                  );
+                })()
+                )}
 
                 <div className="space-y-4">
                   {/* Life goals are captured as ANNUAL targets only — monthly_target_life_apps/
@@ -1978,7 +2136,7 @@ export default function SettingsTab({
                    <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><DollarSign size={20}/></div>
                    <div><h3 className="font-bold text-gray-900 dark:text-slate-100">Compensation Plans</h3><p className="text-xs text-gray-500 dark:text-slate-400">Tiered rules that automatically calculate commission</p></div>
                  </div>
-                 <button onClick={() => setEditingPlan({ name: "New Plan", rules: { base_rates: { auto_nb: 0, fire_nb: 0, commercial_nb: 0, term_life_nb: 0, term_life_rate_type: 'percent', whole_life_nb: 0, whole_life_rate_type: 'percent', health_nb: 0, health_base_rate_type: 'percent', health_medicare_rate: 0, health_medicare_rate_type: 'percent' }, thresholds: { required_apps_to_unlock: 0, required_premium_to_unlock: 0, required_life_health_apps_to_unlock: 0 }, accelerators: [], custom_bonuses: [] } })} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 text-sm"><Plus size={16}/> Create Plan</button>
+                 <button onClick={() => setEditingPlan({ name: "New Plan", rules: { base_rates: { auto_nb: 0, auto_rate_type: 'percent', fire_nb: 0, fire_rate_type: 'percent', commercial_nb: 0, commercial_rate_type: 'percent', term_life_nb: 0, term_life_rate_type: 'percent', whole_life_nb: 0, whole_life_rate_type: 'percent', health_nb: 0, health_base_rate_type: 'percent', health_medicare_rate: 0, health_medicare_rate_type: 'percent' }, thresholds: { required_apps_to_unlock: 0, required_premium_to_unlock: 0, required_life_health_apps_to_unlock: 0 }, accelerators: [], custom_bonuses: [] } })} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 text-sm"><Plus size={16}/> Create Plan</button>
               </div>
               <div className="p-6 space-y-3">
                 {compPlans.length === 0 && <p className="text-sm text-gray-400 dark:text-slate-400">No comp plans created. Click 'Create Plan' to begin.</p>}
@@ -2012,7 +2170,7 @@ export default function SettingsTab({
               <div className="p-6 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-800">
                 <h4 className="font-bold text-gray-900 dark:text-slate-100 mb-4 uppercase text-xs tracking-wider flex items-center gap-1.5">
                   1. Base Commission Rates
-                  <InfoTooltip text="The starting commission this plan pays per line before any accelerator bumps below are applied. Auto/Fire/Commercial are always a % of premium; Term Life, Whole Life, Health (Base), and Health (Medicare Supp) can each independently be switched to a flat $ amount per policy instead." />
+                  <InfoTooltip text="The starting commission this plan pays per line before any accelerator bumps below are applied. Every line (Auto, Fire, Commercial, Term Life, Whole Life, Health Base, and Health Medicare Supp) can independently be paid as a % of premium or switched to a flat $ amount per policy." />
                 </h4>
                 {/* Grid cells stretch to the row's height (grid default align-items: stretch), and each cell
                     is a flex column with justify-end, so label -> (optional % / $ dropdown) -> input is
@@ -2060,9 +2218,9 @@ export default function SettingsTab({
                       <div className="space-y-4">
                         {/* Property & Casualty (top row) */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          {renderCell({ key: 'auto_nb', label: 'Auto' })}
-                          {renderCell({ key: 'fire_nb', label: 'Fire' })}
-                          {renderCell({ key: 'commercial_nb', label: 'Commercial' })}
+                          {renderCell({ key: 'auto_nb', label: 'Auto', rateTypeKey: 'auto_rate_type' })}
+                          {renderCell({ key: 'fire_nb', label: 'Fire', rateTypeKey: 'fire_rate_type' })}
+                          {renderCell({ key: 'commercial_nb', label: 'Commercial', rateTypeKey: 'commercial_rate_type' })}
                         </div>
                         {/* Financial Services (bottom row) */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2081,7 +2239,7 @@ export default function SettingsTab({
                 {editingPlan.rules?.base_rates?.health_nb !== undefined && editingPlan.rules?.base_rates?.health_medicare_rate === undefined && (
                   <p className="text-[11px] text-amber-600 font-semibold mt-3">This plan still uses its legacy Health rate ({editingPlan.rules.base_rates.health_nb}%) on both Health (Base) and Health (Medicare Supp) until you set a Medicare rate above.</p>
                 )}
-                {(editingPlan.rules?.base_rates?.term_life_rate_type === 'flat' || editingPlan.rules?.base_rates?.whole_life_rate_type === 'flat' || editingPlan.rules?.base_rates?.health_base_rate_type === 'flat' || editingPlan.rules?.base_rates?.health_medicare_rate_type === 'flat') && (
+                {(editingPlan.rules?.base_rates?.auto_rate_type === 'flat' || editingPlan.rules?.base_rates?.fire_rate_type === 'flat' || editingPlan.rules?.base_rates?.commercial_rate_type === 'flat' || editingPlan.rules?.base_rates?.term_life_rate_type === 'flat' || editingPlan.rules?.base_rates?.whole_life_rate_type === 'flat' || editingPlan.rules?.base_rates?.health_base_rate_type === 'flat' || editingPlan.rules?.base_rates?.health_medicare_rate_type === 'flat') && (
                   <p className="text-[11px] text-gray-500 dark:text-slate-400 font-semibold mt-3">Flat $ lines pay strictly per bound/issued policy count on that line - premium amount is ignored for that line&apos;s payout.</p>
                 )}
               </div>

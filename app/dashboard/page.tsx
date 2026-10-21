@@ -57,7 +57,7 @@ const GlobalStyles = () => (
   `}} />
 );
 
-type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; avatar_url?: string | null; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; hide_setup_widget?: boolean; };
+type Profile = { id: string; agency_id: string; office_id: string; comp_plan_id: string | null; is_floater: boolean; first_name: string; last_name: string; avatar_url?: string | null; role: string; daily_target_touchpoints: number; daily_target_quotes: number; daily_target_bound: number; weekly_target_touchpoints: number; weekly_target_quotes: number; weekly_target_bound: number; monthly_target_bound: number; monthly_target_premium: number; annual_target_life_apps: number; annual_target_life_premium: number; monthly_base_salary: number; on_vacation?: boolean; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; is_archived?: boolean; close_rate?: number | null; hide_setup_widget?: boolean; is_manual_goals?: boolean; };
 type Agency = { id: string; name: string; timezone?: string; production_days_per_week: number; annual_target_premium: number; annual_target_life_apps: number; ytd_lapse_cancel_rate: number; annual_target_auto_apps: number; annual_target_fire_apps: number; annual_target_commercial_apps: number; annual_target_health_apps: number; ytd_lapse_cancel_auto: number; ytd_lapse_cancel_fire: number; ytd_lapse_cancel_commercial: number; ytd_lapse_cancel_health: number; travel_lvl1_apps: number; travel_lvl1_life_cred: number; travel_lvl1_total_cred: number; travel_lvl2_apps: number; travel_lvl2_life_cred: number; travel_lvl2_total_cred: number; travel_lvl3_apps: number; travel_lvl3_life_cred: number; travel_lvl3_total_cred: number; travel_exotic_apps: number; travel_exotic_life_cred: number; travel_exotic_total_cred: number; travel_exotic_plus_apps: number; travel_exotic_plus_life_cred: number; travel_exotic_plus_total_cred: number; base_comm_auto: number; base_comm_fire: number; base_comm_life: number; base_comm_health: number; current_vc_rate: number; vc_min_auto_gain: number; vc_max_auto_gain: number; vc_min_fire_gain: number; vc_max_fire_gain: number; vc_min_fs_comm: number; vc_max_fs_comm: number; book_size_auto: number; book_size_fire: number; book_size_commercial: number; book_size_life: number; book_size_health: number; prior_pif_auto: number; prior_pif_fire: number; team_bonus_active: boolean; team_bonus_target: number; team_bonus_metric: string; team_bonus_reward: string; prev_month_lapse_auto: number; prev_month_lapse_fire: number; scoreboard_name: string; custom_product_lines?: { name: string, parent: string }[]; custom_roles?: { id: string, name: string, isSystem: boolean, permissions: Record<string, boolean> }[]; streak_touches?: number; streak_quotes?: number; streak_apps?: number; grace_touches?: boolean; grace_quotes?: boolean; grace_apps?: boolean; stealth_mode_active?: boolean; pipeline_auto_archive_days?: number; daily_report_time?: string; celebration_threshold?: number; default_leaderboard_metric?: string; commission_rates?: import("../../utils/commissionRates").CommissionRates; global_close_rate?: number; stripe_customer_id?: string | null; stripe_subscription_id?: string | null; subscription_status?: string | null; plan_id?: string | null; is_beta_user?: boolean; beta_expires_at?: string | null; target_vc_active?: boolean; target_travel_active?: boolean; owner_visible_on_leaderboards?: boolean;};
 // `client_identifier_hash` is a one-way SHA-256 blind index (see utils/crypto.ts)
 // - there is no plaintext name on this object, by design. Any "readable label"
@@ -199,6 +199,10 @@ export default function Home() {
   // Corporate Targets switch) can never blindly re-write - and potentially clobber with a stale
   // browser snapshot - a team member's goals/salary that were never actually touched this session.
   const teamBaselineRef = useRef<Profile[]>([]);
+  // Monotonic id for fetchDashboardData runs. The effect re-fires on every month/producer/office
+  // change, so an older, slower request can resolve AFTER a newer one; without this guard it would
+  // overwrite commissionPolicies with the wrong month's rows.
+  const dashboardFetchSeqRef = useRef(0);
   const [archivedTeam, setArchivedTeam] = useState<Profile[]>([]);
   const [teamInvites, setTeamInvites] = useState<any[]>([]);
   // monthPolicies = PRODUCTION feed for the viewed month (dated by bound_at - when the work happened).
@@ -541,6 +545,7 @@ export default function Home() {
   };
 
   const fetchDashboardData = async (userId: string, agencyId: string, currentSettings?: any) => {
+    const fetchSeq = ++dashboardFetchSeqRef.current;
     const targetDate = commissionMonth ? new Date(`${commissionMonth}-02T00:00:00`) : new Date();
     const actualToday = new Date();
     
@@ -615,7 +620,10 @@ export default function Home() {
       console.error('[Dashboard] commission policies fetch failed', issuedError);
       showToast('Failed to load issued policies — commission numbers may be incomplete.', 'error');
     }
-    setCommissionPolicies(filterCommissionEligiblePolicies(issuedRows || [], targetDate));
+    // Drop the result if a newer fetch (e.g. the user already moved to another month) has started.
+    if (fetchSeq === dashboardFetchSeqRef.current) {
+      setCommissionPolicies(filterCommissionEligiblePolicies(issuedRows || [], targetDate));
+    }
 
     let bonusQuery = supabase.from('manual_bonuses').select('*').eq('agency_id', agencyId).gte('logged_at', firstDayOfMonth.toISOString());
     const { data: fetchedBonuses, error: bonusesError } = await bonusQuery;
@@ -2124,7 +2132,7 @@ export default function Home() {
     // in THIS browser session. A member nobody touched is never written to at all, so their
     // current DB row - whatever it is - is always explicitly preserved.
     const PROFILE_TARGET_FIELDS = [
-      'role', 'office_id', 'comp_plan_id', 'is_floater', 'on_vacation',
+      'role', 'office_id', 'comp_plan_id', 'is_floater', 'on_vacation', 'is_manual_goals',
       'daily_target_touchpoints', 'daily_target_quotes', 'daily_target_bound',
       'weekly_target_touchpoints', 'weekly_target_quotes', 'weekly_target_bound',
       'monthly_target_bound', 'monthly_target_premium',
@@ -2175,6 +2183,14 @@ export default function Home() {
             comp_plan_id: m.comp_plan_id === '' ? null : m.comp_plan_id,
             is_floater: m.is_floater,
             on_vacation: m.on_vacation ?? false,
+            // Goal mode. The daily_/weekly_target_* values written just below are ALWAYS whatever is
+            // in `team` for this member, and Settings keeps that in lockstep with the mode: with
+            // is_manual_goals = true they are the owner's hand-typed numbers (the reverse math never
+            // touches them); with false they are the Monthly-App-Target-derived numbers. So one
+            // write path stores the right values for both modes. Only sent when the column exists
+            // on the fetched row (or is being turned on), so an un-migrated DB can't make every
+            // team save fail on an unknown column.
+            ...((('is_manual_goals' in (baselineById.get(m.id) || {})) || m.is_manual_goals) ? { is_manual_goals: !!m.is_manual_goals } : {}),
             daily_target_touchpoints: toInt(m.daily_target_touchpoints),
             daily_target_quotes: toInt(m.daily_target_quotes),
             daily_target_bound: toInt(m.daily_target_bound),
@@ -2626,6 +2642,32 @@ export default function Home() {
   // of the true ~2,556 YTD quotes) while `agencyPolicies` below is already correctly
   // fetched from Jan 1 with no status filter - that mismatch is what previously produced
   // "840 bound / 46 quotes" => an impossible 1826% close rate.
+  // Per-producer YTD touch (outbound call + text) counts - the denominator of the Call -> Quote
+  // ratio that Team Management's reverse goal math (utils/goalMath.ts) needs. Fetched as one cheap
+  // head-only COUNT per producer rather than pulling rows (the activities feed above only spans ~2
+  // months, and a full-year touch log would blow past any row cap). Manager-level only, since that's
+  // who can open Team Management.
+  const [ytdTouchCounts, setYtdTouchCounts] = useState<Record<string, number>>({});
+  const teamIdsKey = team.map(m => m.id).join(',');
+  useEffect(() => {
+    if (!profile?.agency_id || !isManagerLevelRole(profile.role) || team.length === 0) return;
+    let cancelled = false;
+    const startOfYearIso = new Date(new Date().getFullYear(), 0, 1).toISOString();
+    Promise.all(team.map(async (m) => {
+      const { count, error } = await supabase
+        .from('activities')
+        .select('id', { count: 'exact', head: true })
+        .eq('agency_id', profile.agency_id)
+        .eq('user_id', m.id)
+        .eq('activity_type', 'touchpoint')
+        .gte('logged_at', startOfYearIso);
+      if (error) console.error('[Goals] YTD touch count failed for', m.id, error);
+      return [m.id, error ? 0 : (count || 0)] as const;
+    })).then(entries => { if (!cancelled) setYtdTouchCounts(Object.fromEntries(entries)); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.agency_id, profile?.role, teamIdsKey]);
+
   const conversionMetricsData = useMemo(() => {
     const now = new Date();
     const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -2658,11 +2700,16 @@ export default function Home() {
       }
     });
 
-    const memberRates: Record<string, { ytd: number; r30: number }> = {};
+    const memberRates: Record<string, { ytd: number; r30: number; ytdQuotes: number; ytdBound: number; ytdTouches: number }> = {};
     Object.entries(byMember).forEach(([id, v]) => {
       memberRates[id] = {
         ytd: v.ytdQuotes > 0 ? (v.ytdBound / v.ytdQuotes) * 100 : 0,
         r30: v.r30Quotes > 0 ? (v.r30Bound / v.r30Quotes) * 100 : 0,
+        // Raw counts (not just the %s) so the reverse goal math can apply its own minimum-sample
+        // rules before trusting a live ratio - see utils/goalMath.ts.
+        ytdQuotes: v.ytdQuotes,
+        ytdBound: v.ytdBound,
+        ytdTouches: ytdTouchCounts[id] || 0,
       };
     });
 
@@ -2672,7 +2719,7 @@ export default function Home() {
       agencyYtdBound,
       memberRates,
     };
-  }, [team, agencyPolicies]);
+  }, [team, agencyPolicies, ytdTouchCounts]);
 
   // --- USE MEMO DATA ENGINES ---
   const filteredActivities = useMemo(() => {
