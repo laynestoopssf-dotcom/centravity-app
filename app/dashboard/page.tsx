@@ -41,6 +41,7 @@ import ReportsTab from '../../components/ReportsTab';
 import CoachingTab from '../../components/CoachingTab';
 import SettingsTab from '../../components/SettingsTab';
 import FeedbackTab from '../../components/FeedbackTab';
+import TrainingTab from '../../components/TrainingTab';
 import MyProfileTab from '../../components/MyProfileTab';
 import { useDashboardTab } from '../../components/dashboard/DashboardShellContext';
 
@@ -3918,6 +3919,7 @@ export default function Home() {
             onHistoricalDataSaved={refreshAfterHistoricalEdit}
           />
         )}
+        {activeTab === 'training' && !isBookkeeper && <TrainingTab profile={profile} />}
         {activeTab === 'feedback' && !isBookkeeper && <FeedbackTab profile={profile} showToast={showToast} />}
         {activeTab === 'profile' && profile && (
           <MyProfileTab

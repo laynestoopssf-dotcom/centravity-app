@@ -43,6 +43,7 @@ export type DashboardTabId =
   | "coaching"
   | "settings"
   | "feedback"
+  | "training"
   | "profile";
 
 export interface DashboardShellContextValue {

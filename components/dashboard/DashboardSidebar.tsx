@@ -9,6 +9,7 @@ import {
   Settings,
   Award,
   BookOpen,
+  PlayCircle,
   FileBarChart,
   CalendarDays,
   Briefcase,
@@ -239,6 +240,17 @@ export default function DashboardSidebar({ permissions }: { permissions: Dashboa
             }`}
           >
             <MessageSquare size={18} /> Community Board
+          </button>
+        )}
+        {/* Role-based video academies (Manager/Owner vs Producer) - see components/TrainingTab.tsx. */}
+        {!isBookkeeper && (
+          <button
+            onClick={() => goToTab("training")}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+              isOnTabbedShell && activeTab === "training" ? "bg-blue-500/15 text-blue-300" : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+            }`}
+          >
+            <PlayCircle size={18} /> Training Videos
           </button>
         )}
         {/* A real Next.js <Link> (client-side nav, no new tab/window), not a
